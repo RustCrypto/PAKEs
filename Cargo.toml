@@ -1,0 +1,8 @@
+[package]
+name = "spake2"
+version = "0.1.0"
+authors = ["Brian Warner <warner@lothar.com>"]
+
+[dependencies]
+#rust-crypto = "^0.2"
+curve25519-dalek = "0.2.0"
