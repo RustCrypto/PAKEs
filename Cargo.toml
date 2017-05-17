@@ -5,4 +5,5 @@ authors = ["Brian Warner <warner@lothar.com>"]
 
 [dependencies]
 #rust-crypto = "^0.2"
-curve25519-dalek = "0.2.0"
+curve25519-dalek = "0.6.0"
+rand = "0.3.0"
