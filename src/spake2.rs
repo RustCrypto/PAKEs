@@ -10,6 +10,7 @@ trait Group {
     type Element;
     // const element_length: usize; // in unstable, or u8
     //type ElementBytes : Index<usize, Output=u8>+IndexMut<usize>; // later
+    fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
     fn random_scalar() -> Self::Scalar;
     fn basepoint_mult(s: &Self::Scalar) -> Self::Element;
     fn scalarmult(e: &Self::Element, s: &Self::Scalar) -> Self::Element;
@@ -25,6 +26,9 @@ impl Group for Ed25519Group {
     //type ElementBytes = [u8; 32];
     //type ScalarBytes
 
+    fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
+        c2_Scalar::hash_from_bytes(&s)
+    }
     fn random_scalar() -> c2_Scalar {
         let mut cspring: OsRng = OsRng::new().unwrap();
         c2_Scalar::random(&mut cspring)
@@ -54,7 +58,8 @@ struct SPAKE2<G: Group> {
 
 impl<G: Group> SPAKE2<G> {
     pub fn new(password: &[u8], idA: &[u8], idB: &[u8]) -> (SPAKE2<G>, Vec<u8>) {
-        let pw: G::Scalar = hash_to_scalar::<G::Scalar>(password);
+        //let pw: G::Scalar = hash_to_scalar::<G::Scalar>(password);
+        let pw: G::Scalar = G::hash_to_scalar(password);
         let x: G::Scalar = random_scalar::<G::Scalar>;
 
         let M1: G::Element = unimplemented!();
