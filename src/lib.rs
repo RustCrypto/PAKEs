@@ -1,6 +1,7 @@
 
 extern crate rand;
 extern crate curve25519_dalek;
+extern crate sha2;
 
 pub mod spake2;
 //use spake2::*;

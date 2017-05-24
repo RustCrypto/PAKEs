@@ -1,15 +1,22 @@
 
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
 use curve25519_dalek::curve::ExtendedPoint as c2_Element;
-use curve25519_dalek::curve::BasepointMult;
-use curve25519_dalek::curve::ScalarMult;
+use curve25519_dalek::constants::ED25519_BASEPOINT;
+//use curve25519_dalek::curve::BasepointMult;
+//use curve25519_dalek::curve::ScalarMult;
 use rand::OsRng;
+use sha2::Sha512;
+//use std::ops::{Add, Mul};
 
 trait Group {
     type Scalar;
     type Element;
+    //type Element: Add<Output=Self::Element>
+    //    + Mul<Self::Scalar, Output=Self::Element>;
     // const element_length: usize; // in unstable, or u8
     //type ElementBytes : Index<usize, Output=u8>+IndexMut<usize>; // later
+    fn const_M() -> Self::Element;
+    fn const_N() -> Self::Element;
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
     fn random_scalar() -> Self::Scalar;
     fn basepoint_mult(s: &Self::Scalar) -> Self::Element;
@@ -26,22 +33,36 @@ impl Group for Ed25519Group {
     //type ElementBytes = [u8; 32];
     //type ScalarBytes
 
+    fn const_M() -> c2_Element {
+        // there's a specific value to return here, not this
+        ED25519_BASEPOINT
+    }
+
+    fn const_N() -> c2_Element {
+        // there's a specific value to return here, not this
+        ED25519_BASEPOINT
+    }
+
     fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
-        c2_Scalar::hash_from_bytes(&s)
+        c2_Scalar::hash_from_bytes::<Sha512>(&s)
     }
     fn random_scalar() -> c2_Scalar {
         let mut cspring: OsRng = OsRng::new().unwrap();
         c2_Scalar::random(&mut cspring)
     }
     fn basepoint_mult(s: &c2_Scalar) -> c2_Element {
-        c2_Element::basepoint_mult(s)
+        //c2_Element::basepoint_mult(s)
+        &ED25519_BASEPOINT * s
     }
     fn scalarmult(e: &c2_Element, s: &c2_Scalar) -> c2_Element {
-        e.scalar_mult(s)
+        e * s
+        //e.scalar_mult(s)
     }
     fn add(a: &c2_Element, b: &c2_Element) -> c2_Element {
-        a.add(b)
+        a + b
+        //a.add(b)
     }
+    
 }
 
 
@@ -60,10 +81,13 @@ impl<G: Group> SPAKE2<G> {
     pub fn new(password: &[u8], idA: &[u8], idB: &[u8]) -> (SPAKE2<G>, Vec<u8>) {
         //let pw: G::Scalar = hash_to_scalar::<G::Scalar>(password);
         let pw: G::Scalar = G::hash_to_scalar(password);
-        let x: G::Scalar = random_scalar::<G::Scalar>;
+        let x: G::Scalar = G::random_scalar();
 
-        let M1: G::Element = unimplemented!();
-        let msg1 = unimplemented!(); // M1 to bytes
+        // M1 = B*x + M*pw
+        let M1: G::Element = G::add(&G::basepoint_mult(&x),
+                                    &G::scalarmult(&G::const_M(), &pw));
+        //let M1: G::Element = &G::basepoint_mult(&x) + &(&G::const_M() * &pw);
+        let msg1: Vec<u8> = unimplemented!(); // M1 to bytes
         let mut pv = Vec::new();
         pv.extend_from_slice(password);
         let mut idA_copy = Vec::new();
@@ -79,8 +103,8 @@ impl<G: Group> SPAKE2<G> {
         }, msg1)
     }
 
-    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
-    }
+    /*pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
+    }*/
 }
 
 
