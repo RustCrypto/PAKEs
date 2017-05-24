@@ -20,6 +20,7 @@ pub trait Group {
     type TranscriptHash;
     fn const_m() -> Self::Element;
     fn const_n() -> Self::Element;
+    fn const_s() -> Self::Element;
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
     fn random_scalar<T: Rng>(cspring: &mut T) -> Self::Scalar;
     fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;
@@ -57,6 +58,17 @@ impl Group for Ed25519Group {
             0xf0, 0x4f, 0x2e, 0x7e, 0xb7, 0x34, 0xb2, 0xa8, 0xf8, 0xb4, 0x72,
             0xea, 0xf9, 0xc3, 0xc6, 0x32, 0x57, 0x6a, 0xc6, 0x4a, 0xea, 0x65,
             0x0b, 0x49, 0x6a, 0x8a, 0x20, 0xff, 0x00, 0xe5, 0x83, 0xc3,
+        ]).decompress().unwrap()
+
+    }
+
+    fn const_s() -> c2_Element {
+        // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.S.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
+        // 6f00dae87c1be1a73b5922ef431cd8f57879569c222d22b1cd71e8546ab8e6f1
+        CompressedEdwardsY([
+            0x6f, 0x00, 0xda, 0xe8, 0x7c, 0x1b, 0xe1, 0xa7, 0x3b, 0x59, 0x22,
+            0xef, 0x43, 0x1c, 0xd8, 0xf5, 0x78, 0x79, 0x56, 0x9c, 0x22, 0x2d,
+            0x22, 0xb1, 0xcd, 0x71, 0xe8, 0x54, 0x6a, 0xb8, 0xe6, 0xf1,
         ]).decompress().unwrap()
 
     }
@@ -100,30 +112,39 @@ impl Group for Ed25519Group {
 
 /* "session type pattern" */
 
+enum Side {
+    A,
+    B,
+    Symmetric,
+}
 pub struct SPAKE2<G: Group> { //where &G::Scalar: Neg {
-    i_am_a: bool,
+    side: Side,
     xy_scalar: G::Scalar,
     password_vec: Vec<u8>,
     id_a: Vec<u8>,
     id_b: Vec<u8>,
+    id_s: Vec<u8>,
     msg1: Vec<u8>,
     password_scalar: G::Scalar,
 }
 
 impl<G: Group> SPAKE2<G> {
-    fn start_internal<T: Rng>(i_am_a: bool,
-                            password: &[u8], id_a: &[u8], id_b: &[u8],
-                            rng: &mut T)
-                    -> (SPAKE2<G>, Vec<u8>) {
+    fn start_internal<T: Rng>(side: Side,
+                              password: &[u8],
+                              id_a: &[u8], id_b: &[u8], id_s: &[u8],
+                              rng: &mut T)
+                              -> (SPAKE2<G>, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
         let password_scalar: G::Scalar = G::hash_to_scalar(password);
         let xy: G::Scalar = G::random_scalar(rng);
 
         // a: X = B*x + M*pw
         // b: Y = B*y + N*pw
-        let blinding = match i_am_a {
-            true => G::const_m(),
-            false => G::const_n(),
+        // sym: X = B*x * S*pw
+        let blinding = match side {
+            Side::A => G::const_m(),
+            Side::B => G::const_n(),
+            Side::Symmetric => G::const_s(),
         };
         let m1: G::Element = G::add(&G::basepoint_mult(&xy),
                                     &G::scalarmult(&blinding, &password_scalar));
@@ -135,12 +156,16 @@ impl<G: Group> SPAKE2<G> {
         id_a_copy.extend_from_slice(id_a);
         let mut id_b_copy = Vec::new();
         id_b_copy.extend_from_slice(id_b);
+        let mut id_s_copy = Vec::new();
+        id_s_copy.extend_from_slice(id_s);
+
         (SPAKE2 {
-            i_am_a: i_am_a,
+            side: side,
             xy_scalar: xy,
             password_vec: password_vec, // string
             id_a: id_a_copy,
             id_b: id_b_copy,
+            id_s: id_s_copy,
             msg1: msg1.clone(),
             password_scalar: password_scalar, // scalar
         }, msg1)
@@ -149,22 +174,33 @@ impl<G: Group> SPAKE2<G> {
     pub fn start_a(password: &[u8], id_a: &[u8], id_b: &[u8])
                -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
-        Self::start_internal(true, password, id_a, id_b, &mut cspring)
+        Self::start_internal(Side::A,
+                             password, id_a, id_b, b"", &mut cspring)
     }
 
     pub fn start_b(password: &[u8], id_a: &[u8], id_b: &[u8])
                -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
-        Self::start_internal(false, password, id_a, id_b, &mut cspring)
+        Self::start_internal(Side::B,
+                             password, id_a, id_b, b"", &mut cspring)
+    }
+
+
+    pub fn start_symmetric(password: &[u8], id_s: &[u8])
+               -> (SPAKE2<G>, Vec<u8>) {
+        let mut cspring: OsRng = OsRng::new().unwrap();
+        Self::start_internal(Side::Symmetric,
+                             password, b"", b"", id_s, &mut cspring)
     }
 
     pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
         // a: K = (Y+N*(-pw))*x
         // b: K = (X+M*(-pw))*y
         let msg2_element = G::bytes_to_element(msg2).unwrap();
-        let unblinding = match self.i_am_a {
-            true => G::const_n(),
-            false => G::const_m(),
+        let unblinding = match self.side {
+            Side::A => G::const_n(),
+            Side::B => G::const_m(),
+            Side::Symmetric => G::const_s(),
         };
         let tmp1 = G::scalarmult(&unblinding,
                                  &G::scalar_neg(&self.password_scalar));
@@ -177,6 +213,16 @@ impl<G: Group> SPAKE2<G> {
         //                       X_msg, Y_msg, K_bytes])
         //key = sha256(transcript).digest()
         // note that both sides must use the same order
+
+        Ok(match self.side {
+            Side::A => self.hash_ab(&self.msg1.as_slice(), msg2, &key_element),
+            Side::B => self.hash_ab(msg2, &self.msg1.as_slice(), &key_element),
+            Side::Symmetric => self.hash_symmetric(msg2, &key_element),
+        })
+    }
+
+    fn hash_ab(&self, first_msg: &[u8], second_msg: &[u8],
+               key_element: &G::Element) -> Vec<u8> {
         let mut transcript = Vec::<u8>::new();
 
         let mut pw_hash = Sha256::new();
@@ -191,14 +237,8 @@ impl<G: Group> SPAKE2<G> {
         idb_hash.input(&self.id_b);
         transcript.extend_from_slice(idb_hash.result().as_slice());
 
-        transcript.extend_from_slice(match self.i_am_a {
-            true => self.msg1.as_slice(),
-            false => msg2,
-        });
-        transcript.extend_from_slice(match self.i_am_a {
-            true => msg2,
-            false => self.msg1.as_slice(),
-        });
+        transcript.extend_from_slice(first_msg);
+        transcript.extend_from_slice(second_msg);
 
         let k_bytes = G::element_to_bytes(&key_element);
         transcript.extend_from_slice(k_bytes.as_slice());
@@ -206,8 +246,41 @@ impl<G: Group> SPAKE2<G> {
         //let mut hash = G::TranscriptHash::default();
         let mut hash = Sha256::default();
         hash.input(transcript.as_slice());
+        hash.result().to_vec()
+    }
 
-        Ok(hash.result().to_vec())
+    fn hash_symmetric(&self, msg2: &[u8], key_element: &G::Element) -> Vec<u8> {
+        // # since we don't know which side is which, we must sort the messages
+        // first_msg, second_msg = sorted([msg1, msg2])
+        // transcript = b"".join([sha256(pw).digest(),
+        //                        sha256(idSymmetric).digest(),
+        //                        first_msg, second_msg, K_bytes])
+        let mut transcript = Vec::<u8>::new();
+
+        let mut pw_hash = Sha256::new();
+        pw_hash.input(&self.password_vec);
+        transcript.extend_from_slice(pw_hash.result().as_slice());
+
+        let mut ids_hash = Sha256::new();
+        ids_hash.input(&self.id_s);
+        transcript.extend_from_slice(ids_hash.result().as_slice());
+
+        let msg_u = self.msg1.as_slice();
+        let msg_v = msg2;
+        if msg_u < msg_v {
+            transcript.extend_from_slice(&msg_u);
+            transcript.extend_from_slice(msg_v);
+        } else {
+            transcript.extend_from_slice(msg_v);
+            transcript.extend_from_slice(&msg_u);
+        }
+
+        let k_bytes = G::element_to_bytes(&key_element);
+        transcript.extend_from_slice(k_bytes.as_slice());
+
+        let mut hash = Sha256::default();
+        hash.input(transcript.as_slice());
+        hash.result().to_vec()
     }
 }
 
