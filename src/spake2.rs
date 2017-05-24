@@ -5,7 +5,7 @@ use curve25519_dalek::curve::ExtendedPoint as c2_Element;
 use curve25519_dalek::constants::ED25519_BASEPOINT;
 use curve25519_dalek::curve::CompressedEdwardsY;
 use rand::{Rng, OsRng};
-use sha2::Sha512;
+use sha2::{Sha256, Sha512, Digest};
 
 #[derive(Debug)]
 pub struct SPAKEErr;
@@ -17,6 +17,7 @@ pub trait Group {
     //    + Mul<Self::Scalar, Output=Self::Element>;
     // const element_length: usize; // in unstable, or u8
     //type ElementBytes : Index<usize, Output=u8>+IndexMut<usize>; // later
+    type TranscriptHash;
     fn const_m() -> Self::Element;
     fn const_n() -> Self::Element;
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
@@ -37,15 +38,27 @@ impl Group for Ed25519Group {
     //type ElementBytes = Vec<u8>;
     //type ElementBytes = [u8; 32];
     //type ScalarBytes
+    type TranscriptHash = Sha256;
 
     fn const_m() -> c2_Element {
-        // there's a specific value to return here, not this
-        ED25519_BASEPOINT
+        // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.M.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
+        // 15cfd18e385952982b6a8f8c7854963b58e34388c8e6dae891db756481a02312
+        CompressedEdwardsY([
+            0x15, 0xcf, 0xd1, 0x8e, 0x38, 0x59, 0x52, 0x98, 0x2b, 0x6a, 0x8f,
+            0x8c, 0x78, 0x54, 0x96, 0x3b, 0x58, 0xe3, 0x43, 0x88, 0xc8, 0xe6,
+            0xda, 0xe8, 0x91, 0xdb, 0x75, 0x64, 0x81, 0xa0, 0x23, 0x12,
+            ]).decompress().unwrap()
     }
 
     fn const_n() -> c2_Element {
-        // there's a specific value to return here, not this
-        ED25519_BASEPOINT
+        // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.N.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
+        // f04f2e7eb734b2a8f8b472eaf9c3c632576ac64aea650b496a8a20ff00e583c3
+        CompressedEdwardsY([
+            0xf0, 0x4f, 0x2e, 0x7e, 0xb7, 0x34, 0xb2, 0xa8, 0xf8, 0xb4, 0x72,
+            0xea, 0xf9, 0xc3, 0xc6, 0x32, 0x57, 0x6a, 0xc6, 0x4a, 0xea, 0x65,
+            0x0b, 0x49, 0x6a, 0x8a, 0x20, 0xff, 0x00, 0xe5, 0x83, 0xc3,
+        ]).decompress().unwrap()
+
     }
 
     fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
@@ -82,64 +95,119 @@ impl Group for Ed25519Group {
         a + b
         //a.add(b)
     }
-    
 }
 
 
 /* "session type pattern" */
 
 pub struct SPAKE2<G: Group> { //where &G::Scalar: Neg {
-    x: G::Scalar,
-    password: Vec<u8>,
+    i_am_a: bool,
+    xy_scalar: G::Scalar,
+    password_vec: Vec<u8>,
     id_a: Vec<u8>,
     id_b: Vec<u8>,
     msg1: Vec<u8>,
-    pw: G::Scalar,
+    password_scalar: G::Scalar,
 }
 
 impl<G: Group> SPAKE2<G> {
-    pub fn new(password: &[u8], id_a: &[u8], id_b: &[u8])
-               -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        Self::new_internal(password, id_a, id_b, &mut cspring)
-    }
-    fn new_internal<T: Rng>(password: &[u8], id_a: &[u8], id_b: &[u8],
+    fn start_internal<T: Rng>(i_am_a: bool,
+                            password: &[u8], id_a: &[u8], id_b: &[u8],
                             rng: &mut T)
                     -> (SPAKE2<G>, Vec<u8>) {
-        //let pw: G::Scalar = hash_to_scalar::<G::Scalar>(password);
-        let pw: G::Scalar = G::hash_to_scalar(password);
-        let x: G::Scalar = G::random_scalar(rng);
+        //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
+        let password_scalar: G::Scalar = G::hash_to_scalar(password);
+        let xy: G::Scalar = G::random_scalar(rng);
 
-        // m1 = B*x + M*pw
-        let m1: G::Element = G::add(&G::basepoint_mult(&x),
-                                    &G::scalarmult(&G::const_m(), &pw));
-        //let m1: G::Element = &G::basepoint_mult(&x) + &(&G::const_m() * &pw);
+        // a: X = B*x + M*pw
+        // b: Y = B*y + N*pw
+        let blinding = match i_am_a {
+            true => G::const_m(),
+            false => G::const_n(),
+        };
+        let m1: G::Element = G::add(&G::basepoint_mult(&xy),
+                                    &G::scalarmult(&blinding, &password_scalar));
+        //let m1: G::Element = &G::basepoint_mult(&x) + &(blinding * &password_scalar);
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
-        let mut pv = Vec::new();
-        pv.extend_from_slice(password);
+        let mut password_vec = Vec::new();
+        password_vec.extend_from_slice(password);
         let mut id_a_copy = Vec::new();
         id_a_copy.extend_from_slice(id_a);
         let mut id_b_copy = Vec::new();
         id_b_copy.extend_from_slice(id_b);
-        (SPAKE2 {x: x,
-                 password: pv, // string
-                 id_a: id_a_copy,
-                 id_b: id_b_copy,
-                 msg1: msg1.clone(),
-                 pw: pw, // scalar
+        (SPAKE2 {
+            i_am_a: i_am_a,
+            xy_scalar: xy,
+            password_vec: password_vec, // string
+            id_a: id_a_copy,
+            id_b: id_b_copy,
+            msg1: msg1.clone(),
+            password_scalar: password_scalar, // scalar
         }, msg1)
     }
 
-    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
-        #![allow(unused_variables)]
-        // KA = scalarmult(Y* + scalarmult(N, -int(pw)), x)
-        // key = H(H(pw) + H(idA) + H(idB) + X* + Y* + KA)
-        let y = G::bytes_to_element(msg2);
-        let foo = &G::scalarmult(&G::const_n(), &G::scalar_neg(&self.pw));
+    pub fn start_a(password: &[u8], id_a: &[u8], id_b: &[u8])
+               -> (SPAKE2<G>, Vec<u8>) {
+        let mut cspring: OsRng = OsRng::new().unwrap();
+        Self::start_internal(true, password, id_a, id_b, &mut cspring)
+    }
 
-        //"nope".to_vec()
-        //unimplemented!()
-        Ok(Vec::new())
+    pub fn start_b(password: &[u8], id_a: &[u8], id_b: &[u8])
+               -> (SPAKE2<G>, Vec<u8>) {
+        let mut cspring: OsRng = OsRng::new().unwrap();
+        Self::start_internal(false, password, id_a, id_b, &mut cspring)
+    }
+
+    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
+        // a: K = (Y+N*(-pw))*x
+        // b: K = (X+M*(-pw))*y
+        let msg2_element = G::bytes_to_element(msg2).unwrap();
+        let unblinding = match self.i_am_a {
+            true => G::const_n(),
+            false => G::const_m(),
+        };
+        let tmp1 = G::scalarmult(&unblinding,
+                                 &G::scalar_neg(&self.password_scalar));
+        let tmp2 = G::add(&msg2_element, &tmp1);
+        let key_element = G::scalarmult(&tmp2, &self.xy_scalar);
+
+        // key = H(H(pw) + H(idA) + H(idB) + X + Y + K)
+        //transcript = b"".join([sha256(pw).digest(),
+        //                       sha256(idA).digest(), sha256(idB).digest(),
+        //                       X_msg, Y_msg, K_bytes])
+        //key = sha256(transcript).digest()
+        // note that both sides must use the same order
+        let mut transcript = Vec::<u8>::new();
+
+        let mut pw_hash = Sha256::new();
+        pw_hash.input(&self.password_vec);
+        transcript.extend_from_slice(pw_hash.result().as_slice());
+
+        let mut ida_hash = Sha256::new();
+        ida_hash.input(&self.id_a);
+        transcript.extend_from_slice(ida_hash.result().as_slice());
+
+        let mut idb_hash = Sha256::new();
+        idb_hash.input(&self.id_b);
+        transcript.extend_from_slice(idb_hash.result().as_slice());
+
+        transcript.extend_from_slice(match self.i_am_a {
+            true => self.msg1.as_slice(),
+            false => msg2,
+        });
+        transcript.extend_from_slice(match self.i_am_a {
+            true => msg2,
+            false => self.msg1.as_slice(),
+        });
+
+        let k_bytes = G::element_to_bytes(&key_element);
+        transcript.extend_from_slice(k_bytes.as_slice());
+
+        //let mut hash = G::TranscriptHash::default();
+        let mut hash = Sha256::default();
+        hash.input(transcript.as_slice());
+
+        Ok(hash.result().to_vec())
     }
 }
 
