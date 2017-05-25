@@ -303,14 +303,16 @@ impl<G: Group> SPAKE2<G> {
         // note that both sides must use the same order
 
         Ok(match self.side {
-            Side::A => self.hash_ab(&self.msg1.as_slice(), msg2, &key_element),
-            Side::B => self.hash_ab(msg2, &self.msg1.as_slice(), &key_element),
-            Side::Symmetric => self.hash_symmetric(msg2, &key_element),
+            Side::A => self.hash_ab(self.msg1.as_slice(), &msg2[1..], &key_element),
+            Side::B => self.hash_ab(&msg2[1..], self.msg1.as_slice(), &key_element),
+            Side::Symmetric => self.hash_symmetric(&msg2[1..], &key_element),
         })
     }
 
     fn hash_ab(&self, first_msg: &[u8], second_msg: &[u8],
                key_element: &G::Element) -> Vec<u8> {
+        assert_eq!(first_msg.len(), 32);
+        assert_eq!(second_msg.len(), 32);
         // the transcript is fixed-length, made up of 6 32-byte values:
         // byte 0-31   : sha256(pw)
         // byte 32-63  : sha256(idA)
@@ -347,6 +349,7 @@ impl<G: Group> SPAKE2<G> {
     }
 
     fn hash_symmetric(&self, msg2: &[u8], key_element: &G::Element) -> Vec<u8> {
+        assert_eq!(msg2.len(), 32);
         // # since we don't know which side is which, we must sort the messages
         // first_msg, second_msg = sorted([msg1, msg2])
         // transcript = b"".join([sha256(pw).digest(),
