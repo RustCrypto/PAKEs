@@ -493,12 +493,12 @@ mod test {
         println!();
 
         assert_eq!(expected_pw_scalar.as_bytes().to_hex(),
-                   s1.xy_scalar.as_bytes().to_hex());
+                   s1.password_scalar.as_bytes().to_hex());
         assert_eq!(msg1.to_hex(), expected_msg1);
 
         let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b_internal(
             b"password", b"idA", b"idB", scalar_b);
-        assert_eq!(expected_pw_scalar, s2.xy_scalar);
+        assert_eq!(expected_pw_scalar, s2.password_scalar);
         assert_eq!(msg2.to_hex(),
                    "42354e97b88406922b1df4bea1d7870f17aed3dba7c720b313edae315b00959309");
 
