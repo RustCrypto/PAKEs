@@ -7,7 +7,7 @@ use rand::{Rng, OsRng};
 use sha2::{Sha256, Sha512, Digest};
 
 #[derive(Debug)]
-pub struct SPAKEErr;
+pub struct SPAKEErr ( String );
 
 pub trait Group {
     type Scalar;
@@ -222,11 +222,15 @@ impl<G: Group> SPAKE2<G> {
 
     pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
         if msg2.len() != 1 + G::element_length() {
-            return Err(SPAKEErr); //("inbound message is the wrong length"));
+            return Err(SPAKEErr(String::from("inbound message is the wrong length")))
         }
         let msg_side = msg2[0];
 
-        let msg2_element = G::bytes_to_element(&msg2[1..]).unwrap();
+        let msg2_element = match G::bytes_to_element(&msg2[1..]) {
+            Some(x) => x,
+            None => {return Err(SPAKEErr(String::from("message corrupted")))},
+        };
+
         // a: K = (Y+N*(-pw))*x
         // b: K = (X+M*(-pw))*y
         let unblinding = match self.side {
