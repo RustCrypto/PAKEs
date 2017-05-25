@@ -1,10 +1,17 @@
+#![allow(dead_code)]
 
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
 use curve25519_dalek::curve::ExtendedPoint as c2_Element;
 use curve25519_dalek::constants::ED25519_BASEPOINT;
 use curve25519_dalek::curve::CompressedEdwardsY;
 use rand::{Rng, OsRng};
-use sha2::{Sha256, Sha512, Digest};
+//use sha2::{Sha256, Sha512, Digest};
+use crypto::sha2::Sha256;
+use crypto::digest::Digest;
+use crypto::hkdf;
+use num_bigint::BigUint;
+
+use hex::ToHex;
 
 #[derive(Debug)]
 pub struct SPAKEErr ( String );
@@ -74,7 +81,29 @@ impl Group for Ed25519Group {
     }
 
     fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
-        c2_Scalar::hash_from_bytes::<Sha512>(&s)
+        //c2_Scalar::hash_from_bytes::<Sha512>(&s)
+        // spake2.py does:
+        //  h = HKDF(salt=b"", ikm=s, hash=SHA256, info=b"SPAKE2 pw", len=32+16)
+        //  i = int(h, 16)
+        //  i % q
+
+        let mut prk = [0u8; 32];
+        let digest = Sha256::new();
+        hkdf::hkdf_extract(digest, b"", s, &mut prk);
+        let mut okm = [0u8; 32+16];
+        hkdf::hkdf_expand(digest, &prk, b"SPAKE2 pw", &mut okm);
+        //okm[32+16-2] = 1;
+        println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
+
+        let mut reducible = [0u8; 64]; // little-endian
+        for i in 0..32+16 {
+            reducible[32+16-1-i] = okm[i];
+        }
+        println!("reducible:  {}", reducible.iter().to_hex());
+        let reduced = c2_Scalar::reduce(&reducible);
+        println!("reduced:    {}", reduced.as_bytes().to_hex());
+        println!("done");
+        reduced
     }
     fn random_scalar<T: Rng>(cspring: &mut T) -> c2_Scalar {
         c2_Scalar::random(cspring)
@@ -110,6 +139,14 @@ impl Group for Ed25519Group {
         a + b
         //a.add(b)
     }
+}
+
+fn decimal_to_scalar(d: &[u8]) -> c2_Scalar {
+    let bytes = BigUint::parse_bytes(d, 10).unwrap().to_bytes_le();
+    assert_eq!(bytes.len(), 32);
+    let mut s = c2_Scalar([0u8; 32]);
+    s.0.copy_from_slice(&bytes);
+    s
 }
 
 
@@ -226,6 +263,21 @@ impl<G: Group> SPAKE2<G> {
         }
         let msg_side = msg2[0];
 
+        match self.side {
+            Side::A => match msg_side {
+                0x42 => (), // 'B'
+                _ => return Err(SPAKEErr(String::from("bad side"))),
+            },
+            Side::B => match msg_side {
+                0x41 => (), // 'A'
+                _ => return Err(SPAKEErr(String::from("bad side"))),
+            },
+            Side::Symmetric => match msg_side {
+                0x53 => (), // 'S'
+                _ => return Err(SPAKEErr(String::from("bad side"))),
+            },
+        }
+
         let msg2_element = match G::bytes_to_element(&msg2[1..]) {
             Some(x) => x,
             None => {return Err(SPAKEErr(String::from("message corrupted")))},
@@ -259,30 +311,39 @@ impl<G: Group> SPAKE2<G> {
 
     fn hash_ab(&self, first_msg: &[u8], second_msg: &[u8],
                key_element: &G::Element) -> Vec<u8> {
-        let mut transcript = Vec::<u8>::new();
+        // the transcript is fixed-length, made up of 6 32-byte values:
+        // byte 0-31   : sha256(pw)
+        // byte 32-63  : sha256(idA)
+        // byte 64-95  : sha256(idB)
+        // byte 96-127 : X_msg
+        // byte 128-159: Y_msg
+        // byte 160-191: K_bytes
+        let mut transcript = [0u8; 6*32];
 
         let mut pw_hash = Sha256::new();
         pw_hash.input(&self.password_vec);
-        transcript.extend_from_slice(pw_hash.result().as_slice());
+        pw_hash.result(&mut transcript[0..32]);
 
         let mut ida_hash = Sha256::new();
         ida_hash.input(&self.id_a);
-        transcript.extend_from_slice(ida_hash.result().as_slice());
+        ida_hash.result(&mut transcript[32..64]);
 
         let mut idb_hash = Sha256::new();
         idb_hash.input(&self.id_b);
-        transcript.extend_from_slice(idb_hash.result().as_slice());
+        idb_hash.result(&mut transcript[64..96]);
 
-        transcript.extend_from_slice(first_msg);
-        transcript.extend_from_slice(second_msg);
+        transcript[96..128].copy_from_slice(first_msg);
+        transcript[128..160].copy_from_slice(second_msg);
 
         let k_bytes = G::element_to_bytes(&key_element);
-        transcript.extend_from_slice(k_bytes.as_slice());
+        transcript[160..192].copy_from_slice(k_bytes.as_slice());
 
         //let mut hash = G::TranscriptHash::default();
-        let mut hash = Sha256::default();
-        hash.input(transcript.as_slice());
-        hash.result().to_vec()
+        let mut hash = Sha256::new();
+        hash.input(&transcript);
+        let mut out = [0u8; 32];
+        hash.result(&mut out);
+        out.to_vec()
     }
 
     fn hash_symmetric(&self, msg2: &[u8], key_element: &G::Element) -> Vec<u8> {
@@ -291,32 +352,41 @@ impl<G: Group> SPAKE2<G> {
         // transcript = b"".join([sha256(pw).digest(),
         //                        sha256(idSymmetric).digest(),
         //                        first_msg, second_msg, K_bytes])
-        let mut transcript = Vec::<u8>::new();
+
+        // the transcript is fixed-length, made up of 5 32-byte values:
+        // byte 0-31   : sha256(pw)
+        // byte 32-63  : sha256(idSymmetric)
+        // byte 64-95  : X_msg
+        // byte 96-127 : Y_msg
+        // byte 128-159: K_bytes
+        let mut transcript = [0u8; 5*32];
 
         let mut pw_hash = Sha256::new();
         pw_hash.input(&self.password_vec);
-        transcript.extend_from_slice(pw_hash.result().as_slice());
+        pw_hash.result(&mut transcript[0..32]);
 
         let mut ids_hash = Sha256::new();
         ids_hash.input(&self.id_s);
-        transcript.extend_from_slice(ids_hash.result().as_slice());
+        ids_hash.result(&mut transcript[32..64]);
 
         let msg_u = self.msg1.as_slice();
         let msg_v = msg2;
         if msg_u < msg_v {
-            transcript.extend_from_slice(&msg_u);
-            transcript.extend_from_slice(msg_v);
+            transcript[64..96].copy_from_slice(&msg_u);
+            transcript[96..128].copy_from_slice(msg_v);
         } else {
-            transcript.extend_from_slice(msg_v);
-            transcript.extend_from_slice(&msg_u);
+            transcript[64..96].copy_from_slice(msg_v);
+            transcript[96..128].copy_from_slice(&msg_u);
         }
 
         let k_bytes = G::element_to_bytes(&key_element);
-        transcript.extend_from_slice(k_bytes.as_slice());
+        transcript[128..160].copy_from_slice(k_bytes.as_slice());
 
-        let mut hash = Sha256::default();
-        hash.input(transcript.as_slice());
-        hash.result().to_vec()
+        let mut hash = Sha256::new();
+        hash.input(&transcript);
+        let mut out = [0u8; 32];
+        hash.result(&mut out);
+        out.to_vec()
     }
 }
 
@@ -328,21 +398,15 @@ mod test {
     deterministic RNG (used only for tests, of course) into the per-Group
     "random_scalar()" function, which results in some particular scalar.
      */
-    use num_bigint::BigUint;
     use curve25519_dalek::scalar::Scalar;
+    use curve25519_dalek::constants::ED25519_BASEPOINT;
     use spake2::{SPAKE2, Ed25519Group};
+    use hex::ToHex;
+    use super::*;
 
     // the python tests show the long-integer form of scalars. the rust code
     // wants an array of bytes (little-endian). Make sure the way we convert
     // things works correctly.
-
-    fn decimal_to_scalar(d: &[u8]) -> Scalar {
-        let bytes = BigUint::parse_bytes(d, 10).unwrap().to_bytes_le();
-        assert_eq!(bytes.len(), 32);
-        let mut s = Scalar([0u8; 32]);
-        s.0.copy_from_slice(&bytes);
-        s
-    }
 
     #[test]
     fn test_convert() {
@@ -357,8 +421,6 @@ mod test {
         //println!("t1_scalar is {:?}", t1_scalar);
     }
 
-    use hex::ToHex;
-    use curve25519_dalek::constants::ED25519_BASEPOINT;
     #[test]
     fn test_serialize_basepoint() {
         // make sure elements are serialized same as the python library
@@ -368,6 +430,16 @@ mod test {
         println!("exp: {:?}", exp);
         println!("got: {:?}", base_hex);
         assert_eq!(exp, base_hex);
+    }
+
+    #[test]
+    fn test_password_to_scalar() {
+        let password = b"password";
+        let expected_pw_scalar = decimal_to_scalar(b"3515301705789368674385125653994241092664323519848410154015274772661223168839");
+        let pw_scalar = Ed25519Group::hash_to_scalar(password);
+        println!("exp: {:?}", expected_pw_scalar.as_bytes().to_hex());
+        println!("got: {:?}", pw_scalar.as_bytes().to_hex());
+        assert_eq!(&pw_scalar, &expected_pw_scalar);
     }
 
     #[test]
@@ -407,8 +479,15 @@ mod test {
             b"password", b"idA", b"idB", scalar_a);
         let expected_msg1 = "416fc960df73c9cf8ed7198b0c9534e2e96a5984bfc5edc023fd24dacf371f2af9";
 
+        println!();
+        println!("xys1: {:?}", s1.xy_scalar.as_bytes().to_hex());
+        println!();
+        println!("pws1: {:?}", s1.password_scalar.as_bytes().to_hex());
+        println!("exp : {:?}", expected_pw_scalar.as_bytes().to_hex());
+        println!();
         println!("msg1: {:?}", msg1.to_hex());
         println!("exp : {:?}", expected_msg1);
+        println!();
 
         assert_eq!(expected_pw_scalar.as_bytes().to_hex(),
                    s1.xy_scalar.as_bytes().to_hex());

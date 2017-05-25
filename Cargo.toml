@@ -7,8 +7,10 @@ authors = ["Brian Warner <warner@lothar.com>"]
 #rust-crypto = "^0.2"
 curve25519-dalek = "0.8.0"
 rand = "0.3.0"
-sha2 = "0.4.0"
+#sha2 = "0.4.0"
+rust-crypto = "0.2"
+num-bigint = "0.1"
+hex = "0.2"
 
 [dev-dependencies]
-num-bigint = "0.1"
 hex = "0.2"
