@@ -81,29 +81,7 @@ impl Group for Ed25519Group {
     }
 
     fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
-        //c2_Scalar::hash_from_bytes::<Sha512>(&s)
-        // spake2.py does:
-        //  h = HKDF(salt=b"", ikm=s, hash=SHA256, info=b"SPAKE2 pw", len=32+16)
-        //  i = int(h, 16)
-        //  i % q
-
-        let mut prk = [0u8; 32];
-        let digest = Sha256::new();
-        hkdf::hkdf_extract(digest, b"", s, &mut prk);
-        let mut okm = [0u8; 32+16];
-        hkdf::hkdf_expand(digest, &prk, b"SPAKE2 pw", &mut okm);
-        //okm[32+16-2] = 1;
-        println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
-
-        let mut reducible = [0u8; 64]; // little-endian
-        for i in 0..32+16 {
-            reducible[32+16-1-i] = okm[i];
-        }
-        println!("reducible:  {}", reducible.iter().to_hex());
-        let reduced = c2_Scalar::reduce(&reducible);
-        println!("reduced:    {}", reduced.as_bytes().to_hex());
-        println!("done");
-        reduced
+        ed25519_hash_to_scalar(s)
     }
     fn random_scalar<T: Rng>(cspring: &mut T) -> c2_Scalar {
         c2_Scalar::random(cspring)
@@ -149,6 +127,114 @@ fn decimal_to_scalar(d: &[u8]) -> c2_Scalar {
     s
 }
 
+fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
+    //c2_Scalar::hash_from_bytes::<Sha512>(&s)
+    // spake2.py does:
+    //  h = HKDF(salt=b"", ikm=s, hash=SHA256, info=b"SPAKE2 pw", len=32+16)
+    //  i = int(h, 16)
+    //  i % q
+
+    let mut prk = [0u8; 32];
+    let digest = Sha256::new();
+    hkdf::hkdf_extract(digest, b"", s, &mut prk);
+    let mut okm = [0u8; 32+16];
+    hkdf::hkdf_expand(digest, &prk, b"SPAKE2 pw", &mut okm);
+    //okm[32+16-2] = 1;
+    println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
+
+    let mut reducible = [0u8; 64]; // little-endian
+    for i in 0..32+16 {
+        reducible[32+16-1-i] = okm[i];
+    }
+    println!("reducible:  {}", reducible.iter().to_hex());
+    let reduced = c2_Scalar::reduce(&reducible);
+    println!("reduced:    {}", reduced.as_bytes().to_hex());
+    println!("done");
+    reduced
+}
+
+fn ed25519_hash_ab(password_vec: &[u8], id_a: &[u8], id_b: &[u8],
+                   first_msg: &[u8], second_msg: &[u8], key_bytes: &[u8])
+                   -> Vec<u8> {
+    assert_eq!(first_msg.len(), 32);
+    assert_eq!(second_msg.len(), 32);
+    // the transcript is fixed-length, made up of 6 32-byte values:
+    // byte 0-31   : sha256(pw)
+    // byte 32-63  : sha256(idA)
+    // byte 64-95  : sha256(idB)
+    // byte 96-127 : X_msg
+    // byte 128-159: Y_msg
+    // byte 160-191: K_bytes
+    let mut transcript = [0u8; 6*32];
+
+    let mut pw_hash = Sha256::new();
+    pw_hash.input(&password_vec);
+    pw_hash.result(&mut transcript[0..32]);
+
+    let mut ida_hash = Sha256::new();
+    ida_hash.input(&id_a);
+    ida_hash.result(&mut transcript[32..64]);
+
+    let mut idb_hash = Sha256::new();
+    idb_hash.input(&id_b);
+    idb_hash.result(&mut transcript[64..96]);
+
+    transcript[96..128].copy_from_slice(first_msg);
+    transcript[128..160].copy_from_slice(second_msg);
+    transcript[160..192].copy_from_slice(key_bytes);
+
+    println!("transcript: {:?}", transcript.iter().to_hex());
+        
+    //let mut hash = G::TranscriptHash::default();
+    let mut hash = Sha256::new();
+    hash.input(&transcript);
+    let mut out = [0u8; 32];
+    hash.result(&mut out);
+    out.to_vec()
+}
+
+fn ed25519_hash_symmetric(password_vec: &[u8], id_s: &[u8],
+                          msg_u: &[u8], msg_v: &[u8], key_bytes: &[u8])
+                          -> Vec<u8> {
+    assert_eq!(msg_u.len(), 32);
+    assert_eq!(msg_v.len(), 32);
+    // # since we don't know which side is which, we must sort the messages
+    // first_msg, second_msg = sorted([msg1, msg2])
+    // transcript = b"".join([sha256(pw).digest(),
+    //                        sha256(idSymmetric).digest(),
+    //                        first_msg, second_msg, K_bytes])
+
+    // the transcript is fixed-length, made up of 5 32-byte values:
+    // byte 0-31   : sha256(pw)
+    // byte 32-63  : sha256(idSymmetric)
+    // byte 64-95  : X_msg
+    // byte 96-127 : Y_msg
+    // byte 128-159: K_bytes
+    let mut transcript = [0u8; 5*32];
+
+    let mut pw_hash = Sha256::new();
+    pw_hash.input(&password_vec);
+    pw_hash.result(&mut transcript[0..32]);
+
+    let mut ids_hash = Sha256::new();
+    ids_hash.input(&id_s);
+    ids_hash.result(&mut transcript[32..64]);
+
+    if msg_u < msg_v {
+        transcript[64..96].copy_from_slice(&msg_u);
+        transcript[96..128].copy_from_slice(msg_v);
+    } else {
+        transcript[64..96].copy_from_slice(msg_v);
+        transcript[96..128].copy_from_slice(&msg_u);
+    }
+    transcript[128..160].copy_from_slice(key_bytes);
+
+    let mut hash = Sha256::new();
+    hash.input(&transcript);
+    let mut out = [0u8; 32];
+    hash.result(&mut out);
+    out.to_vec()
+}
 
 /* "session type pattern" */
 
@@ -294,6 +380,7 @@ impl<G: Group> SPAKE2<G> {
                                  &G::scalar_neg(&self.password_scalar));
         let tmp2 = G::add(&msg2_element, &tmp1);
         let key_element = G::scalarmult(&tmp2, &self.xy_scalar);
+        let key_bytes = G::element_to_bytes(&key_element);
 
         // key = H(H(pw) + H(idA) + H(idB) + X + Y + K)
         //transcript = b"".join([sha256(pw).digest(),
@@ -303,93 +390,19 @@ impl<G: Group> SPAKE2<G> {
         // note that both sides must use the same order
 
         Ok(match self.side {
-            Side::A => self.hash_ab(self.msg1.as_slice(), &msg2[1..], &key_element),
-            Side::B => self.hash_ab(&msg2[1..], self.msg1.as_slice(), &key_element),
-            Side::Symmetric => self.hash_symmetric(&msg2[1..], &key_element),
+            Side::A => ed25519_hash_ab(&self.password_vec,
+                                       &self.id_a, &self.id_b,
+                                       self.msg1.as_slice(), &msg2[1..],
+                                       &key_bytes),
+            Side::B => ed25519_hash_ab(&self.password_vec,
+                                       &self.id_a, &self.id_b,
+                                       &msg2[1..], self.msg1.as_slice(),
+                                       &key_bytes),
+            Side::Symmetric => ed25519_hash_symmetric(&self.password_vec,
+                                                      &self.id_s,
+                                                      &self.msg1, &msg2[1..],
+                                                      &key_bytes),
         })
-    }
-
-    fn hash_ab(&self, first_msg: &[u8], second_msg: &[u8],
-               key_element: &G::Element) -> Vec<u8> {
-        assert_eq!(first_msg.len(), 32);
-        assert_eq!(second_msg.len(), 32);
-        // the transcript is fixed-length, made up of 6 32-byte values:
-        // byte 0-31   : sha256(pw)
-        // byte 32-63  : sha256(idA)
-        // byte 64-95  : sha256(idB)
-        // byte 96-127 : X_msg
-        // byte 128-159: Y_msg
-        // byte 160-191: K_bytes
-        let mut transcript = [0u8; 6*32];
-
-        let mut pw_hash = Sha256::new();
-        pw_hash.input(&self.password_vec);
-        pw_hash.result(&mut transcript[0..32]);
-
-        let mut ida_hash = Sha256::new();
-        ida_hash.input(&self.id_a);
-        ida_hash.result(&mut transcript[32..64]);
-
-        let mut idb_hash = Sha256::new();
-        idb_hash.input(&self.id_b);
-        idb_hash.result(&mut transcript[64..96]);
-
-        transcript[96..128].copy_from_slice(first_msg);
-        transcript[128..160].copy_from_slice(second_msg);
-
-        let k_bytes = G::element_to_bytes(&key_element);
-        transcript[160..192].copy_from_slice(k_bytes.as_slice());
-
-        //let mut hash = G::TranscriptHash::default();
-        let mut hash = Sha256::new();
-        hash.input(&transcript);
-        let mut out = [0u8; 32];
-        hash.result(&mut out);
-        out.to_vec()
-    }
-
-    fn hash_symmetric(&self, msg2: &[u8], key_element: &G::Element) -> Vec<u8> {
-        assert_eq!(msg2.len(), 32);
-        // # since we don't know which side is which, we must sort the messages
-        // first_msg, second_msg = sorted([msg1, msg2])
-        // transcript = b"".join([sha256(pw).digest(),
-        //                        sha256(idSymmetric).digest(),
-        //                        first_msg, second_msg, K_bytes])
-
-        // the transcript is fixed-length, made up of 5 32-byte values:
-        // byte 0-31   : sha256(pw)
-        // byte 32-63  : sha256(idSymmetric)
-        // byte 64-95  : X_msg
-        // byte 96-127 : Y_msg
-        // byte 128-159: K_bytes
-        let mut transcript = [0u8; 5*32];
-
-        let mut pw_hash = Sha256::new();
-        pw_hash.input(&self.password_vec);
-        pw_hash.result(&mut transcript[0..32]);
-
-        let mut ids_hash = Sha256::new();
-        ids_hash.input(&self.id_s);
-        ids_hash.result(&mut transcript[32..64]);
-
-        let msg_u = self.msg1.as_slice();
-        let msg_v = msg2;
-        if msg_u < msg_v {
-            transcript[64..96].copy_from_slice(&msg_u);
-            transcript[96..128].copy_from_slice(msg_v);
-        } else {
-            transcript[64..96].copy_from_slice(msg_v);
-            transcript[96..128].copy_from_slice(&msg_u);
-        }
-
-        let k_bytes = G::element_to_bytes(&key_element);
-        transcript[128..160].copy_from_slice(k_bytes.as_slice());
-
-        let mut hash = Sha256::new();
-        hash.input(&transcript);
-        let mut out = [0u8; 32];
-        hash.result(&mut out);
-        out.to_vec()
     }
 }
 
@@ -471,6 +484,29 @@ mod test {
     }
 
     #[test]
+    fn test_hash_ab() {
+        let key = ed25519_hash_ab(
+            b"pw",
+            b"idA", b"idB",
+            b"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // len=32
+            b"YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+            b"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
+        let expected_key = "d59d9ba920f7092565cec747b08d5b2e981d553ac32fde0f25e5b4a4cfca3efd";
+        assert_eq!(key.to_hex(), expected_key);
+    }
+
+    #[test]
+    fn test_hash_symmetric() {
+        let key = ed25519_hash_symmetric(
+            b"pw", b"idSymmetric",
+            b"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+            b"YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+            b"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
+        let expected_key = "b0b31e4401aae37d91a9a8bf6fbb1298cafc005ff9142e3ffc5b9799fb11128b";
+        assert_eq!(key.to_hex(), expected_key);
+    }
+
+    #[test]
     fn test_asymmetric() {
         let scalar_a = decimal_to_scalar(b"2611694063369306139794446498317402240796898290761098242657700742213257926693");
         let scalar_b = decimal_to_scalar(b"7002393159576182977806091886122272758628412261510164356026361256515836884383");
@@ -506,7 +542,7 @@ mod test {
         let key2 = s2.finish(&msg1).unwrap();
         assert_eq!(key1, key2);
         assert_eq!(key1.to_hex(),
-                   "a480bca13fa04464bb644f10e340125e96c9494f7399fef7c2bda67eb0fdf06d");
+                   "712295de7219c675ddd31942184aa26e0a957cf216bc230d165b215047b520c1");
     }
 
 
