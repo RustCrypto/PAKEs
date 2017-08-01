@@ -1,12 +1,23 @@
 [package]
 name = "spake2"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Brian Warner <warner@lothar.com>"]
+description = "The SPAKE2 password-authenticated key-exchange algorithm, in Rust."
+documentation = "https://github.com/warner/spake2.rs"
+homepage = "https://github.com/warner/spake2.rs"
+repository = "https://github.com/warner/spake2.rs"
+license = "MIT"
+categories = ["cryptography"]
+exclude = [
+    ".gitignore"
+]
+
+[badges]
+travis-ci = { repository = "https://github.com/warner/spake2.rs" }
 
 [dependencies]
-#rust-crypto = "^0.2"
-curve25519-dalek = "0.9.0"
-rand = "0.3.0"
+curve25519-dalek = "0.9"
+rand = "0.3"
 #sha2 = "0.4.0"
 rust-crypto = "0.2"
 num-bigint = "0.1"
