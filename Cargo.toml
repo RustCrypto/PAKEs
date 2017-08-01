@@ -13,7 +13,7 @@ exclude = [
 ]
 
 [badges]
-travis-ci = { repository = "https://github.com/warner/spake2.rs" }
+travis-ci = { repository = "warner/spake2.rs" }
 
 [dependencies]
 curve25519-dalek = "0.9"
