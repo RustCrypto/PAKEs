@@ -1,20 +1,27 @@
 #![allow(dead_code)]
 
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
-use curve25519_dalek::curve::ExtendedPoint as c2_Element;
-use curve25519_dalek::constants::ED25519_BASEPOINT;
-use curve25519_dalek::curve::CompressedEdwardsY;
+use curve25519_dalek::edwards::ExtendedPoint as c2_Element;
+use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
+use curve25519_dalek::edwards::CompressedEdwardsY;
 use rand::{Rng, OsRng};
-//use sha2::{Sha256, Sha512, Digest};
-use crypto::sha2::Sha256;
-use crypto::digest::Digest;
-use crypto::hkdf;
+use sha2::{Sha256, Digest};
+use hkdf::Hkdf;
 use num_bigint::BigUint;
 
 use hex::ToHex;
 
-#[derive(Debug)]
-pub struct SPAKEErr ( String );
+#[derive(Debug, PartialEq)]
+pub enum ErrorType {
+    BadSide,
+    WrongLength,
+    CorruptMessage,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SPAKEErr {
+    pub kind: ErrorType,
+}
 
 pub trait Group {
     type Scalar;
@@ -107,7 +114,7 @@ impl Group for Ed25519Group {
 
     fn basepoint_mult(s: &c2_Scalar) -> c2_Element {
         //c2_Element::basepoint_mult(s)
-        &ED25519_BASEPOINT * s
+        &ED25519_BASEPOINT_POINT * s
     }
     fn scalarmult(e: &c2_Element, s: &c2_Scalar) -> c2_Element {
         e * s
@@ -134,12 +141,7 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
     //  i = int(h, 16)
     //  i % q
 
-    let mut prk = [0u8; 32];
-    let digest = Sha256::new();
-    hkdf::hkdf_extract(digest, b"", s, &mut prk);
-    let mut okm = [0u8; 32+16];
-    hkdf::hkdf_expand(digest, &prk, b"SPAKE2 pw", &mut okm);
-    //okm[32+16-2] = 1;
+    let okm = Hkdf::<Sha256>::new(s, b"").derive(b"SPAKE2 pw", 32+16);
     println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
 
     let mut reducible = [0u8; 64]; // little-endian
@@ -169,15 +171,15 @@ fn ed25519_hash_ab(password_vec: &[u8], id_a: &[u8], id_b: &[u8],
 
     let mut pw_hash = Sha256::new();
     pw_hash.input(password_vec);
-    pw_hash.result(&mut transcript[0..32]);
+    transcript[0..32].copy_from_slice(&pw_hash.result());
 
     let mut ida_hash = Sha256::new();
     ida_hash.input(id_a);
-    ida_hash.result(&mut transcript[32..64]);
+    transcript[32..64].copy_from_slice(&ida_hash.result());
 
     let mut idb_hash = Sha256::new();
     idb_hash.input(id_b);
-    idb_hash.result(&mut transcript[64..96]);
+    transcript[64..96].copy_from_slice(&idb_hash.result());
 
     transcript[96..128].copy_from_slice(first_msg);
     transcript[128..160].copy_from_slice(second_msg);
@@ -188,9 +190,7 @@ fn ed25519_hash_ab(password_vec: &[u8], id_a: &[u8], id_b: &[u8],
     //let mut hash = G::TranscriptHash::default();
     let mut hash = Sha256::new();
     hash.input(&transcript);
-    let mut out = [0u8; 32];
-    hash.result(&mut out);
-    out.to_vec()
+    hash.result().to_vec()
 }
 
 fn ed25519_hash_symmetric(password_vec: &[u8], id_s: &[u8],
@@ -214,11 +214,11 @@ fn ed25519_hash_symmetric(password_vec: &[u8], id_s: &[u8],
 
     let mut pw_hash = Sha256::new();
     pw_hash.input(password_vec);
-    pw_hash.result(&mut transcript[0..32]);
+    transcript[0..32].copy_from_slice(&pw_hash.result());
 
     let mut ids_hash = Sha256::new();
     ids_hash.input(id_s);
-    ids_hash.result(&mut transcript[32..64]);
+    transcript[32..64].copy_from_slice(&ids_hash.result());
 
     if msg_u < msg_v {
         transcript[64..96].copy_from_slice(msg_u);
@@ -231,9 +231,7 @@ fn ed25519_hash_symmetric(password_vec: &[u8], id_s: &[u8],
 
     let mut hash = Sha256::new();
     hash.input(&transcript);
-    let mut out = [0u8; 32];
-    hash.result(&mut out);
-    out.to_vec()
+    hash.result().to_vec()
 }
 
 /* "session type pattern" */
@@ -345,28 +343,28 @@ impl<G: Group> SPAKE2<G> {
 
     pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
         if msg2.len() != 1 + G::element_length() {
-            return Err(SPAKEErr(String::from("inbound message is the wrong length")))
+            return Err(SPAKEErr{kind: ErrorType::WrongLength});
         }
         let msg_side = msg2[0];
 
         match self.side {
             Side::A => match msg_side {
                 0x42 => (), // 'B'
-                _ => return Err(SPAKEErr(String::from("bad side"))),
+                _ => return Err(SPAKEErr{kind: ErrorType::BadSide}),
             },
             Side::B => match msg_side {
                 0x41 => (), // 'A'
-                _ => return Err(SPAKEErr(String::from("bad side"))),
+                _ => return Err(SPAKEErr{kind: ErrorType::BadSide}),
             },
             Side::Symmetric => match msg_side {
                 0x53 => (), // 'S'
-                _ => return Err(SPAKEErr(String::from("bad side"))),
+                _ => return Err(SPAKEErr{kind: ErrorType::BadSide}),
             },
         }
 
         let msg2_element = match G::bytes_to_element(&msg2[1..]) {
             Some(x) => x,
-            None => {return Err(SPAKEErr(String::from("message corrupted")))},
+            None => {return Err(SPAKEErr{kind: ErrorType::CorruptMessage})},
         };
 
         // a: K = (Y+N*(-pw))*x
@@ -415,7 +413,7 @@ mod test {
     "random_scalar()" function, which results in some particular scalar.
      */
     use curve25519_dalek::scalar::Scalar;
-    use curve25519_dalek::constants::ED25519_BASEPOINT;
+    use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
     use spake2::{SPAKE2, Ed25519Group};
     use hex::ToHex;
     use super::*;
@@ -441,7 +439,7 @@ mod test {
     fn test_serialize_basepoint() {
         // make sure elements are serialized same as the python library
         let exp = "5866666666666666666666666666666666666666666666666666666666666666";
-        let base_vec = ED25519_BASEPOINT.compress_edwards().as_bytes().to_vec();
+        let base_vec = ED25519_BASEPOINT_POINT.compress_edwards().as_bytes().to_vec();
         let base_hex = base_vec.to_hex();
         println!("exp: {:?}", exp);
         println!("got: {:?}", base_hex);
