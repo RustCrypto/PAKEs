@@ -1,0 +1,13 @@
+[package]
+name = "srp"
+version = "0.1.0"
+authors = ["RustCrypto Developers"]
+
+[dependencies]
+num = "*"
+generic-array = "*"
+rand = "0.3"
+digest = "*"
+
+[dev-dependencies]
+sha2 = "*"
