@@ -8,6 +8,23 @@
 //! 
 //! Currently compatability with over implementations was not tested.
 //! 
+//! # Usage
+//! Add `srp` dependecy to your `Cargo.toml`:
+//! 
+//! ```toml
+//! [dependencies]
+//! rand = "0.3"
+//! ```
+//!
+//! and this to your crate root:
+//!
+//! ```rust
+//! extern crate srp;
+//! ```
+//!
+//! Next read documentation for [`client`](client/index.html) and
+//! [`server`](server/index.html) modules.
+//!
 //! # Algorithm description
 //! Here we briefly describe implemented algroithm. For additionall information
 //! refer to SRP literature. All arithmetic is done modulo `N`, where `N` is a 
