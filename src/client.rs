@@ -9,7 +9,7 @@
 //! use sha2::Sha256;
 //!
 //! let a = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
-//! let client = SrpClient::<Sha256>::new(&a, &srp_params);
+//! let client = SrpClient::<Sha256>::new(&a, &G_2048);
 //! ```
 //! 
 //! Next send handshake data (username and `a_pub`) to the server and receive
@@ -52,7 +52,7 @@
 //! registration.
 //! 
 //! ```ignore
-//! let pwd_verifier = SrpClient::<Sha256>::register(&private_key, &srp_params);
+//! let pwd_verifier = client.get_password_verifier(&private_key);
 //! conn.send_registration_data(username, salt, pwd_verifier);
 //! ```
 
