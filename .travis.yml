@@ -6,4 +6,4 @@ rust:
 matrix:
   allow_failures:
     - rust: nightly
-script: cargo test --release --verbose
+script: cargo test --release --verbose --all
