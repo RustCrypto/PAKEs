@@ -1,6 +1,6 @@
 [package]
 name = "srp"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["RustCrypto Developers"]
 license = "MIT/Apache-2.0"
 description = "Secure Remote Password (SRP) protocol implementation"
@@ -12,11 +12,13 @@ categories = ["cryptography", "authentication"]
 [dependencies]
 num = "0.1"
 generic-array = "0.8"
-rand = "0.3"
 digest = "0.6"
+lazy_static = "0.2"
 
 [dev-dependencies]
+rand = "0.3"
 sha2 = "0.6"
+sha-1 = "0.4"
 
 [badges]
 travis-ci = { repository = "RustCrypto/SRP" }

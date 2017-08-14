@@ -2,6 +2,7 @@
 use std::{fmt, error};
 use num::BigUint;
 use tools::powm;
+use digest::Digest;
 
 /// SRP authentification error.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -21,19 +22,43 @@ impl error::Error for SrpAuthError {
     }
 }
 
-/// Parameters of SRP shared between client and server.
+/// Group used for SRP computations
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SrpParams {
+pub struct SrpGroup {
     /// A large safe prime (N = 2q+1, where q is prime)
     pub n: BigUint,
-    /// A generator modulo N (e.g. 2)
+    /// A generator modulo N
     pub g: BigUint,
-    /// Multiplier parameter (k = H(N, g) in SRP-6a, k = 3 for legacy SRP-6)
-    pub k: BigUint,
 }
 
-impl SrpParams {
+impl SrpGroup {
     pub(crate) fn powm(&self, v: &BigUint) -> BigUint {
         powm(&self.g, v, &self.n)
+    }
+
+    /// Compute `k` with given hash function and return SRP parameters
+    pub(crate) fn compute_k<D: Digest>(&self) -> BigUint {
+        let n = self.n.to_bytes_be();
+        let g_bytes = self.g.to_bytes_be();
+        let mut buf = vec![0u8; n.len()];
+        let l = n.len() - g_bytes.len();
+        buf[l..].copy_from_slice(&g_bytes);
+
+        let mut d = D::new();
+        d.input(&n);
+        d.input(&buf);
+        BigUint::from_bytes_be(&d.result())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ::groups::G_1024;
+    use sha_1::Sha1;
+
+    #[test]
+    fn test_k_1024_sha1() {
+        let k = G_1024.compute_k::<Sha1>().to_bytes_be();
+        assert_eq!(&k, include_bytes!("k_sha1_1024.bin"));
     }
 }

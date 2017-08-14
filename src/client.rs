@@ -2,12 +2,14 @@
 //! 
 //! # Usage
 //! First create SRP client struct by passing to it SRP parameters (shared
-//! between client and server) and RNG instance (OS RNG is recommended):
+//! between client and server) and randomly generated `a`:
 //! 
 //! ```ignore
-//! let srp_params = SrpParams{n, g, k};
-//! let mut rng = rand::os::OsRng::new().unwrap();
-//! let client = SrpClient::<Sha256>::new(&srp_params, &mut rng);
+//! use srp::groups::G_2048;
+//! use sha2::Sha256;
+//!
+//! let a = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
+//! let client = SrpClient::<Sha256>::new(&a, &srp_params);
 //! ```
 //! 
 //! Next send handshake data (username and `a_pub`) to the server and receive
@@ -25,7 +27,7 @@
 //! can return error in case of malicious `b_pub`.
 //! 
 //! ```ignore
-//! let private_key = srp6a_private_key::<Sha256>(username, password, salt);
+//! let private_key = srp_private_key::<Sha256>(username, password, salt);
 //! let verifier = client.get_verifier(&private_key, &b_pub)?;
 //! ```
 //!
@@ -53,19 +55,20 @@
 //! let pwd_verifier = SrpClient::<Sha256>::register(&private_key, &srp_params);
 //! conn.send_registration_data(username, salt, pwd_verifier);
 //! ```
+
+//let buf = rng.gen_iter::<u8>().take(l).collect::<Vec<u8>>();
 use std::marker::PhantomData;
 
-use rand::Rng;
 use num::{BigUint, Zero};
 use digest::Digest;
 use generic_array::GenericArray;
 
 use tools::powm;
-use types::{SrpAuthError, SrpParams};
+use types::{SrpAuthError, SrpGroup};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
-    params: &'a SrpParams,
+    params: &'a SrpGroup,
 
     a: BigUint,
     a_pub: BigUint,
@@ -80,11 +83,10 @@ pub struct SrpClientVerifier<D: Digest> {
     key: GenericArray<u8, D::OutputSize>,
 }
 
-/// Compute user private key as described in the SRP6a. Consider using proper
+/// Compute user private key as described in the RFC 5054. Consider using proper
 /// password hashing algorithm instead.
-pub fn srp6a_private_key<D: Digest>(username: &[u8], password: &[u8],
-        salt: &[u8]
-    ) -> GenericArray<u8, D::OutputSize>
+pub fn srp_private_key<D: Digest>(username: &[u8], password: &[u8], salt: &[u8])
+    -> GenericArray<u8, D::OutputSize>
 {
     let p = {
         let mut d = D::new();
@@ -101,10 +103,8 @@ pub fn srp6a_private_key<D: Digest>(username: &[u8], password: &[u8],
 
 impl<'a, D: Digest> SrpClient<'a, D> {
     /// Create new SRP client instance.
-    pub fn new<R: Rng>(params: &'a SrpParams, rng: &mut R) -> Self {
-        let l = params.n.bits()/8; 
-        let buf = rng.gen_iter::<u8>().take(l).collect::<Vec<u8>>();
-        let a = BigUint::from_bytes_le(&buf);
+    pub fn new(a: &[u8], params: &'a SrpGroup) -> Self {
+        let a = BigUint::from_bytes_be(a);
         let a_pub = params.powm(&a);
 
         Self { params, a, a_pub, d: Default::default() }
@@ -112,16 +112,17 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
     /// Get password verfier for user registration on the server
     pub fn get_password_verifier(&self, private_key: &[u8]) -> Vec<u8> {
-        let x = BigUint::from_bytes_le(&private_key);
+        let x = BigUint::from_bytes_be(&private_key);
         let v = self.params.powm(&x);
-        v.to_bytes_le()
+        v.to_bytes_be()
     }
 
     fn calc_key(&self, b_pub: &BigUint, x: &BigUint, u: &BigUint)
         -> GenericArray<u8, D::OutputSize>
     {
         let n = &self.params.n;
-        let interm = (&self.params.k * self.params.powm(x)) % n;
+        let k = self.params.compute_k::<D>();
+        let interm = (k * self.params.powm(x)) % n;
         // Because we do operation in modulo N we can get: (kv + g^b) < kv
         let v = if b_pub > &interm {
             (b_pub - &interm) % n
@@ -130,7 +131,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         };
         // S = |B - kg^x| ^ (a + ux)
         let s = powm(&v, &(&self.a + (u*x) % n ), n);
-        D::digest(&s.to_bytes_le())
+        D::digest(&s.to_bytes_be())
     }
 
     /// Process server reply to the handshake.
@@ -139,25 +140,25 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     {
         let u = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_le());
+            d.input(&self.a_pub.to_bytes_be());
             d.input(b_pub);
-            BigUint::from_bytes_le(&d.result())
+            BigUint::from_bytes_be(&d.result())
         };
 
-        let b_pub = BigUint::from_bytes_le(b_pub);
+        let b_pub = BigUint::from_bytes_be(b_pub);
 
         // Safeguard against malicious B
         if &b_pub % &self.params.n == BigUint::zero() {
             return Err(SrpAuthError{ description: "Malicious b_pub value" })
         }
 
-        let x = BigUint::from_bytes_le(&private_key);
+        let x = BigUint::from_bytes_be(&private_key);
         let key = self.calc_key(&b_pub, &x, &u);
         // M1 = H(A, B, K)
         let proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_le());
-            d.input(&b_pub.to_bytes_le());
+            d.input(&self.a_pub.to_bytes_be());
+            d.input(&b_pub.to_bytes_be());
             d.input(&key);
             d.result()
         };
@@ -165,7 +166,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         // M2 = H(A, M1, K)
         let server_proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_le());
+            d.input(&self.a_pub.to_bytes_be());
             d.input(&proof);
             d.input(&key);
             d.result()
@@ -180,7 +181,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
     /// Get public ephemeral value for handshaking with the server.
     pub fn get_a_pub(&self) -> Vec<u8> {
-        self.a_pub.to_bytes_le()
+        self.a_pub.to_bytes_be()
     }
 }
 
