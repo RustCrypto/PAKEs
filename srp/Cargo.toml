@@ -21,4 +21,4 @@ sha2 = "0.6"
 sha-1 = "0.4"
 
 [badges]
-travis-ci = { repository = "RustCrypto/SRP" }
+travis-ci = { repository = "RustCrypto/PAKE" }
