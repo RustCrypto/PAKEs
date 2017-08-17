@@ -12,7 +12,7 @@ use srp::server::{SrpServer, UserRecord};
 
 fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
     let mut rng = rand::os::OsRng::new().unwrap();
-    let username = "alice".as_bytes();
+    let username = b"alice";
 
     // Client instance creation
     let a = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
@@ -34,7 +34,7 @@ fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
     let (salt, b_pub) = (&user.salt, server.get_b_pub());
 
     // Client processes handshake reply
-    let auth_priv_key = srp_private_key::<Sha256>(username, auth_pwd, &salt);
+    let auth_priv_key = srp_private_key::<Sha256>(username, auth_pwd, salt);
     let client2 = client.process_reply(&auth_priv_key, &b_pub).unwrap();
     let proof = client2.get_proof();
 
@@ -51,11 +51,11 @@ fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
 
 #[test]
 fn good_password() {
-    auth_test("password".as_bytes(), "password".as_bytes());
+    auth_test(b"password", b"password");
 }
 
 #[test]
 #[should_panic]
 fn bad_password() {
-    auth_test("password".as_bytes(), "paSsword".as_bytes());
+    auth_test(b"password", b"paSsword");
 }

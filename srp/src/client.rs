@@ -48,8 +48,8 @@
 //! 
 //! For user registration on the server first generate salt (e.g. 32 bytes long)
 //! and get password verifier which depends on private key. Send useranme, salt
-//! and password verifier over protected channel to protect against MitM for
-//! registration.
+//! and password verifier over protected channel to protect against
+//! Man-in-the-middle (MITM) attack for registration.
 //! 
 //! ```ignore
 //! let pwd_verifier = client.get_password_verifier(&private_key);
@@ -112,7 +112,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
     /// Get password verfier for user registration on the server
     pub fn get_password_verifier(&self, private_key: &[u8]) -> Vec<u8> {
-        let x = BigUint::from_bytes_be(&private_key);
+        let x = BigUint::from_bytes_be(private_key);
         let v = self.params.powm(&x);
         v.to_bytes_be()
     }
@@ -152,7 +152,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             return Err(SrpAuthError{ description: "Malicious b_pub value" })
         }
 
-        let x = BigUint::from_bytes_be(&private_key);
+        let x = BigUint::from_bytes_be(private_key);
         let key = self.calc_key(&b_pub, &x, &u);
         // M1 = H(A, B, K)
         let proof = {
