@@ -168,15 +168,15 @@ fn ed25519_hash_ab(password_vec: &[u8], id_a: &[u8], id_b: &[u8],
     let mut transcript = [0u8; 6*32];
 
     let mut pw_hash = Sha256::new();
-    pw_hash.input(&password_vec);
+    pw_hash.input(password_vec);
     pw_hash.result(&mut transcript[0..32]);
 
     let mut ida_hash = Sha256::new();
-    ida_hash.input(&id_a);
+    ida_hash.input(id_a);
     ida_hash.result(&mut transcript[32..64]);
 
     let mut idb_hash = Sha256::new();
-    idb_hash.input(&id_b);
+    idb_hash.input(id_b);
     idb_hash.result(&mut transcript[64..96]);
 
     transcript[96..128].copy_from_slice(first_msg);
@@ -213,19 +213,19 @@ fn ed25519_hash_symmetric(password_vec: &[u8], id_s: &[u8],
     let mut transcript = [0u8; 5*32];
 
     let mut pw_hash = Sha256::new();
-    pw_hash.input(&password_vec);
+    pw_hash.input(password_vec);
     pw_hash.result(&mut transcript[0..32]);
 
     let mut ids_hash = Sha256::new();
-    ids_hash.input(&id_s);
+    ids_hash.input(id_s);
     ids_hash.result(&mut transcript[32..64]);
 
     if msg_u < msg_v {
-        transcript[64..96].copy_from_slice(&msg_u);
+        transcript[64..96].copy_from_slice(msg_u);
         transcript[96..128].copy_from_slice(msg_v);
     } else {
         transcript[64..96].copy_from_slice(msg_v);
-        transcript[96..128].copy_from_slice(&msg_u);
+        transcript[96..128].copy_from_slice(msg_u);
     }
     transcript[128..160].copy_from_slice(key_bytes);
 
