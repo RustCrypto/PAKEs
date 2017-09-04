@@ -143,8 +143,8 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
     println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
 
     let mut reducible = [0u8; 64]; // little-endian
-    for i in 0..32+16 {
-        reducible[32+16-1-i] = okm[i];
+    for (i, x) in okm.iter().enumerate().take(32+16) {
+        reducible[32+16-1-i] = *x;
     }
     println!("reducible:  {}", reducible.iter().to_hex());
     let reduced = c2_Scalar::reduce(&reducible);
