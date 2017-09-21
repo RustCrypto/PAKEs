@@ -5,13 +5,13 @@ extern crate sha2;
 extern crate hkdf;
 extern crate num_bigint;
 
-extern crate hex;
+//extern crate hex;
 
 mod spake2;
 pub use spake2::*;
 
-//#[cfg(test)]
-//extern crate hex;
+#[cfg(test)]
+extern crate hex;
 
 #[cfg(test)]
 mod tests {

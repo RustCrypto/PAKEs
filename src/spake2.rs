@@ -9,7 +9,7 @@ use sha2::{Sha256, Digest};
 use hkdf::Hkdf;
 use num_bigint::BigUint;
 
-use hex::ToHex;
+//use hex::ToHex;
 
 #[derive(Debug, PartialEq)]
 pub enum ErrorType {
@@ -142,17 +142,18 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
     //  i % q
 
     let okm = Hkdf::<Sha256>::new(s, b"").derive(b"SPAKE2 pw", 32+16);
-    println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
+    //println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
 
     let mut reducible = [0u8; 64]; // little-endian
     for (i, x) in okm.iter().enumerate().take(32+16) {
         reducible[32+16-1-i] = *x;
     }
-    println!("reducible:  {}", reducible.iter().to_hex());
-    let reduced = c2_Scalar::reduce(&reducible);
-    println!("reduced:    {}", reduced.as_bytes().to_hex());
-    println!("done");
-    reduced
+    //println!("reducible:  {}", reducible.iter().to_hex());
+    c2_Scalar::reduce(&reducible)
+    //let reduced = c2_Scalar::reduce(&reducible);
+    //println!("reduced:    {}", reduced.as_bytes().to_hex());
+    //println!("done");
+    //reduced
 }
 
 fn ed25519_hash_ab(password_vec: &[u8], id_a: &[u8], id_b: &[u8],
@@ -185,7 +186,7 @@ fn ed25519_hash_ab(password_vec: &[u8], id_a: &[u8], id_b: &[u8],
     transcript[128..160].copy_from_slice(second_msg);
     transcript[160..192].copy_from_slice(key_bytes);
 
-    println!("transcript: {:?}", transcript.iter().to_hex());
+    //println!("transcript: {:?}", transcript.iter().to_hex());
         
     //let mut hash = G::TranscriptHash::default();
     let mut hash = Sha256::new();
