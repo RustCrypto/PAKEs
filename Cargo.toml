@@ -25,3 +25,8 @@ hex = "0.2"
 
 [dev-dependencies]
 hex = "0.2"
+bencher = "0.1"
+
+[[bench]]
+name = "spake2"
+harness = false
