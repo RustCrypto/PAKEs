@@ -97,7 +97,7 @@ impl Group for Ed25519Group {
         -s
     }
     fn element_to_bytes(s: &c2_Element) -> Vec<u8> {
-        s.compress_edwards().as_bytes().to_vec()
+        s.compress().as_bytes().to_vec()
     }
     fn element_length() -> usize {
         32
@@ -440,7 +440,7 @@ mod test {
     fn test_serialize_basepoint() {
         // make sure elements are serialized same as the python library
         let exp = "5866666666666666666666666666666666666666666666666666666666666666";
-        let base_vec = ED25519_BASEPOINT_POINT.compress_edwards().as_bytes().to_vec();
+        let base_vec = ED25519_BASEPOINT_POINT.compress().as_bytes().to_vec();
         let base_hex = base_vec.to_hex();
         println!("exp: {:?}", exp);
         println!("got: {:?}", base_hex);
