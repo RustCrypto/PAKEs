@@ -2,7 +2,7 @@
 //! 
 //! It is strongly recommended to use them instead of custom generated
 //! groups. Additionally it is not recommended to use `G_1024` and `G_1536`,
-//! they are provided only for compatability with the legacy software.
+//! they are provided only for compatibility with the legacy software.
 use types::SrpGroup;
 use num::BigUint;
 

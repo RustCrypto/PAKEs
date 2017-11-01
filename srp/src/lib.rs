@@ -7,7 +7,7 @@
 //! algorithm for private key computation instead of method described in the
 //! SRP literature.
 //!
-//! Compatability with over implementations was not yet tested.
+//! Compatibility with over implementations was not yet tested.
 //!
 //! # Usage
 //! Add `srp` dependecy to your `Cargo.toml`:
