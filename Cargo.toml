@@ -21,10 +21,10 @@ rand = "0.3"
 sha2 = "0.6"
 hkdf = "0.2"
 num-bigint = "0.1"
-hex = "0.2"
+hex = "0.3"
 
 [dev-dependencies]
-hex = "0.2"
+hex = "0.3"
 bencher = "0.1"
 
 [[bench]]

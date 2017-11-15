@@ -416,7 +416,7 @@ mod test {
     use curve25519_dalek::scalar::Scalar;
     use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
     use spake2::{SPAKE2, Ed25519Group};
-    use hex::ToHex;
+    use hex;
     use super::*;
 
     // the python tests show the long-integer form of scalars. the rust code
@@ -441,7 +441,7 @@ mod test {
         // make sure elements are serialized same as the python library
         let exp = "5866666666666666666666666666666666666666666666666666666666666666";
         let base_vec = ED25519_BASEPOINT_POINT.compress().as_bytes().to_vec();
-        let base_hex = base_vec.to_hex();
+        let base_hex = hex::encode(base_vec);
         println!("exp: {:?}", exp);
         println!("got: {:?}", base_hex);
         assert_eq!(exp, base_hex);
@@ -452,8 +452,8 @@ mod test {
         let password = b"password";
         let expected_pw_scalar = decimal_to_scalar(b"3515301705789368674385125653994241092664323519848410154015274772661223168839");
         let pw_scalar = Ed25519Group::hash_to_scalar(password);
-        println!("exp: {:?}", expected_pw_scalar.as_bytes().to_hex());
-        println!("got: {:?}", pw_scalar.as_bytes().to_hex());
+        println!("exp: {:?}", hex::encode(expected_pw_scalar.as_bytes()));
+        println!("got: {:?}", hex::encode(pw_scalar.as_bytes()));
         assert_eq!(&pw_scalar, &expected_pw_scalar);
     }
 
@@ -491,7 +491,7 @@ mod test {
             b"YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
             b"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
         let expected_key = "d59d9ba920f7092565cec747b08d5b2e981d553ac32fde0f25e5b4a4cfca3efd";
-        assert_eq!(key.to_hex(), expected_key);
+        assert_eq!(hex::encode(key), expected_key);
     }
 
     #[test]
@@ -502,7 +502,7 @@ mod test {
             b"YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
             b"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
         let expected_key = "b0b31e4401aae37d91a9a8bf6fbb1298cafc005ff9142e3ffc5b9799fb11128b";
-        assert_eq!(key.to_hex(), expected_key);
+        assert_eq!(hex::encode(key), expected_key);
     }
 
     #[test]
@@ -511,36 +511,36 @@ mod test {
         let scalar_b = decimal_to_scalar(b"7002393159576182977806091886122272758628412261510164356026361256515836884383");
         let expected_pw_scalar = decimal_to_scalar(b"3515301705789368674385125653994241092664323519848410154015274772661223168839");
 
-        println!("scalar_a is {}", scalar_a.as_bytes().to_hex());
+        println!("scalar_a is {}", hex::encode(scalar_a.as_bytes()));
 
         let (s1, msg1) = SPAKE2::<Ed25519Group>::start_a_internal(
             b"password", b"idA", b"idB", scalar_a);
         let expected_msg1 = "416fc960df73c9cf8ed7198b0c9534e2e96a5984bfc5edc023fd24dacf371f2af9";
 
         println!();
-        println!("xys1: {:?}", s1.xy_scalar.as_bytes().to_hex());
+        println!("xys1: {:?}", hex::encode(s1.xy_scalar.as_bytes()));
         println!();
-        println!("pws1: {:?}", s1.password_scalar.as_bytes().to_hex());
-        println!("exp : {:?}", expected_pw_scalar.as_bytes().to_hex());
+        println!("pws1: {:?}", hex::encode(s1.password_scalar.as_bytes()));
+        println!("exp : {:?}", hex::encode(expected_pw_scalar.as_bytes()));
         println!();
-        println!("msg1: {:?}", msg1.to_hex());
+        println!("msg1: {:?}", hex::encode(&msg1));
         println!("exp : {:?}", expected_msg1);
         println!();
 
-        assert_eq!(expected_pw_scalar.as_bytes().to_hex(),
-                   s1.password_scalar.as_bytes().to_hex());
-        assert_eq!(msg1.to_hex(), expected_msg1);
+        assert_eq!(hex::encode(expected_pw_scalar.as_bytes()),
+                   hex::encode(s1.password_scalar.as_bytes()));
+        assert_eq!(hex::encode(&msg1), expected_msg1);
 
         let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b_internal(
             b"password", b"idA", b"idB", scalar_b);
         assert_eq!(expected_pw_scalar, s2.password_scalar);
-        assert_eq!(msg2.to_hex(),
+        assert_eq!(hex::encode(&msg2),
                    "42354e97b88406922b1df4bea1d7870f17aed3dba7c720b313edae315b00959309");
 
         let key1 = s1.finish(&msg2).unwrap();
         let key2 = s2.finish(&msg1).unwrap();
         assert_eq!(key1, key2);
-        assert_eq!(key1.to_hex(),
+        assert_eq!(hex::encode(key1),
                    "712295de7219c675ddd31942184aa26e0a957cf216bc230d165b215047b520c1");
     }
 
