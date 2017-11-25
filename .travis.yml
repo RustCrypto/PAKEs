@@ -5,14 +5,19 @@ rust:
   - beta
   - nightly
 
+os:
+  - linux
+  - osx
+
 matrix:
   allow_failures:
     - rust: nightly
 
 script:
   - cargo clean
-  - cargo build
-  - cargo test
+  - cargo build --verbose --all
+#  - cargo run --verbose --example XYZ
+  - cargo test --verbose --features "test" --all
 
 after_success: |
   if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
