@@ -17,7 +17,8 @@ script:
   - cargo clean
   - cargo build --verbose --all
 #  - cargo run --verbose --example XYZ
-  - cargo test --verbose --features "test" --all
+#  - cargo test --verbose --features "test" --all
+  - cargo test --verbose --all
 
 after_success: |
   if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
