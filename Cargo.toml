@@ -1,6 +1,6 @@
 [package]
 name = "spake2"
-version = "0.0.3"
+version = "0.0.4-alpha.0"
 authors = ["Brian Warner <warner@lothar.com>"]
 description = "The SPAKE2 password-authenticated key-exchange algorithm, in Rust."
 documentation = "https://docs.rs/spake2"
