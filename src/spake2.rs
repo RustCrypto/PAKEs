@@ -129,9 +129,9 @@ impl Group for Ed25519Group {
 fn decimal_to_scalar(d: &[u8]) -> c2_Scalar {
     let bytes = BigUint::parse_bytes(d, 10).unwrap().to_bytes_le();
     assert_eq!(bytes.len(), 32);
-    let mut s = c2_Scalar([0u8; 32]);
-    s.0.copy_from_slice(&bytes);
-    s
+    let mut b2 = [0u8; 32];
+    b2.copy_from_slice(&bytes);
+    c2_Scalar::from_bytes_mod_order(b2)
 }
 
 fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
@@ -149,7 +149,7 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
         reducible[32+16-1-i] = *x;
     }
     //println!("reducible:  {}", reducible.iter().to_hex());
-    c2_Scalar::reduce(&reducible)
+    c2_Scalar::from_bytes_mod_order_wide(&reducible)
     //let reduced = c2_Scalar::reduce(&reducible);
     //println!("reduced:    {}", reduced.as_bytes().to_hex());
     //println!("done");
@@ -413,7 +413,6 @@ mod test {
     deterministic RNG (used only for tests, of course) into the per-Group
     "random_scalar()" function, which results in some particular scalar.
      */
-    use curve25519_dalek::scalar::Scalar;
     use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
     use spake2::{SPAKE2, Ed25519Group};
     use hex;
@@ -427,12 +426,13 @@ mod test {
     fn test_convert() {
         let t1_decimal = b"2238329342913194256032495932344128051776374960164957527413114840482143558222";
         let t1_scalar = decimal_to_scalar(t1_decimal);
-        let expected: Scalar = Scalar(
+        let t1_bytes = t1_scalar.to_bytes();
+        let expected =
             [0x4e, 0x5a, 0xb4, 0x34, 0x5d, 0x47, 0x08, 0x84,
              0x59, 0x13, 0xb4, 0x64, 0x1b, 0xc2, 0x7d, 0x52,
              0x52, 0xa5, 0x85, 0x10, 0x1b, 0xcc, 0x42, 0x44,
-             0xd4, 0x49, 0xf4, 0xa8, 0x79, 0xd9, 0xf2, 0x04]);
-        assert_eq!(t1_scalar, expected);
+             0xd4, 0x49, 0xf4, 0xa8, 0x79, 0xd9, 0xf2, 0x04];
+        assert_eq!(t1_bytes, expected);
         //println!("t1_scalar is {:?}", t1_scalar);
     }
 

@@ -16,7 +16,7 @@ exclude = [
 travis-ci = { repository = "warner/spake2.rs" }
 
 [dependencies]
-curve25519-dalek = "0.13"
+curve25519-dalek = "0.14"
 rand = "0.3"
 sha2 = "0.7"
 hkdf = "0.3"
