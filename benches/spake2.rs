@@ -4,7 +4,7 @@ extern crate bencher;
 extern crate spake2;
 
 use bencher::Bencher;
-use spake2::{SPAKE2, Ed25519Group};
+use spake2::{Ed25519Group, SPAKE2};
 
 fn spake2_start(bench: &mut Bencher) {
     bench.iter(|| {
@@ -26,19 +26,18 @@ fn spake2_finish(bench: &mut Bencher) {
 }*/
 
 fn spake2_start_and_finish(bench: &mut Bencher) {
-    let (_, msg2) = SPAKE2::<Ed25519Group>::start_b(b"password",
-                                                    b"idA", b"idB");
+    let (_, msg2) = SPAKE2::<Ed25519Group>::start_b(b"password", b"idA", b"idB");
     let msg2_slice = msg2.as_slice();
     bench.iter(|| {
-        let (s1, _) = SPAKE2::<Ed25519Group>::start_a(b"password",
-                                                      b"idA", b"idB");
+        let (s1, _) = SPAKE2::<Ed25519Group>::start_a(b"password", b"idA", b"idB");
         s1.finish(msg2_slice)
     })
 }
 
-
-benchmark_group!(benches,
-                 spake2_start,
-                 //spake2_finish,
-                 spake2_start_and_finish);
+benchmark_group!(
+    benches,
+    spake2_start,
+    //spake2_finish,
+    spake2_start_and_finish
+);
 benchmark_main!(benches);
