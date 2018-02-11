@@ -117,7 +117,7 @@ impl Group for Ed25519Group {
 
     fn basepoint_mult(s: &c2_Scalar) -> c2_Element {
         //c2_Element::basepoint_mult(s)
-        &ED25519_BASEPOINT_POINT * s
+        ED25519_BASEPOINT_POINT * s
     }
     fn scalarmult(e: &c2_Element, s: &c2_Scalar) -> c2_Element {
         e * s
