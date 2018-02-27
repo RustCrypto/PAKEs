@@ -311,14 +311,14 @@ impl<G: Group> SPAKE2<G> {
 
         (
             SPAKE2 {
-                side: side,
-                xy_scalar: xy_scalar,
-                password_vec: password_vec, // string
+                side,
+                xy_scalar,
+                password_vec, // string
                 id_a: id_a_copy,
                 id_b: id_b_copy,
                 id_s: id_s_copy,
                 msg1: msg1.clone(),
-                password_scalar: password_scalar, // scalar
+                password_scalar, // scalar
             },
             msg_and_side,
         )
