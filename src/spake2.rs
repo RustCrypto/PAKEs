@@ -144,7 +144,7 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
     //  i = int(h, 16)
     //  i % q
 
-    let okm = Hkdf::<Sha256>::new(s, b"").derive(b"SPAKE2 pw", 32 + 16);
+    let okm = Hkdf::<Sha256>::extract(b"", s).expand(b"SPAKE2 pw", 32 + 16);
     //println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
 
     let mut reducible = [0u8; 64]; // little-endian
