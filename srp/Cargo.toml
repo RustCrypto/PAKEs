@@ -1,6 +1,6 @@
 [package]
 name = "srp"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["RustCrypto Developers"]
 license = "MIT/Apache-2.0"
 description = "Secure Remote Password (SRP) protocol implementation"
