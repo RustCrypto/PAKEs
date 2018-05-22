@@ -4,7 +4,7 @@ use curve25519_dalek::scalar::Scalar as c2_Scalar;
 use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 use curve25519_dalek::edwards::CompressedEdwardsY;
-use rand::{OsRng, Rng};
+use rand::{OsRng, Rng, CryptoRng};
 use sha2::{Digest, Sha256};
 use hkdf::Hkdf;
 use num_bigint::BigUint;
@@ -35,7 +35,7 @@ pub trait Group {
     fn const_n() -> Self::Element;
     fn const_s() -> Self::Element;
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
-    fn random_scalar<T: Rng>(cspring: &mut T) -> Self::Scalar;
+    fn random_scalar<T>(cspring: &mut T) -> Self::Scalar where T: Rng+CryptoRng;
     fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;
     fn element_to_bytes(e: &Self::Element) -> Vec<u8>;
     fn bytes_to_element(b: &[u8]) -> Option<Self::Element>;
@@ -91,7 +91,8 @@ impl Group for Ed25519Group {
     fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
         ed25519_hash_to_scalar(s)
     }
-    fn random_scalar<T: Rng>(cspring: &mut T) -> c2_Scalar {
+    fn random_scalar<T>(cspring: &mut T) -> c2_Scalar
+    where T: Rng + CryptoRng {
         c2_Scalar::random(cspring)
     }
     fn scalar_neg(s: &c2_Scalar) -> c2_Scalar {
