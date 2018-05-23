@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
-use curve25519_dalek::scalar::Scalar as c2_Scalar;
-use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 use curve25519_dalek::edwards::CompressedEdwardsY;
-use rand::{OsRng, Rng, CryptoRng};
-use sha2::{Digest, Sha256};
+use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
+use curve25519_dalek::scalar::Scalar as c2_Scalar;
 use hkdf::Hkdf;
 use num_bigint::BigUint;
+use rand::{CryptoRng, OsRng, Rng};
+use sha2::{Digest, Sha256};
 
 //use hex::ToHex;
 
@@ -35,7 +35,9 @@ pub trait Group {
     fn const_n() -> Self::Element;
     fn const_s() -> Self::Element;
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
-    fn random_scalar<T>(cspring: &mut T) -> Self::Scalar where T: Rng+CryptoRng;
+    fn random_scalar<T>(cspring: &mut T) -> Self::Scalar
+    where
+        T: Rng + CryptoRng;
     fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;
     fn element_to_bytes(e: &Self::Element) -> Vec<u8>;
     fn bytes_to_element(b: &[u8]) -> Option<Self::Element>;
@@ -92,7 +94,9 @@ impl Group for Ed25519Group {
         ed25519_hash_to_scalar(s)
     }
     fn random_scalar<T>(cspring: &mut T) -> c2_Scalar
-    where T: Rng + CryptoRng {
+    where
+        T: Rng + CryptoRng,
+    {
         c2_Scalar::random(cspring)
     }
     fn scalar_neg(s: &c2_Scalar) -> c2_Scalar {
@@ -467,10 +471,10 @@ mod test {
     deterministic RNG (used only for tests, of course) into the per-Group
     "random_scalar()" function, which results in some particular scalar.
      */
-    use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
-    use spake2::{Ed25519Group, SPAKE2};
-    use hex;
     use super::*;
+    use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
+    use hex;
+    use spake2::{Ed25519Group, SPAKE2};
 
     // the python tests show the long-integer form of scalars. the rust code
     // wants an array of bytes (little-endian). Make sure the way we convert
