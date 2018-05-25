@@ -9,7 +9,18 @@ os:
   - linux
   - osx
 
+branches:
+  except:
+    - /^WIP-.*$/
+
 matrix:
+  include:
+    - rust: 1.26.0 # lock down for consistent rustfmt behavior
+      env: RUSTFMT
+      install:
+        - rustup component add rustfmt-preview
+      script:
+        - cargo fmt -- --write-mode=diff
   allow_failures:
     - rust: nightly
 
