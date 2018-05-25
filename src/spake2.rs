@@ -13,14 +13,14 @@ use std::fmt;
 
 //use hex::ToHex;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ErrorType {
     BadSide,
     WrongLength,
     CorruptMessage,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SPAKEErr {
     pub kind: ErrorType,
 }
@@ -49,7 +49,7 @@ pub trait Group {
     fn add(a: &Self::Element, b: &Self::Element) -> Self::Element;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Ed25519Group;
 
 impl Group for Ed25519Group {
@@ -257,13 +257,15 @@ fn ed25519_hash_symmetric(
 
 /* "session type pattern" */
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Side {
     A,
     B,
     Symmetric,
 }
 
+// we implement a custom Debug below, to avoid revealing secrets in a dump
+#[derive(PartialEq, Eq)]
 pub struct SPAKE2<G: Group> {
     //where &G::Scalar: Neg {
     side: Side,
