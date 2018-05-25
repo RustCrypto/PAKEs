@@ -1,16 +1,12 @@
 extern crate curve25519_dalek;
+extern crate hex;
 extern crate hkdf;
 extern crate num_bigint;
 extern crate rand;
 extern crate sha2;
 
-//extern crate hex;
-
 mod spake2;
 pub use spake2::*;
-
-#[cfg(test)]
-extern crate hex;
 
 #[cfg(test)]
 mod tests {

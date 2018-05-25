@@ -4,10 +4,12 @@ use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
+use hex;
 use hkdf::Hkdf;
 use num_bigint::BigUint;
 use rand::{CryptoRng, OsRng, Rng};
 use sha2::{Digest, Sha256};
+use std::fmt;
 
 //use hex::ToHex;
 
@@ -47,6 +49,7 @@ pub trait Group {
     fn add(a: &Self::Element, b: &Self::Element) -> Self::Element;
 }
 
+#[derive(Debug)]
 pub struct Ed25519Group;
 
 impl Group for Ed25519Group {
@@ -254,11 +257,13 @@ fn ed25519_hash_symmetric(
 
 /* "session type pattern" */
 
+#[derive(Debug)]
 enum Side {
     A,
     B,
     Symmetric,
 }
+
 pub struct SPAKE2<G: Group> {
     //where &G::Scalar: Neg {
     side: Side,
@@ -464,6 +469,26 @@ impl<G: Group> SPAKE2<G> {
     }
 }
 
+fn maybe_utf8(s: &[u8]) -> String {
+    match String::from_utf8(s.to_vec()) {
+        Ok(m) => format!("(s={})", m),
+        Err(_) => format!("(hex={})", hex::encode(s)),
+    }
+}
+
+impl<G: Group> fmt::Debug for SPAKE2<G> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "SPAKE2(G=?, side={:?}, idA={}, idB={}, idS={})",
+            self.side,
+            maybe_utf8(&self.id_a),
+            maybe_utf8(&self.id_b),
+            maybe_utf8(&self.id_s)
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     /* This compares results against the python compatibility tests:
@@ -615,6 +640,14 @@ mod test {
             hex::encode(key1),
             "712295de7219c675ddd31942184aa26e0a957cf216bc230d165b215047b520c1"
         );
+    }
+
+    #[test]
+    fn test_debug() {
+        let (s1, _msg1) = SPAKE2::<Ed25519Group>::start_a(b"password", b"idA", b"idB");
+        println!("s1: {:?}", s1);
+        let (s2, _msg1) = SPAKE2::<Ed25519Group>::start_symmetric(b"password", b"idS");
+        println!("s2: {:?}", s2);
     }
 
 }
