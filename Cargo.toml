@@ -20,7 +20,7 @@ curve25519-dalek = "0.17"
 rand = "0.5"
 sha2 = "0.7"
 hkdf = "0.5"
-num-bigint = "0.1"
+num-bigint = "0.2"
 hex = "0.3"
 
 [dev-dependencies]
