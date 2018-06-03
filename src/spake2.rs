@@ -10,8 +10,41 @@ use num_bigint::BigUint;
 use rand::{CryptoRng, OsRng, Rng};
 use sha2::{Digest, Sha256};
 use std::fmt;
+use std::ops::Deref;
 
 //use hex::ToHex;
+
+/* "newtype pattern": it's a Vec<u8>, but only used for a specific argument
+ * type, to distinguish between ones that are meant as passwords, and ones
+ * that are meant as identity strings */
+
+#[derive(PartialEq, Eq, Clone)]
+pub struct Password(Vec<u8>);
+impl Password {
+    pub fn new(p: &[u8]) -> Password {
+        Password(p.to_vec())
+    }
+}
+impl Deref for Password {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Vec<u8> {
+        &self.0
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
+pub struct Identity(Vec<u8>);
+impl Deref for Identity {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Vec<u8> {
+        &self.0
+    }
+}
+impl Identity {
+    pub fn new(p: &[u8]) -> Identity {
+        Identity(p.to_vec())
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErrorType {
@@ -281,14 +314,14 @@ pub struct SPAKE2<G: Group> {
 impl<G: Group> SPAKE2<G> {
     fn start_internal(
         side: Side,
-        password: &[u8],
-        id_a: &[u8],
-        id_b: &[u8],
-        id_s: &[u8],
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
+        id_s: &Identity,
         xy_scalar: G::Scalar,
     ) -> (SPAKE2<G>, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
-        let password_scalar: G::Scalar = G::hash_to_scalar(password);
+        let password_scalar: G::Scalar = G::hash_to_scalar(&password);
 
         // a: X = B*x + M*pw
         // b: Y = B*y + N*pw
@@ -305,13 +338,13 @@ impl<G: Group> SPAKE2<G> {
         //let m1: G::Element = &G::basepoint_mult(&x) + &(blinding * &password_scalar);
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
         let mut password_vec = Vec::new();
-        password_vec.extend_from_slice(password);
+        password_vec.extend_from_slice(&password);
         let mut id_a_copy = Vec::new();
-        id_a_copy.extend_from_slice(id_a);
+        id_a_copy.extend_from_slice(&id_a);
         let mut id_b_copy = Vec::new();
-        id_b_copy.extend_from_slice(id_b);
+        id_b_copy.extend_from_slice(&id_b);
         let mut id_s_copy = Vec::new();
-        id_s_copy.extend_from_slice(id_s);
+        id_s_copy.extend_from_slice(&id_s);
 
         let mut msg_and_side = Vec::new();
         msg_and_side.push(match side {
@@ -337,47 +370,68 @@ impl<G: Group> SPAKE2<G> {
     }
 
     fn start_a_internal(
-        password: &[u8],
-        id_a: &[u8],
-        id_b: &[u8],
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
         xy_scalar: G::Scalar,
     ) -> (SPAKE2<G>, Vec<u8>) {
-        Self::start_internal(Side::A, password, id_a, id_b, b"", xy_scalar)
+        Self::start_internal(
+            Side::A,
+            &password,
+            &id_a,
+            &id_b,
+            &Identity::new(b""),
+            xy_scalar,
+        )
     }
 
     fn start_b_internal(
-        password: &[u8],
-        id_a: &[u8],
-        id_b: &[u8],
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
         xy_scalar: G::Scalar,
     ) -> (SPAKE2<G>, Vec<u8>) {
-        Self::start_internal(Side::B, password, id_a, id_b, b"", xy_scalar)
+        Self::start_internal(
+            Side::B,
+            &password,
+            &id_a,
+            &id_b,
+            &Identity::new(b""),
+            xy_scalar,
+        )
     }
 
     fn start_symmetric_internal(
-        password: &[u8],
-        id_s: &[u8],
+        password: &Password,
+        id_s: &Identity,
         xy_scalar: G::Scalar,
     ) -> (SPAKE2<G>, Vec<u8>) {
-        Self::start_internal(Side::Symmetric, password, b"", b"", id_s, xy_scalar)
+        Self::start_internal(
+            Side::Symmetric,
+            &password,
+            &Identity::new(b""),
+            &Identity::new(b""),
+            &id_s,
+            xy_scalar,
+        )
     }
 
-    pub fn start_a(password: &[u8], id_a: &[u8], id_b: &[u8]) -> (SPAKE2<G>, Vec<u8>) {
+    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_a_internal(password, id_a, id_b, xy_scalar)
+        Self::start_a_internal(&password, &id_a, &id_b, xy_scalar)
     }
 
-    pub fn start_b(password: &[u8], id_a: &[u8], id_b: &[u8]) -> (SPAKE2<G>, Vec<u8>) {
+    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_b_internal(password, id_a, id_b, xy_scalar)
+        Self::start_b_internal(&password, &id_a, &id_b, xy_scalar)
     }
 
-    pub fn start_symmetric(password: &[u8], id_s: &[u8]) -> (SPAKE2<G>, Vec<u8>) {
+    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_symmetric_internal(password, id_s, xy_scalar)
+        Self::start_symmetric_internal(&password, &id_s, xy_scalar)
     }
 
     pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
@@ -535,11 +589,11 @@ mod test {
 
     #[test]
     fn test_password_to_scalar() {
-        let password = b"password";
+        let password = Password::new(b"password");
         let expected_pw_scalar = decimal_to_scalar(
             b"3515301705789368674385125653994241092664323519848410154015274772661223168839",
         );
-        let pw_scalar = Ed25519Group::hash_to_scalar(password);
+        let pw_scalar = Ed25519Group::hash_to_scalar(&password);
         println!("exp: {:?}", hex::encode(expected_pw_scalar.as_bytes()));
         println!("got: {:?}", hex::encode(pw_scalar.as_bytes()));
         assert_eq!(&pw_scalar, &expected_pw_scalar);
@@ -547,18 +601,32 @@ mod test {
 
     #[test]
     fn test_sizes() {
-        let (s1, msg1) = SPAKE2::<Ed25519Group>::start_a(b"password", b"idA", b"idB");
+        let (s1, msg1) = SPAKE2::<Ed25519Group>::start_a(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+        );
         assert_eq!(msg1.len(), 1 + 32);
-        let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b(b"password", b"idA", b"idB");
+        let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+        );
         assert_eq!(msg2.len(), 1 + 32);
         let key1 = s1.finish(&msg2).unwrap();
         let key2 = s2.finish(&msg1).unwrap();
         assert_eq!(key1.len(), 32);
         assert_eq!(key2.len(), 32);
 
-        let (s1, msg1) = SPAKE2::<Ed25519Group>::start_symmetric(b"password", b"idS");
+        let (s1, msg1) = SPAKE2::<Ed25519Group>::start_symmetric(
+            &Password::new(b"password"),
+            &Identity::new(b"idS"),
+        );
         assert_eq!(msg1.len(), 1 + 32);
-        let (s2, msg2) = SPAKE2::<Ed25519Group>::start_symmetric(b"password", b"idS");
+        let (s2, msg2) = SPAKE2::<Ed25519Group>::start_symmetric(
+            &Password::new(b"password"),
+            &Identity::new(b"idS"),
+        );
         assert_eq!(msg2.len(), 1 + 32);
         let key1 = s1.finish(&msg2).unwrap();
         let key2 = s2.finish(&msg1).unwrap();
@@ -607,8 +675,12 @@ mod test {
 
         println!("scalar_a is {}", hex::encode(scalar_a.as_bytes()));
 
-        let (s1, msg1) =
-            SPAKE2::<Ed25519Group>::start_a_internal(b"password", b"idA", b"idB", scalar_a);
+        let (s1, msg1) = SPAKE2::<Ed25519Group>::start_a_internal(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+            scalar_a,
+        );
         let expected_msg1 = "416fc960df73c9cf8ed7198b0c9534e2e96a5984bfc5edc023fd24dacf371f2af9";
 
         println!();
@@ -627,8 +699,12 @@ mod test {
         );
         assert_eq!(hex::encode(&msg1), expected_msg1);
 
-        let (s2, msg2) =
-            SPAKE2::<Ed25519Group>::start_b_internal(b"password", b"idA", b"idB", scalar_b);
+        let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b_internal(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+            scalar_b,
+        );
         assert_eq!(expected_pw_scalar, s2.password_scalar);
         assert_eq!(
             hex::encode(&msg2),
@@ -646,9 +722,16 @@ mod test {
 
     #[test]
     fn test_debug() {
-        let (s1, _msg1) = SPAKE2::<Ed25519Group>::start_a(b"password", b"idA", b"idB");
+        let (s1, _msg1) = SPAKE2::<Ed25519Group>::start_a(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+        );
         println!("s1: {:?}", s1);
-        let (s2, _msg1) = SPAKE2::<Ed25519Group>::start_symmetric(b"password", b"idS");
+        let (s2, _msg1) = SPAKE2::<Ed25519Group>::start_symmetric(
+            &Password::new(b"password"),
+            &Identity::new(b"idS"),
+        );
         println!("s2: {:?}", s2);
     }
 
