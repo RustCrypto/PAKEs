@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+#![cfg_attr(test, deny(warnings))]
+
 extern crate curve25519_dalek;
 extern crate hex;
 extern crate hkdf;
