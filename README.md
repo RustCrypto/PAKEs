@@ -8,3 +8,5 @@ The SPAKE2 password-authenticated key-exchange algorithm, in Rust.
 
 
 This is still pretty early, but seems to do the job. It needs a proper security review before you should consider using it for anything serious.
+
+Note that the API has changed since 0.0.8 . I released 0.0.9 by mistake.
