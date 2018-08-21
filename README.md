@@ -7,4 +7,4 @@ The SPAKE2 password-authenticated key-exchange algorithm, in Rust.
 [![Docs.rs](https://docs.rs/spake2/badge.svg)](https://docs.rs/spake2)
 
 
-NOTE: this is just a beginning: you should absolutely not use this for anything at all yet. It has a long way to go. Wait until it has a real version number (at least 0.1.something) and has been published to crates.io.
+This is still pretty early, but seems to do the job. It needs a proper security review before you should consider using it for anything serious.
