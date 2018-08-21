@@ -19,7 +19,7 @@ travis-ci = { repository = "warner/spake2.rs" }
 curve25519-dalek = "0.19"
 rand = "0.5"
 sha2 = "0.7"
-hkdf = "0.5"
+hkdf = "0.6"
 num-bigint = "0.2"
 hex = "0.3"
 
