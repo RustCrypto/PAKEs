@@ -16,7 +16,7 @@ the memory.
 | Name      | Crates.io  | Documentation  |
 | --------- |:----------:| :-----:|
 | [SRP][2]  | [![crates.io](https://img.shields.io/crates/v/srp.svg)](https://crates.io/crates/srp) | [![Documentation](https://docs.rs/srp/badge.svg)](https://docs.rs/srp) |
-| [spake2][2]  | [![crates.io](https://img.shields.io/crates/v/spake2.svg)](https://crates.io/crates/spake2) | [![Documentation](https://docs.rs/spake2/badge.svg)](https://docs.rs/spake2) |
+| [spake2][4]  | [![crates.io](https://img.shields.io/crates/v/spake2.svg)](https://crates.io/crates/spake2) | [![Documentation](https://docs.rs/spake2/badge.svg)](https://docs.rs/spake2) |
 
 ## License
 
@@ -36,3 +36,4 @@ dual licensed as above, without any additional terms or conditions.
 [1]: https://en.wikipedia.org/wiki/Password-authenticated_key_agreement
 [2]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 [3]: https://en.wikipedia.org/wiki/Blinding_(cryptography)
+[4]: https://www.di.ens.fr/~mabdalla/papers/AbPo05a-letter.pdf
