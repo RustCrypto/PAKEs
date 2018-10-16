@@ -24,7 +24,7 @@ is-it-maintained-issue-resolution = { repository = "RustCrypto/PAKEs" }
 is-it-maintained-open-issues = { repository = "RustCrypto/PAKEs" }
 
 [dependencies]
-curve25519-dalek = "0.19"
+curve25519-dalek = "0.21"
 rand = "0.5"
 sha2 = "0.7"
 hkdf = "0.6"
