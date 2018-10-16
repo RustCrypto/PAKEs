@@ -1,4 +1,5 @@
 [workspace]
 members = [
     "srp",
+    "spake2",
 ]
