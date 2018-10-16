@@ -1,4 +1,4 @@
-# PAKE [![Build Status](https://travis-ci.org/RustCrypto/PAKE.svg?branch=master)](https://travis-ci.org/RustCrypto/PAKE)
+# RustCrypto: PAKEs [![Build Status](https://travis-ci.org/RustCrypto/PAKEs.svg?branch=master)](https://travis-ci.org/RustCrypto/PAKEs)
 [Password-Authenticated Key Agreement][1] protocols implementation.
 
 ## Warnings
@@ -16,6 +16,7 @@ the memory.
 | Name      | Crates.io  | Documentation  |
 | --------- |:----------:| :-----:|
 | [SRP][2]  | [![crates.io](https://img.shields.io/crates/v/srp.svg)](https://crates.io/crates/srp) | [![Documentation](https://docs.rs/srp/badge.svg)](https://docs.rs/srp) |
+| [spake2][2]  | [![crates.io](https://img.shields.io/crates/v/spake2.svg)](https://crates.io/crates/spake2) | [![Documentation](https://docs.rs/spake2/badge.svg)](https://docs.rs/spake2) |
 
 ## License
 
@@ -26,6 +27,11 @@ All crates are licensed under either of
 
 at your option.
 
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
 
 [1]: https://en.wikipedia.org/wiki/Password-authenticated_key_agreement
 [2]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
