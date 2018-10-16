@@ -1,10 +1,10 @@
 //! Groups from [RFC 5054](https://tools.ietf.org/html/rfc5054)
-//! 
+//!
 //! It is strongly recommended to use them instead of custom generated
 //! groups. Additionally it is not recommended to use `G_1024` and `G_1536`,
 //! they are provided only for compatibility with the legacy software.
-use types::SrpGroup;
 use num::BigUint;
+use types::SrpGroup;
 
 lazy_static! {
     pub static ref G_1024: SrpGroup = SrpGroup {

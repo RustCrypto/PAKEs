@@ -4,6 +4,13 @@ rust:
   - beta
   - nightly
 matrix:
+  include:
+    - rust: 1.29.0 # lock down for consistent rustfmt behavior
+      env: RUSTFMT
+      install:
+        - rustup component add rustfmt-preview
+      script:
+        - cargo fmt -- --check
   allow_failures:
     - rust: nightly
 script: cargo test --release --verbose --all

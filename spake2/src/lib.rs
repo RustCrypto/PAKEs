@@ -13,7 +13,7 @@ pub use spake2::*;
 
 #[cfg(test)]
 mod tests {
-    use spake2::{Ed25519Group, ErrorType, Identity, Password, SPAKE2, SPAKEErr};
+    use spake2::{Ed25519Group, ErrorType, Identity, Password, SPAKEErr, SPAKE2};
 
     #[test]
     fn test_basic() {
