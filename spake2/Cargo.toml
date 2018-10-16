@@ -12,6 +12,12 @@ exclude = [
     ".gitignore"
 ]
 
+[package.metadata.release]
+tag-prefix = "spake2-v"
+tag-message = "(cargo-release) spake2-v{{version}}"
+pre-release-commit-message = "(cargo-release) spake2-v{{version}}"
+pro-release-commit-message = "(cargo-release) start next development iteration spake2-v{{version}}"
+
 [badges]
 travis-ci = { repository = "RustCrypto/PAKEs" }
 is-it-maintained-issue-resolution = { repository = "RustCrypto/PAKEs" }
