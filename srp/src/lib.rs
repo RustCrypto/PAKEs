@@ -63,17 +63,17 @@
 //!
 //! [1]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 //! [2]: https://tools.ietf.org/html/rfc5054
-extern crate num;
 extern crate digest;
 extern crate generic_array;
+extern crate num;
 #[macro_use]
 extern crate lazy_static;
 
 #[cfg(test)]
 extern crate sha_1;
 
-mod tools;
 pub mod client;
-pub mod server;
-pub mod types;
 pub mod groups;
+pub mod server;
+mod tools;
+pub mod types;
