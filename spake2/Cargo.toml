@@ -4,18 +4,18 @@ version = "0.1.1-alpha.0"
 authors = ["Brian Warner <warner@lothar.com>"]
 description = "The SPAKE2 password-authenticated key-exchange algorithm, in Rust."
 documentation = "https://docs.rs/spake2"
-homepage = "https://github.com/warner/spake2.rs"
-repository = "https://github.com/warner/spake2.rs"
-license = "MIT"
+homepage = "https://github.com/RustCrypto/PAKEs"
+repository = "https://github.com/RustCrypto/PAKEs"
+license = "MIT/Apache-2.0"
 categories = ["cryptography"]
 exclude = [
     ".gitignore"
 ]
 
 [badges]
-travis-ci = { repository = "warner/spake2.rs" }
-is-it-maintained-issue-resolution = { repository = "warner/spake2.rs" }
-is-it-maintained-open-issues = { repository = "warner/spake2.rs" }
+travis-ci = { repository = "RustCrypto/PAKEs" }
+is-it-maintained-issue-resolution = { repository = "RustCrypto/PAKEs" }
+is-it-maintained-open-issues = { repository = "RustCrypto/PAKEs" }
 
 [dependencies]
 curve25519-dalek = "0.19"

@@ -5,7 +5,7 @@ authors = ["RustCrypto Developers"]
 license = "MIT/Apache-2.0"
 description = "Secure Remote Password (SRP) protocol implementation"
 documentation = "https://docs.rs/srp"
-repository = "https://github.com/RustCrypto/PAKE"
+repository = "https://github.com/RustCrypto/PAKEs"
 keywords = ["crypto", "pake", "authentication"]
 categories = ["cryptography", "authentication"]
 
@@ -21,4 +21,4 @@ sha2 = "0.6"
 sha-1 = "0.4"
 
 [badges]
-travis-ci = { repository = "RustCrypto/PAKE" }
+travis-ci = { repository = "RustCrypto/PAKEs" }
