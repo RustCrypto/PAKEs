@@ -1,3 +1,5 @@
+#![doc(html_logo_url =
+    "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 #![forbid(unsafe_code)]
 #![cfg_attr(test, deny(warnings))]
 
