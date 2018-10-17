@@ -13,4 +13,5 @@ matrix:
         - cargo fmt -- --check
   allow_failures:
     - rust: nightly
+    - env: RUSTFMT
 script: cargo test --release --verbose --all
