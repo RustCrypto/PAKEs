@@ -63,8 +63,7 @@
 //!
 //! [1]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 //! [2]: https://tools.ietf.org/html/rfc5054
-#![doc(html_logo_url =
-    "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 extern crate digest;
 extern crate generic_array;
 extern crate num;
