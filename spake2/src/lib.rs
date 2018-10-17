@@ -240,7 +240,7 @@ fn ed25519_hash_ab(
 
     //let mut hash = G::TranscriptHash::default();
     let mut hash = Sha256::new();
-    hash.input(&transcript);
+    hash.input(transcript.to_vec());
     hash.result().to_vec()
 }
 
@@ -285,7 +285,7 @@ fn ed25519_hash_symmetric(
     transcript[128..160].copy_from_slice(key_bytes);
 
     let mut hash = Sha256::new();
-    hash.input(&transcript);
+    hash.input(transcript.to_vec());
     hash.result().to_vec()
 }
 
