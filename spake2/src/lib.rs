@@ -2,8 +2,8 @@
 #![deny(warnings)]
 #![forbid(unsafe_code)]
 
-extern crate curve25519_dalek;
 extern crate hex;
+extern crate curve25519_dalek;
 extern crate hkdf;
 extern crate num_bigint;
 extern crate rand;
