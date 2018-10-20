@@ -1,6 +1,8 @@
 # RustCrypto: PAKEs [![Build Status](https://travis-ci.org/RustCrypto/PAKEs.svg?branch=master)](https://travis-ci.org/RustCrypto/PAKEs)
 [Password-Authenticated Key Agreement][1] protocols implementation.
 
+[![dependency status](https://deps.rs/repo/github/RustCrypto/PAKEs/status.svg)](https://deps.rs/repo/github/RustCrypto/PAKEs)
+
 ## Warnings
 
 Crates in this repository have not yet received any formal cryptographic and
