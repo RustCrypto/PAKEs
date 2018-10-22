@@ -54,7 +54,7 @@ impl SrpGroup {
 #[cfg(test)]
 mod tests {
     use groups::G_1024;
-    use sha_1::Sha1;
+    use sha1::Sha1;
 
     #[test]
     fn test_k_1024_sha1() {

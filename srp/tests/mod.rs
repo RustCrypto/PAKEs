@@ -3,7 +3,7 @@ extern crate rand;
 extern crate sha2;
 extern crate srp;
 
-use rand::Rng;
+use rand::RngCore;
 use sha2::Sha256;
 
 use srp::client::{srp_private_key, SrpClient};
@@ -15,11 +15,13 @@ fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
     let username = b"alice";
 
     // Client instance creation
-    let a = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
+    let mut a = [0u8; 64];
+    rng.fill_bytes(&mut a);
     let client = SrpClient::<Sha256>::new(&a, &G_2048);
 
     // Registration
-    let salt: [u8; 16] = rng.gen();
+    let mut salt = [0u8; 16];
+    rng.fill_bytes(&mut salt);
     let reg_priv_key = srp_private_key::<Sha256>(username, reg_pwd, &salt);
     let verif = client.get_password_verifier(&reg_priv_key);
 
@@ -32,7 +34,8 @@ fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
         salt: &salt,
         verifier: &verif,
     };
-    let b = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
+    let mut b = [0u8; 64];
+    rng.fill_bytes(&mut b);
     let server = SrpServer::<Sha256>::new(&user, &a_pub, &b, &G_2048).unwrap();
     let (salt, b_pub) = (&user.salt, server.get_b_pub());
 

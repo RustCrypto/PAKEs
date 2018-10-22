@@ -71,7 +71,7 @@ extern crate num;
 extern crate lazy_static;
 
 #[cfg(test)]
-extern crate sha_1;
+extern crate sha1;
 
 pub mod client;
 pub mod groups;

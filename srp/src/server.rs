@@ -10,7 +10,8 @@
 //!
 //! let (username, a_pub) = conn.receive_handshake();
 //! let user = db.retrieve_user_record(username);
-//! let b = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
+//! let b = [0u8; 64];
+//! rng.fill_bytes(&mut b);
 //! let server = SrpServer::<Sha256>::new(&user, &a_pub, &b, &G_2048)?;
 //! ```
 //!

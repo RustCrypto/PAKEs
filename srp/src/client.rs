@@ -8,7 +8,8 @@
 //! use srp::groups::G_2048;
 //! use sha2::Sha256;
 //!
-//! let a = rng.gen_iter::<u8>().take(64).collect::<Vec<u8>>();
+//! let mut a = [0u8; 64];
+//! rng.fill_bytes(&mut a);
 //! let client = SrpClient::<Sha256>::new(&a, &G_2048);
 //! ```
 //!
@@ -55,8 +56,6 @@
 //! let pwd_verifier = client.get_password_verifier(&private_key);
 //! conn.send_registration_data(username, salt, pwd_verifier);
 //! ```
-
-//let buf = rng.gen_iter::<u8>().take(l).collect::<Vec<u8>>();
 use std::marker::PhantomData;
 
 use digest::Digest;
