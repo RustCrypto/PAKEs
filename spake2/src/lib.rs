@@ -1,3 +1,290 @@
+//! An implementation of the [SPAKE2][1] password-authenticated key-exchange
+//! algorithm
+//!
+//! This library implements the SPAKE2 password-authenticated key exchange
+//! ("PAKE") algorithm. This allows two parties, who share a weak password, to
+//! safely derive a strong shared secret (and therefore build an
+//! encrypted+authenticated channel).
+//!
+//! A passive attacker who eavesdrops on the connection learns no information
+//! about the password or the generated secret. An active attacker
+//! (man-in-the-middle) gets exactly one guess at the password, and unless they
+//! get it right, they learn no information about the password or the generated
+//! secret. Each execution of the protocol enables one guess. The use of a weak
+//! password is made safer by the rate-limiting of guesses: no off-line
+//! dictionary attack is available to the network-level attacker, and the
+//! protocol does not depend upon having previously-established confidentiality
+//! of the network (unlike e.g. sending a plaintext password over TLS).
+//!
+//! The protocol requires the exchange of one pair of messages, so only one round
+//! trip is necessary to establish the session key. If key-confirmation is
+//! necessary, that will require a second round trip.
+//!
+//! All messages are bytestrings. For the default security level (using the
+//! Ed25519 elliptic curve, roughly equivalent to an 128-bit symmetric key), the
+//! message is 33 bytes long.
+//!
+//! This implementation is generic over a `Group`, which defines the cyclic
+//! group to use, the functions which convert group elements and scalars to
+//! and from bytestrings, and the three distinctive group elements used in
+//! the blinding process. Only one such Group is implemented, named
+//! `Ed25519Group`, which provides fast operations and high security, and is
+//! compatible with my [python
+//! implementation](https://github.com/warner/python-spake2).
+//!
+//! # What Is It Good For?
+//!
+//! PAKE can be used in a pairing protocol, like the initial version of Firefox
+//! Sync (the one with J-PAKE), to introduce one device to another and help them
+//! share secrets. In this mode, one device creates a random code, the user
+//! copies that code to the second device, then both devices use the code as a
+//! one-time password and run the PAKE protocol. Once both devices have a shared
+//! strong key, they can exchange other secrets safely.
+//!
+//! PAKE can also be used (carefully) in a login protocol, where SRP is perhaps
+//! the best-known approach. Traditional non-PAKE login consists of sending a
+//! plaintext password through a TLS-encrypted channel, to a server which then
+//! checks it (by hashing/stretching and comparing against a stored verifier). In
+//! a PAKE login, both sides put the password into their PAKE protocol, and then
+//! confirm that their generated key is the same. This nominally does not require
+//! the initial TLS-protected channel. However note that it requires other,
+//! deeper design considerations (the PAKE protocol must be bound to whatever
+//! protected channel you end up using, else the attacker can wait for PAKE to
+//! complete normally and then steal the channel), and is not simply a drop-in
+//! replacement. In addition, the server cannot hash/stretch the password very
+//! much (see the note on "Augmented PAKE" below), so unless the client is
+//! willing to perform key-stretching before running PAKE, the server's stored
+//! verifier will be vulnerable to a low-cost dictionary attack.
+//!
+//! # Usage
+//!
+//! Add the `spake2 dependency to your `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! spake2 = "0.1"
+//! ```
+//!
+//! and this to your crate root:
+//!
+//! ```rust
+//! extern crate spake2;
+//! ```
+//!
+//!
+//! Alice and Bob both initialize their SPAKE2 instances with the same (weak)
+//! password. They will exchange messages to (hopefully) derive a shared secret
+//! key. The protocol is symmetric: for each operation that Alice does, Bob will
+//! do the same.
+//!
+//! However, there are two roles in the SPAKE2 protocol, "A" and "B". The two
+//! sides must agree ahead of time which one will play which role (the
+//! messages they generate depend upon which side they play). There are two
+//! separate constructor functions, `start_a()` and `start_b()`, and a
+//! complete interaction will use one of each (one `start_a` on one computer,
+//! and one `start_b` on the other computer).
+//!
+//! Each instance of a SPAKE2 protocol uses a set of shared parameters. These
+//! include a group, a generator, and a pair of arbitrary group elements.
+//! This library comes a single pre-generated parameter set, but could be
+//! extended with others.
+//!
+//! You start by calling `start_a()` (or `_b)` with the password and identity
+//! strings for both sides. This gives you back a state object and the first
+//! message, which you must send to your partner. Once you receive the
+//! corresponding inbound message, you pass it into the state object
+//! (consuming both in the process) by calling `s.finish()`, and you get back
+//! the shared key as a bytestring.
+//!
+//! The password and identity strings must each be wrapped in a "newtype",
+//! which is a simple `struct` that protects against swapping the different
+//! types of bytestrings.
+//!
+//! Thus a client-side program start with:
+//!
+//! ```rust
+//! # fn send(msg: &[u8]) {}
+//! # fn receive() -> Vec<u8> { vec![0; 33] }
+//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_a(
+//!    &Password::new(b"password"),
+//!    &Identity::new(b"client id string"),
+//!    &Identity::new(b"server id string"));
+//! send(&outbound_msg);
+//!
+//! let inbound_msg = receive();
+//! let key1 = s1.finish(inbound_msg).unwrap();
+//! ```
+//!
+//! while the server-side might do:
+//!
+//! ```rust
+//! # fn send(msg: &[u8]) {}
+//! # fn receive() -> Vec<u8> { vec![0; 33] }
+//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_b(
+//!    &Password::new(b"password"),
+//!    &Identity::new(b"client id string"),
+//!    &Identity::new(b"server id string"));
+//! send(&outbound_msg);
+//!
+//! let inbound_msg = receive();
+//! let key2 = s1.finish(inbound_msg).unwrap();
+//! ```
+//!
+//! If both sides used the same password, and there is no man-in-the-middle,
+//! then `key1` and `key2` will be identical. If not, the two sides will get
+//! different keys. When one side encrypts with `key1`, and the other side
+//! attempts to decrypt with `key2`, they'll get nothing but garbled noise.
+//!
+//! The shared key can be used as an HMAC key to provide data integrity on
+//! subsequent messages, or as an authenticated-encryption key (e.g.
+//! nacl.secretbox). It can also be fed into [HKDF] [1] to derive other
+//! session keys as necessary.
+//!
+//! The `SPAKE2` instances, and the messages they create, are single-use. Create
+//! a new one for each new session. `finish` consumes the instance.
+//!
+//! # Symmetric Usage
+//!
+//! A single SPAKE2 instance must be used asymmetrically: the two sides must
+//! somehow decide (ahead of time) which role they will each play. The
+//! implementation includes the side identifier in the exchanged message to
+//! guard against a `start_a` talking to another `start_a`. Typically a
+//! "client" will take on the `A` role, and the "server" will be `B`.
+//!
+//! This is a nuisance for more egalitarian protocols, where there's no clear
+//! way to assign these roles ahead of time. In this case, use
+//! `start_symmetric()` on both sides. This uses a different set of
+//! parameters (so it is not interoperable with `start_A` or `start_b`), but
+//! should otherwise behave the same way. The symmetric mode uses only one
+//! identity string, not two.
+//!
+//! Carol does:
+//!
+//! ```rust
+//! # fn send(msg: &[u8]) {}
+//! # fn receive() -> Vec<u8> { vec![0; 33] }
+//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_symmetric(
+//!    &Password::new(b"password"),
+//!    &Identity::new(b"shared id string"));
+//! send(&outbound_msg);
+//!
+//! let inbound_msg = receive();
+//! let key1 = s1.finish(inbound_msg).unwrap();
+//! ```
+//!
+//! Dave does exactly the same:
+//!
+//! ```rust
+//! # fn send(msg: &[u8]) {}
+//! # fn receive() -> Vec<u8> { vec![0; 33] }
+//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_symmetric(
+//!    &Password::new(b"password"),
+//!    &Identity::new(b"shared id string"));
+//! send(&outbound_msg);
+//!
+//! let inbound_msg = receive();
+//! let key1 = s1.finish(inbound_msg).unwrap();
+//! ```
+//!
+//! # Identifier Strings
+//!
+//! The SPAKE2 protocol includes a pair of "identity strings" `idA` and `idB`
+//! that are included in the final key-derivation hash. This binds the key to a
+//! single pair of parties, or for some specific purpose.
+//!
+//! For example, when user "alice" logs into "example.com", both sides should set
+//! `idA = b"alice"` and `idB = b"example.com"`. This prevents an attacker from
+//! substituting messages from unrelated login sessions (other users on the same
+//! server, or other servers for the same user).
+//!
+//! This also makes sure the session is established with the correct service. If
+//! Alice has one password for "example.com" but uses it for both login and
+//! file-transfer services, `idB` should be different for the two services.
+//! Otherwise if Alice is simultaneously connecting to both services, and
+//! attacker could rearrange the messages and cause her login client to connect
+//! to the file-transfer server, and vice versa.
+//!
+//! `idA` and `idB` must be bytestrings (slices of `<u8>`).
+//!
+//! `start_symmetric` uses a single `idSymmetric=` string, instead of `idA`
+//! and `idB`. Both sides must provide the same `idSymmetric=`, or leave it
+//! empty.
+//!
+//! # Serialization
+//!
+//! Sometimes, you can't hold the SPAKE2 instance in memory for the whole
+//! negotiation: perhaps all your program state is stored in a database, and
+//! nothing lives in RAM for more than a few moments.
+//!
+//! Unfortunately the Rust implementation does not yet provide serialization
+//! of the state object. A future version should correct this.
+//!
+//! # Security
+//!
+//! This library is probably not constant-time, and does not protect against
+//! timing attacks. Do not allow attackers to measure how long it takes you
+//! to create or respond to a message. This matters somewhat less for pairing
+//! protocols, because their passwords are single-use randomly-generated
+//! keys, so an attacker has much less to work with.
+//!
+//! This library depends upon a strong source of random numbers. Do not use it on
+//! a system where os.urandom() is weak.
+//!
+//! # Speed
+//!
+//! To run the built-in speed tests, just run `cargo bench`.
+//!
+//! SPAKE2 consists of two phases, separated by a single message exchange.
+//! The time these phases take is split roughly 50/50. On my 2.8GHz Core-i7
+//! (i7-7600U) cpu, the built-in Ed25519Group parameters take about 112
+//! microseconds for each phase, and the message exchanged is 33 bytes long.
+//!
+//! # Testing
+//!
+//! Run `cargo test` to run the built-in test suite.
+//!
+//! # History
+//!
+//! The protocol was described as "PAKE2" in ["cryptobook"] [2] from Dan Boneh
+//! and Victor Shoup. This is a form of "SPAKE2", defined by Abdalla and
+//! Pointcheval at [RSA 2005] [3]. Additional recommendations for groups and
+//! distinguished elements were published in [Ladd's IETF draft] [4].
+//!
+//! The Ed25519 implementation uses code adapted from Daniel Bernstein (djb),
+//! Matthew Dempsky, Daniel Holth, Ron Garret, with further optimizations by
+//! Brian Warner[5]. The "arbitrary element" computation, which must be the same
+//! for both participants, is from python-pure25519 version 0.5.
+//!
+//! The Boneh/Shoup chapter that defines PAKE2 also defines an augmented variant
+//! named "PAKE2+", which changes one side (typically a server) to record a
+//! derivative of the password instead of the actual password. In PAKE2+, a
+//! server compromise does not immediately give access to the passwords: instead,
+//! the attacker must perform an offline dictionary attack against the stolen
+//! data before they can learn the passwords. PAKE2+ support is planned, but not
+//! yet implemented.
+//!
+//! The security of the symmetric case was proved by Kobara/Imai[6] in 2003, and
+//! uses different (slightly weaker?) reductions than that of the asymmetric
+//! form. See also Mike Hamburg's analysis[7] from 2015.
+//!
+//! Brian Warner first wrote the Python version in July 2010. He wrote this
+//! Rust version in in May 2017.
+//!
+//! ### footnotes
+//!
+//! [1]: https://tools.ietf.org/html/rfc5869 "HKDF"
+//! [2]: http://crypto.stanford.edu/~dabo/cryptobook/  "cryptobook"
+//! [3]: http://www.di.ens.fr/~pointche/Documents/Papers/2005_rsa.pdf "RSA 2005"
+//! [4]: https://tools.ietf.org/html/draft-ladd-spake2-01 "Ladd's IETF draft"
+//! [5]: https://github.com/warner/python-pure25519
+//! [6]: http://eprint.iacr.org/2003/038.pdf "Pretty-Simple Password-Authenticated Key-Exchange Under Standard Assumptions"
+//! [7]: https://moderncrypto.org/mail-archive/curves/2015/000419.html "PAKE questions"
+
+
 #![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 #![deny(warnings)]
 #![forbid(unsafe_code)]
