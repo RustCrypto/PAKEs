@@ -103,24 +103,23 @@
 //! Thus a client-side program start with:
 //!
 //! ```rust
-//! # fn send(msg: &[u8]) {}
-//! # fn receive() -> Vec<u8> { vec![0; 33] }
 //! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+//! # fn send(msg: &[u8]) {}
 //! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_a(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"client id string"),
 //!    &Identity::new(b"server id string"));
 //! send(&outbound_msg);
 //!
+//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_b(&Password::new(b"password"), &Identity::new(b"client id string"), &Identity::new(b"server id string")); i2 }
 //! let inbound_msg = receive();
-//! let key1 = s1.finish(inbound_msg).unwrap();
+//! let key1 = s1.finish(&inbound_msg).unwrap();
 //! ```
 //!
 //! while the server-side might do:
 //!
 //! ```rust
 //! # fn send(msg: &[u8]) {}
-//! # fn receive() -> Vec<u8> { vec![0; 33] }
 //! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
 //! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_b(
 //!    &Password::new(b"password"),
@@ -128,8 +127,9 @@
 //!    &Identity::new(b"server id string"));
 //! send(&outbound_msg);
 //!
+//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_a(&Password::new(b"password"), &Identity::new(b"client id string"), &Identity::new(b"server id string")); i2 }
 //! let inbound_msg = receive();
-//! let key2 = s1.finish(inbound_msg).unwrap();
+//! let key2 = s1.finish(&inbound_msg).unwrap();
 //! ```
 //!
 //! If both sides used the same password, and there is no man-in-the-middle,
@@ -164,30 +164,30 @@
 //!
 //! ```rust
 //! # fn send(msg: &[u8]) {}
-//! # fn receive() -> Vec<u8> { vec![0; 33] }
 //! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
 //! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_symmetric(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"shared id string"));
 //! send(&outbound_msg);
 //!
+//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_symmetric(&Password::new(b"password"), &Identity::new(b"shared id string")); i2 }
 //! let inbound_msg = receive();
-//! let key1 = s1.finish(inbound_msg).unwrap();
+//! let key1 = s1.finish(&inbound_msg).unwrap();
 //! ```
 //!
 //! Dave does exactly the same:
 //!
 //! ```rust
 //! # fn send(msg: &[u8]) {}
-//! # fn receive() -> Vec<u8> { vec![0; 33] }
 //! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
 //! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_symmetric(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"shared id string"));
 //! send(&outbound_msg);
 //!
+//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_symmetric(&Password::new(b"password"), &Identity::new(b"shared id string")); i2 }
 //! let inbound_msg = receive();
-//! let key1 = s1.finish(inbound_msg).unwrap();
+//! let key1 = s1.finish(&inbound_msg).unwrap();
 //! ```
 //!
 //! # Identifier Strings
@@ -283,7 +283,6 @@
 //! [5]: https://github.com/warner/python-pure25519
 //! [6]: http://eprint.iacr.org/2003/038.pdf "Pretty-Simple Password-Authenticated Key-Exchange Under Standard Assumptions"
 //! [7]: https://moderncrypto.org/mail-archive/curves/2015/000419.html "PAKE questions"
-
 
 #![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 #![deny(warnings)]
