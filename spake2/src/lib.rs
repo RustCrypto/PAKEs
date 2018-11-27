@@ -301,7 +301,7 @@ use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
 
 use hkdf::Hkdf;
-use rand::{CryptoRng, OsRng, Rng};
+use rand::{CryptoRng, rngs::OsRng, Rng};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::ops::Deref;

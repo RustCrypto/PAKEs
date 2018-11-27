@@ -11,7 +11,7 @@ use srp::groups::G_2048;
 use srp::server::{SrpServer, UserRecord};
 
 fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = rand::os::OsRng::new().unwrap();
+    let mut rng = rand::rngs::OsRng::new().unwrap();
     let username = b"alice";
 
     // Client instance creation
