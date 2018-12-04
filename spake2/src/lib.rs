@@ -820,15 +820,13 @@ fn maybe_utf8(s: &[u8]) -> String {
 }
 
 impl<G: Group> fmt::Debug for SPAKE2<G> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "SPAKE2(G=?, side={:?}, idA={}, idB={}, idS={})",
-            self.side,
-            maybe_utf8(&self.id_a),
-            maybe_utf8(&self.id_b),
-            maybe_utf8(&self.id_s)
-        )
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("SPAKE2")
+            .field("side", &self.side)
+            .field("idA", &maybe_utf8(&self.id_a))
+            .field("idB", &maybe_utf8(&self.id_b))
+            .field("idS", &maybe_utf8(&self.id_s))
+            .finish()
     }
 }
 
