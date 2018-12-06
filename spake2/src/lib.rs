@@ -358,6 +358,7 @@ pub trait Group {
     // const element_length: usize; // in unstable, or u8
     //type ElementBytes : Index<usize, Output=u8>+IndexMut<usize>; // later
     type TranscriptHash;
+    fn name() -> &'static str;
     fn const_m() -> Self::Element;
     fn const_n() -> Self::Element;
     fn const_s() -> Self::Element;
@@ -384,6 +385,10 @@ impl Group for Ed25519Group {
     //type ElementBytes = [u8; 32];
     //type ScalarBytes
     type TranscriptHash = Sha256;
+
+    fn name() -> &'static str {
+        "Ed25519"
+    }
 
     fn const_m() -> c2_Element {
         // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.M.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
@@ -822,6 +827,7 @@ fn maybe_utf8(s: &[u8]) -> String {
 impl<G: Group> fmt::Debug for SPAKE2<G> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("SPAKE2")
+            .field("group", &G::name())
             .field("side", &self.side)
             .field("idA", &maybe_utf8(&self.id_a))
             .field("idB", &maybe_utf8(&self.id_b))
