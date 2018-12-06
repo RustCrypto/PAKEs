@@ -1,9 +1,5 @@
-#[macro_use]
-extern crate bencher;
-
-extern crate spake2;
-
 use bencher::Bencher;
+use bencher::{benchmark_group, benchmark_main};
 use spake2::{Ed25519Group, Identity, Password, SPAKE2};
 
 fn spake2_start(bench: &mut Bencher) {

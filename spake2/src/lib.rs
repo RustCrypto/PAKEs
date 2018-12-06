@@ -288,18 +288,10 @@
 #![deny(warnings)]
 #![forbid(unsafe_code)]
 
-extern crate curve25519_dalek;
-extern crate hex;
-extern crate hkdf;
-extern crate num_bigint;
-extern crate rand;
-extern crate sha2;
-
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
-
 use hkdf::Hkdf;
 use rand::{rngs::OsRng, CryptoRng, Rng};
 use sha2::{Digest, Sha256};
@@ -828,7 +820,7 @@ fn maybe_utf8(s: &[u8]) -> String {
 }
 
 impl<G: Group> fmt::Debug for SPAKE2<G> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("SPAKE2")
             .field("group", &G::name())
             .field("side", &self.side)
