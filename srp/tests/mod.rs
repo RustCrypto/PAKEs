@@ -1,8 +1,4 @@
-extern crate num;
-extern crate rand;
-extern crate sha2;
-extern crate srp;
-
+use rand;
 use rand::RngCore;
 use sha2::Sha256;
 

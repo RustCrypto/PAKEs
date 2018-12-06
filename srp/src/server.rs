@@ -65,7 +65,7 @@ pub struct SrpServer<D: Digest> {
 impl<D: Digest> SrpServer<D> {
     /// Create new server state.
     pub fn new(
-        user: &UserRecord,
+        user: &UserRecord<'_>,
         a_pub: &[u8],
         b: &[u8],
         params: &SrpGroup,
