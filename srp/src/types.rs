@@ -1,8 +1,8 @@
 //! Additional SRP types.
+use crate::tools::powm;
 use digest::Digest;
 use num::BigUint;
 use std::{error, fmt};
-use tools::powm;
 
 /// SRP authentification error.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -53,7 +53,7 @@ impl SrpGroup {
 
 #[cfg(test)]
 mod tests {
-    use groups::G_1024;
+    use crate::groups::G_1024;
     use sha1::Sha1;
 
     #[test]

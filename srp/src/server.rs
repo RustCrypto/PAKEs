@@ -40,8 +40,8 @@ use digest::Digest;
 use generic_array::GenericArray;
 use num::{BigUint, Zero};
 
-use tools::powm;
-use types::{SrpAuthError, SrpGroup};
+use crate::tools::powm;
+use crate::types::{SrpAuthError, SrpGroup};
 
 /// Data provided by users upon registration, usually stored in the database.
 pub struct UserRecord<'a> {

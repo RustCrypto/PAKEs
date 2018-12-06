@@ -62,8 +62,8 @@ use digest::Digest;
 use generic_array::GenericArray;
 use num::{BigUint, Zero};
 
-use tools::powm;
-use types::{SrpAuthError, SrpGroup};
+use crate::tools::powm;
+use crate::types::{SrpAuthError, SrpGroup};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
