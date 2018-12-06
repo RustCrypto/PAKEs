@@ -12,7 +12,7 @@ pub fn powm(base: &BigUint, exp: &BigUint, modulus: &BigUint) -> BigUint {
         if &exp % &two == one {
             result = (result * &base) % modulus;
         }
-        exp = exp >> 1;
+        exp >>= 1;
         base = (&base * &base) % modulus;
     }
     result
