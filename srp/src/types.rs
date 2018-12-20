@@ -1,8 +1,8 @@
 //! Additional SRP types.
+use crate::tools::powm;
 use digest::Digest;
 use num::BigUint;
 use std::{error, fmt};
-use tools::powm;
 
 /// SRP authentification error.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -11,7 +11,7 @@ pub struct SrpAuthError {
 }
 
 impl fmt::Display for SrpAuthError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SRP authentification error")
     }
 }
@@ -53,7 +53,7 @@ impl SrpGroup {
 
 #[cfg(test)]
 mod tests {
-    use groups::G_1024;
+    use crate::groups::G_1024;
     use sha1::Sha1;
 
     #[test]

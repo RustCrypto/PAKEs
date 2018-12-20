@@ -40,8 +40,8 @@ use digest::Digest;
 use generic_array::GenericArray;
 use num::{BigUint, Zero};
 
-use tools::powm;
-use types::{SrpAuthError, SrpGroup};
+use crate::tools::powm;
+use crate::types::{SrpAuthError, SrpGroup};
 
 /// Data provided by users upon registration, usually stored in the database.
 pub struct UserRecord<'a> {
@@ -65,7 +65,7 @@ pub struct SrpServer<D: Digest> {
 impl<D: Digest> SrpServer<D> {
     /// Create new server state.
     pub fn new(
-        user: &UserRecord,
+        user: &UserRecord<'_>,
         a_pub: &[u8],
         b: &[u8],
         params: &SrpGroup,

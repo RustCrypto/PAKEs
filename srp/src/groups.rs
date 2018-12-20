@@ -3,8 +3,9 @@
 //! It is strongly recommended to use them instead of custom generated
 //! groups. Additionally it is not recommended to use `G_1024` and `G_1536`,
 //! they are provided only for compatibility with the legacy software.
+use crate::types::SrpGroup;
+use lazy_static::lazy_static;
 use num::BigUint;
-use types::SrpGroup;
 
 lazy_static! {
     pub static ref G_1024: SrpGroup = SrpGroup {

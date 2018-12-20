@@ -62,8 +62,8 @@ use digest::Digest;
 use generic_array::GenericArray;
 use num::{BigUint, Zero};
 
-use tools::powm;
-use types::{SrpAuthError, SrpGroup};
+use crate::tools::powm;
+use crate::types::{SrpAuthError, SrpGroup};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
@@ -133,7 +133,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         let k = self.params.compute_k::<D>();
         let interm = (k * self.params.powm(x)) % n;
         // Because we do operation in modulo N we can get: (kv + g^b) < kv
-        let v = if b_pub > &interm {
+        let v = if *b_pub > interm {
             (b_pub - &interm) % n
         } else {
             (n + b_pub - &interm) % n
@@ -186,9 +186,9 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         };
 
         Ok(SrpClientVerifier {
-            proof: proof,
-            server_proof: server_proof,
-            key: key,
+            proof,
+            server_proof,
+            key,
         })
     }
 

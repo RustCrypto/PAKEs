@@ -1,5 +1,3 @@
-extern crate spake2;
-
 use spake2::{Ed25519Group, ErrorType, Identity, Password, SPAKEErr, SPAKE2};
 
 #[test]
