@@ -14,7 +14,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! rand = "0.3"
+//! srp = "0.4"
 //! ```
 //!
 //! and this to your crate root:
