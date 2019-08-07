@@ -6,7 +6,7 @@ rust:
   - 1.32.0
 matrix:
   include:
-    - rust: 1.31.0 # lock down for consistent rustfmt behavior
+    - rust: stable # not locked down or consistent, since allow_failures
       env: RUSTFMT
       install:
         - rustup component add rustfmt-preview
