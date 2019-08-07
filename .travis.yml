@@ -3,7 +3,6 @@ rust:
   - stable
   - beta
   - nightly
-  - 1.31.1
   - 1.32.0
 matrix:
   include:
@@ -16,5 +15,4 @@ matrix:
   allow_failures:
     - rust: nightly
     - env: RUSTFMT
-    - rust: 1.31.1
 script: cargo test --release --verbose --all
