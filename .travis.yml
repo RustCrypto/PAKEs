@@ -3,6 +3,8 @@ rust:
   - stable
   - beta
   - nightly
+  - 1.31.1
+  - 1.32
 matrix:
   include:
     - rust: 1.31.0 # lock down for consistent rustfmt behavior
@@ -14,4 +16,5 @@ matrix:
   allow_failures:
     - rust: nightly
     - env: RUSTFMT
+    - rust: 1.31.1
 script: cargo test --release --verbose --all
