@@ -4,7 +4,7 @@ use digest::Digest;
 use num::BigUint;
 use std::{error, fmt};
 
-/// SRP authentification error.
+/// SRP authentication error.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct SrpAuthError {
     pub(crate) description: &'static str,
@@ -12,7 +12,7 @@ pub struct SrpAuthError {
 
 impl fmt::Display for SrpAuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SRP authentification error")
+        write!(f, "SRP authentication error")
     }
 }
 
