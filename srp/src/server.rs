@@ -157,7 +157,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             d.update(self.user.salt);
             d.update(&self.a_pub.to_bytes_be());
             d.update(&self.b_pub.to_bytes_be());
-            d.update(&self.key);;
+            d.update(&self.key);
             d.result()
         };
 
