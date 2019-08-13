@@ -159,7 +159,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             d.input(self.user.salt);
             d.input(&self.a_pub.to_bytes_be());
             d.input(&self.b_pub.to_bytes_be());
-            d.input(&self.key);;
+            d.input(&self.key);
             d.result()
         };
 
