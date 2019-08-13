@@ -37,7 +37,9 @@ fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
 
     // Client processes handshake reply
     let auth_priv_key = srp_private_key::<Sha256>(username, auth_pwd, salt);
-    let client2 = client.process_reply(&auth_priv_key, &b_pub).unwrap();
+    let client2 = client
+        .process_reply(user.username, user.salt, &auth_priv_key, &b_pub)
+        .unwrap();
     let proof = client2.get_proof();
 
     // Server processes verification data
