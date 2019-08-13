@@ -38,7 +38,8 @@ use std::marker::PhantomData;
 
 use digest::Digest;
 use generic_array::GenericArray;
-use num::{BigUint, Zero};
+use num::bigint::Sign;
+use num::{BigInt, Zero};
 
 use crate::tools::powm;
 use crate::types::{SrpAuthError, SrpGroup};
@@ -54,9 +55,9 @@ pub struct UserRecord<'a> {
 /// SRP server state
 pub struct SrpServer<'a, D: Digest> {
     user: &'a UserRecord<'a>,
-    b: BigUint,
-    a_pub: BigUint,
-    b_pub: BigUint,
+    b: BigInt,
+    a_pub: BigInt,
+    b_pub: BigInt,
 
     key: GenericArray<u8, D::OutputSize>,
 
@@ -73,33 +74,33 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         b: &[u8],
         params: &'a SrpGroup,
     ) -> Result<Self, SrpAuthError> {
-        let a_pub = BigUint::from_bytes_be(a_pub);
+        let a_pub = BigInt::from_bytes_be(Sign::Plus, a_pub);
         // Safeguard against malicious A
-        if &a_pub % &params.n == BigUint::zero() {
+        if &a_pub % &params.n == BigInt::zero() {
             return Err(SrpAuthError {
                 description: "Malicious a_pub value",
             });
         }
-        let v = BigUint::from_bytes_be(user.verifier);
-        let b = BigUint::from_bytes_be(b) % &params.n;
+        let v = BigInt::from_bytes_be(Sign::Plus, user.verifier);
+        let b = BigInt::from_bytes_be(Sign::Plus, b);
         let k = params.compute_k::<D>();
         // kv + g^b
-        let interm = (k * &v) % &params.n;
-        let b_pub = (interm + &params.powm(&b)) % &params.n;
+        let interm = k * &v;
+        let b_pub = interm + &params.powm(&b);
         // H(A || B)
         let u = {
             let mut d = D::new();
-            d.input(&a_pub.to_bytes_be());
-            d.input(&b_pub.to_bytes_be());
+            d.input(&a_pub.to_bytes_be().1);
+            d.input(&b_pub.to_bytes_be().1);
             d.result()
         };
         let d = Default::default();
         //(Av^u) ^ b
         let key = {
-            let u = BigUint::from_bytes_be(&u);
-            let t = (&a_pub * powm(&v, &u, &params.n)) % &params.n;
+            let u = BigInt::from_bytes_be(Sign::Plus, &u);
+            let t = &a_pub * powm(&v, &u, &params.n);
             let s = powm(&t, &b, &params.n);
-            D::digest(&s.to_bytes_be())
+            D::digest(&s.to_bytes_be().1)
         };
         Ok(Self {
             user,
@@ -114,12 +115,12 @@ impl<'a, D: Digest> SrpServer<'a, D> {
 
     /// Get private `b` value. (see `new_with_b` documentation)
     pub fn get_b(&self) -> Vec<u8> {
-        self.b.to_bytes_be()
+        self.b.to_bytes_be().1
     }
 
     /// Get public `b_pub` value for sending to the user.
     pub fn get_b_pub(&self) -> Vec<u8> {
-        self.b_pub.to_bytes_be()
+        self.b_pub.to_bytes_be().1
     }
 
     /// Get shared secret between user and the server. (do not forget to verify
@@ -139,14 +140,14 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             let hn = {
                 let n = &self.params.n;
                 let mut d = D::new();
-                d.input(n.to_bytes_be());
-                BigUint::from_bytes_be(&d.result())
+                d.input(n.to_bytes_be().1);
+                BigInt::from_bytes_be(Sign::Plus, &d.result())
             };
             let hg = {
                 let g = &self.params.g;
                 let mut d = D::new();
-                d.input(g.to_bytes_be());
-                BigUint::from_bytes_be(&d.result())
+                d.input(g.to_bytes_be().1);
+                BigInt::from_bytes_be(Sign::Plus, &d.result())
             };
             let hu = {
                 let mut d = D::new();
@@ -154,11 +155,11 @@ impl<'a, D: Digest> SrpServer<'a, D> {
                 d.result()
             };
             let mut d = D::new();
-            d.input((hn ^ hg).to_bytes_be());
+            d.input((hn ^ hg).to_bytes_be().1);
             d.input(hu);
             d.input(self.user.salt);
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&self.b_pub.to_bytes_be());
+            d.input(&self.a_pub.to_bytes_be().1);
+            d.input(&self.b_pub.to_bytes_be().1);
             d.input(&self.key);
             d.result()
         };
@@ -166,7 +167,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         if user_proof == proof.as_slice() {
             // H(A, M, K)
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
+            d.input(&self.a_pub.to_bytes_be().1);
             d.input(user_proof);
             d.input(&self.key);
             Ok(d.result())
