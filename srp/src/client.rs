@@ -44,8 +44,8 @@
 //!
 //! `key` contains shared secret key between user and the server. Alternatively
 //! you can directly extract shared secret key using `get_key()` method and
-//! handle authentification through different (secure!) means (e.g. by using
-//! authentificated cipher mode).
+//! handle authentication through different (secure!) means (e.g. by using
+//! authenticated cipher mode).
 //!
 //! For user registration on the server first generate salt (e.g. 32 bytes long)
 //! and get password verifier which depends on private key. Send useranme, salt
@@ -201,7 +201,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 impl<D: Digest> SrpClientVerifier<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
-    /// some kind of secure authentification.
+    /// some kind of secure authentication
     pub fn get_key(self) -> GenericArray<u8, D::OutputSize> {
         self.key
     }
