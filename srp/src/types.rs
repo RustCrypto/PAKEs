@@ -1,7 +1,7 @@
 //! Additional SRP types.
 use crate::tools::powm;
 use digest::Digest;
-use num::BigUint;
+use num_bigint::BigUint;
 use std::{error, fmt};
 
 /// SRP authentication error.

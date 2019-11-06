@@ -38,7 +38,8 @@ use std::marker::PhantomData;
 
 use digest::Digest;
 use generic_array::GenericArray;
-use num::{BigUint, Zero};
+use num_bigint::BigUint;
+use num_traits::Zero;
 
 use crate::tools::powm;
 use crate::types::{SrpAuthError, SrpGroup};

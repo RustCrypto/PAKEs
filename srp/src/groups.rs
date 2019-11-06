@@ -5,7 +5,7 @@
 //! they are provided only for compatibility with the legacy software.
 use crate::types::SrpGroup;
 use lazy_static::lazy_static;
-use num::BigUint;
+use num_bigint::BigUint;
 
 lazy_static! {
     pub static ref G_1024: SrpGroup = SrpGroup {
