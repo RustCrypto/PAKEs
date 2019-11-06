@@ -1,4 +1,4 @@
-use num::BigUint;
+use num_bigint::BigUint;
 
 pub fn powm(base: &BigUint, exp: &BigUint, modulus: &BigUint) -> BigUint {
     let zero = BigUint::new(vec![0]);
