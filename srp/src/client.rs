@@ -61,7 +61,6 @@ use std::marker::PhantomData;
 use digest::Digest;
 use generic_array::GenericArray;
 use num_bigint::BigUint;
-use num_traits::Zero;
 
 use crate::tools::powm;
 use crate::types::{SrpAuthError, SrpGroup};
@@ -160,7 +159,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         let b_pub = BigUint::from_bytes_be(b_pub);
 
         // Safeguard against malicious B
-        if &b_pub % &self.params.n == BigUint::zero() {
+        if &b_pub % &self.params.n == BigUint::default() {
             return Err(SrpAuthError {
                 description: "Malicious b_pub value",
             });

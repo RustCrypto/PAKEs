@@ -1,9 +1,9 @@
 use num_bigint::BigUint;
 
 pub fn powm(base: &BigUint, exp: &BigUint, modulus: &BigUint) -> BigUint {
-    let zero = BigUint::new(vec![0]);
-    let one = BigUint::new(vec![1]);
-    let two = BigUint::new(vec![2]);
+    let zero = BigUint::from(0u32);
+    let one = BigUint::from(1u32);
+    let two = BigUint::from(2u32);
     let mut exp = exp.clone();
     let mut result = one.clone();
     let mut base = base % modulus;
