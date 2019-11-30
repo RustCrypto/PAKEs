@@ -3,7 +3,7 @@ rust:
   - stable
   - beta
   - nightly
-  - 1.32.0
+  - 1.36.0
 matrix:
   include:
     - rust: stable # not locked down or consistent, since allow_failures
