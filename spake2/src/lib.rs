@@ -293,7 +293,7 @@ use curve25519_dalek::edwards::CompressedEdwardsY;
 use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
 use curve25519_dalek::scalar::Scalar as c2_Scalar;
 use hkdf::Hkdf;
-use rand::{rngs::OsRng, CryptoRng, Rng};
+use rand_core::{CryptoRng, OsRng, RngCore};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::ops::Deref;
@@ -357,7 +357,7 @@ pub trait Group {
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
     fn random_scalar<T>(cspring: &mut T) -> Self::Scalar
     where
-        T: Rng + CryptoRng;
+        T: RngCore + CryptoRng;
     fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;
     fn element_to_bytes(e: &Self::Element) -> Vec<u8>;
     fn bytes_to_element(b: &[u8]) -> Option<Self::Element>;
@@ -423,7 +423,7 @@ impl Group for Ed25519Group {
     }
     fn random_scalar<T>(cspring: &mut T) -> c2_Scalar
     where
-        T: Rng + CryptoRng,
+        T: RngCore + CryptoRng,
     {
         c2_Scalar::random(cspring)
     }
@@ -704,19 +704,19 @@ impl<G: Group> SPAKE2<G> {
     }
 
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring: OsRng = OsRng::new().unwrap();
+        let mut cspring = OsRng;
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
         Self::start_a_internal(&password, &id_a, &id_b, xy_scalar)
     }
 
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring: OsRng = OsRng::new().unwrap();
+        let mut cspring = OsRng;
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
         Self::start_b_internal(&password, &id_a, &id_b, xy_scalar)
     }
 
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring: OsRng = OsRng::new().unwrap();
+        let mut cspring = OsRng;
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
         Self::start_symmetric_internal(&password, &id_s, xy_scalar)
     }
