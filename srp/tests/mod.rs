@@ -1,5 +1,4 @@
-use rand;
-use rand::RngCore;
+use rand_core::{OsRng, RngCore};
 use sha2::Sha256;
 
 use srp::client::{srp_private_key, SrpClient};
@@ -7,17 +6,16 @@ use srp::groups::G_2048;
 use srp::server::{SrpServer, UserRecord};
 
 fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = rand::rngs::OsRng::new().unwrap();
     let username = b"alice";
 
     // Client instance creation
     let mut a = [0u8; 64];
-    rng.fill_bytes(&mut a);
+    OsRng.fill_bytes(&mut a);
     let client = SrpClient::<Sha256>::new(&a, &G_2048);
 
     // Registration
     let mut salt = [0u8; 16];
-    rng.fill_bytes(&mut salt);
+    OsRng.fill_bytes(&mut salt);
     let reg_priv_key = srp_private_key::<Sha256>(username, reg_pwd, &salt);
     let verif = client.get_password_verifier(&reg_priv_key);
 
@@ -31,7 +29,7 @@ fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
         verifier: &verif,
     };
     let mut b = [0u8; 64];
-    rng.fill_bytes(&mut b);
+    OsRng.fill_bytes(&mut b);
     let server = SrpServer::<Sha256>::new(&user, &a_pub, &b, &G_2048).unwrap();
     let (salt, b_pub) = (&user.salt, server.get_b_pub());
 
