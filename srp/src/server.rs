@@ -87,7 +87,7 @@ impl<D: Digest> SrpServer<D> {
             let mut d = D::new();
             d.update(&a_pub.to_bytes_be());
             d.update(&b_pub.to_bytes_be());
-            d.finalize().into_bytes()
+            d.finalize().as_slice()
         };
         let d = Default::default();
         //(Av^u) ^ b
@@ -134,7 +134,7 @@ impl<D: Digest> SrpServer<D> {
         d.update(&self.b_pub.to_bytes_be());
         d.update(&self.key);
 
-        if user_proof == d.finalize().into_bytes().as_slice() {
+        if user_proof == d.finalize().as_slice() {
             // H(A, M, K)
             let mut d = D::new();
             d.update(&self.a_pub.to_bytes_be());
