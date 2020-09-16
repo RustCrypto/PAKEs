@@ -58,8 +58,7 @@
 //! ```
 use std::marker::PhantomData;
 
-use digest::Digest;
-use generic_array::GenericArray;
+use digest::{Digest, Output};
 use num_bigint::BigUint;
 
 use crate::tools::powm;
@@ -77,9 +76,9 @@ pub struct SrpClient<'a, D: Digest> {
 
 /// SRP client state after handshake with the server.
 pub struct SrpClientVerifier<D: Digest> {
-    proof: GenericArray<u8, D::OutputSize>,
-    server_proof: GenericArray<u8, D::OutputSize>,
-    key: GenericArray<u8, D::OutputSize>,
+    proof: Output<D>,
+    server_proof: Output<D>,
+    key: Output<D>,
 }
 
 /// Compute user private key as described in the RFC 5054. Consider using proper
@@ -88,7 +87,7 @@ pub fn srp_private_key<D: Digest>(
     username: &[u8],
     password: &[u8],
     salt: &[u8],
-) -> GenericArray<u8, D::OutputSize> {
+) -> Output<D> {
     let p = {
         let mut d = D::new();
         d.update(username);
@@ -128,7 +127,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         b_pub: &BigUint,
         x: &BigUint,
         u: &BigUint,
-    ) -> GenericArray<u8, D::OutputSize> {
+    ) -> Output<D> {
         let n = &self.params.n;
         let k = self.params.compute_k::<D>();
         let interm = (k * self.params.powm(x)) % n;
@@ -202,12 +201,12 @@ impl<D: Digest> SrpClientVerifier<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
-    pub fn get_key(self) -> GenericArray<u8, D::OutputSize> {
+    pub fn get_key(self) -> Output<D> {
         self.key
     }
 
     /// Verification data for sending to the server.
-    pub fn get_proof(&self) -> GenericArray<u8, D::OutputSize> {
+    pub fn get_proof(&self) -> Output<D> {
         self.proof.clone()
     }
 
@@ -216,7 +215,7 @@ impl<D: Digest> SrpClientVerifier<D> {
     pub fn verify_server(
         self,
         reply: &[u8],
-    ) -> Result<GenericArray<u8, D::OutputSize>, SrpAuthError> {
+    ) -> Result<Output<D>, SrpAuthError> {
         if self.server_proof.as_slice() != reply {
             Err(SrpAuthError {
                 description: "Incorrect server proof",
