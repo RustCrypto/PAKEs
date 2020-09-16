@@ -93,11 +93,11 @@ pub fn srp_private_key<D: Digest>(
         d.update(username);
         d.update(b":");
         d.update(password);
-        d.finalize().as_slice()
+        d.finalize()
     };
     let mut d = D::new();
     d.update(salt);
-    d.update(&p);
+    d.update(p.as_slice());
     d.finalize()
 }
 
@@ -152,7 +152,8 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             let mut d = D::new();
             d.update(&self.a_pub.to_bytes_be());
             d.update(b_pub);
-            BigUint::from_bytes_be(&d.finalize().as_slice())
+            let h = d.finalize()
+            BigUint::from_bytes_be(h.as_slice())
         };
 
         let b_pub = BigUint::from_bytes_be(b_pub);
