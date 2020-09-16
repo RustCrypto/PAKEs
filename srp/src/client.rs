@@ -173,7 +173,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             d.update(&self.a_pub.to_bytes_be());
             d.update(&b_pub.to_bytes_be());
             d.update(&key);
-            d.finalize().into_bytes()
+            d.finalize()
         };
 
         // M2 = H(A, M1, K)
@@ -182,7 +182,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             d.update(&self.a_pub.to_bytes_be());
             d.update(&proof);
             d.update(&key);
-            d.finalize().into_bytes()
+            d.finalize()
         };
 
         Ok(SrpClientVerifier {
