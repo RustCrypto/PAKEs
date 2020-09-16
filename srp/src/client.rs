@@ -202,9 +202,10 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
         let u = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(b_pub);
-            BigUint::from_bytes_be(&d.result())
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(b_pub);
+            let h = d.finalize();
+            BigUint::from_bytes_be(h.as_slice())
         };
 
         let b_pub = BigUint::from_bytes_be(b_pub);
@@ -221,26 +222,27 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         // M1 = H(H(N)^H(g), H(I), salt, A, B, K)
         let proof = {
             let mut d = D::new();
-            d.input(username);
-            let I: &[u8] = &d.result_reset();
+            d.update(username);
+            let h = d.finalize_reset();
+            let I: &[u8] = h.as_slice();
 
-            d.input(self.params.compute_hash_n_xor_hash_g::<D>());
-            d.input(I);
-            d.input(salt);
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&b_pub.to_bytes_be());
-            d.input(&key.to_vec());
-            d.result()
+            d.update(self.params.compute_hash_n_xor_hash_g::<D>());
+            d.update(I);
+            d.update(salt);
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&b_pub.to_bytes_be());
+            d.update(&key.to_vec());
+            d.finalize()
         };
         let x = proof.to_vec().as_slice();
 
         // M2 = H(A, M1, K)
         let server_proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&proof);
-            d.input(&key);
-            d.result()
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&proof);
+            d.update(&key);
+            d.finalize()
         };
 
         Ok(SrpClientVerifier {
