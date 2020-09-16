@@ -91,15 +91,15 @@ pub fn srp_private_key<D: Digest>(
 ) -> GenericArray<u8, D::OutputSize> {
     let p = {
         let mut d = D::new();
-        d.input(username);
-        d.input(b":");
-        d.input(password);
-        d.result()
+        d.update(username);
+        d.update(b":");
+        d.update(password);
+        d.finalize().into_bytes()
     };
     let mut d = D::new();
-    d.input(salt);
-    d.input(&p);
-    d.result()
+    d.update(salt);
+    d.update(&p);
+    d.finalize()
 }
 
 impl<'a, D: Digest> SrpClient<'a, D> {
@@ -151,9 +151,9 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
         let u = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(b_pub);
-            BigUint::from_bytes_be(&d.result())
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(b_pub);
+            BigUint::from_bytes_be(&d.finalize().into_bytes())
         };
 
         let b_pub = BigUint::from_bytes_be(b_pub);
@@ -170,19 +170,19 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         // M1 = H(A, B, K)
         let proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&b_pub.to_bytes_be());
-            d.input(&key);
-            d.result()
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&b_pub.to_bytes_be());
+            d.update(&key);
+            d.finalize().into_bytes()
         };
 
         // M2 = H(A, M1, K)
         let server_proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&proof);
-            d.input(&key);
-            d.result()
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&proof);
+            d.update(&key);
+            d.finalize().into_bytes()
         };
 
         Ok(SrpClientVerifier {
