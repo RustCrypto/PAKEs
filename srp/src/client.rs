@@ -192,6 +192,64 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         })
     }
 
+    /// Process server reply to the handshake with username and salt.
+    pub fn process_reply_with_username_and_salt(
+        self,
+        username: &[u8],
+        salt: &[u8],
+        private_key: &[u8],
+        b_pub: &[u8],
+    ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
+        let u = {
+            let mut d = D::new();
+            d.input(&self.a_pub.to_bytes_be());
+            d.input(b_pub);
+            BigUint::from_bytes_be(&d.result())
+        };
+
+        let b_pub = BigUint::from_bytes_be(b_pub);
+
+        // Safeguard against malicious B
+        if &b_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError {
+                description: "Malicious b_pub value",
+            });
+        }
+
+        let x = BigUint::from_bytes_be(private_key);
+        let key = self.calc_key(&b_pub, &x, &u);
+        // M1 = H(H(N)^H(g), H(I), salt, A, B, K)
+        let proof = {
+            let mut d = D::new();
+            d.input(username);
+            let I: &[u8] = &d.result_reset();
+
+            d.input(self.params.compute_hash_n_xor_hash_g::<D>());
+            d.input(I);
+            d.input(salt);
+            d.input(&self.a_pub.to_bytes_be());
+            d.input(&b_pub.to_bytes_be());
+            d.input(&key.to_vec());
+            d.result()
+        };
+        let x = proof.to_vec().as_slice();
+
+        // M2 = H(A, M1, K)
+        let server_proof = {
+            let mut d = D::new();
+            d.input(&self.a_pub.to_bytes_be());
+            d.input(&proof);
+            d.input(&key);
+            d.result()
+        };
+
+        Ok(SrpClientVerifier {
+            proof,
+            server_proof,
+            key,
+        })
+    }
+
     /// Get public ephemeral value for handshaking with the server.
     pub fn get_a_pub(&self) -> Vec<u8> {
         self.a_pub.to_bytes_be()
