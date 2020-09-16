@@ -152,7 +152,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             let mut d = D::new();
             d.update(&self.a_pub.to_bytes_be());
             d.update(b_pub);
-            let h = d.finalize()
+            let h = d.finalize();
             BigUint::from_bytes_be(h.as_slice())
         };
 
