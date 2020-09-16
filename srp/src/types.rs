@@ -45,9 +45,9 @@ impl SrpGroup {
         buf[l..].copy_from_slice(&g_bytes);
 
         let mut d = D::new();
-        d.input(&n);
-        d.input(&buf);
-        BigUint::from_bytes_be(&d.result())
+        d.update(&n);
+        d.update(&buf);
+        BigUint::from_bytes_be(&d.finalize().as_slice())
     }
 }
 
