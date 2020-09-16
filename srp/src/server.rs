@@ -87,12 +87,12 @@ impl<D: Digest> SrpServer<D> {
             let mut d = D::new();
             d.update(&a_pub.to_bytes_be());
             d.update(&b_pub.to_bytes_be());
-            d.finalize().as_slice()
+            d.finalize()
         };
         let d = Default::default();
         //(Av^u) ^ b
         let key = {
-            let u = BigUint::from_bytes_be(&u);
+            let u = BigUint::from_bytes_be(u.as_slice());
             let t = (&a_pub * powm(&v, &u, &params.n)) % &params.n;
             let s = powm(&t, &b, &params.n);
             D::digest(&s.to_bytes_be())
