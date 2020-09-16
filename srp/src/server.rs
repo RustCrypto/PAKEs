@@ -36,8 +36,7 @@
 //! encryption.
 use std::marker::PhantomData;
 
-use digest::Digest;
-use generic_array::GenericArray;
+use digest::{Digest, Output};
 use num_bigint::BigUint;
 
 use crate::tools::powm;
@@ -57,7 +56,7 @@ pub struct SrpServer<D: Digest> {
     a_pub: BigUint,
     b_pub: BigUint,
 
-    key: GenericArray<u8, D::OutputSize>,
+    key: Output<D>,
 
     d: PhantomData<D>,
 }
@@ -119,7 +118,7 @@ impl<D: Digest> SrpServer<D> {
 
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
-    pub fn get_key(&self) -> GenericArray<u8, D::OutputSize> {
+    pub fn get_key(&self) -> Output<D> {
         self.key.clone()
     }
 
@@ -128,7 +127,7 @@ impl<D: Digest> SrpServer<D> {
     pub fn verify(
         &self,
         user_proof: &[u8],
-    ) -> Result<GenericArray<u8, D::OutputSize>, SrpAuthError> {
+    ) -> Result<Output<D>, SrpAuthError> {
         // M = H(A, B, K)
         let mut d = D::new();
         d.update(&self.a_pub.to_bytes_be());
