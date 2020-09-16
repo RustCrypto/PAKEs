@@ -49,6 +49,25 @@ impl SrpGroup {
         d.update(&buf);
         BigUint::from_bytes_be(&d.finalize().as_slice())
     }
+
+    /// Compute `Hash(N) xor Hash(g)` with given hash function and return SRP parameters
+    pub(crate) fn compute_hash_n_xor_hash_g<D: Digest>(&self) -> Vec<u8> {
+        let n = self.n.to_bytes_be();
+        let g_bytes = self.g.to_bytes_be();
+        let mut buf = vec![0u8; n.len()];
+        let l = n.len() - g_bytes.len();
+        buf[l..].copy_from_slice(&g_bytes);
+
+        let mut d = D::new();
+        d.update(&n);
+        let h = d.finalize_reset();
+        let h_n: &[u8] = h.as_slice();
+        d.update(&buf);
+        let h = d.finalize_reset();
+        let h_g: &[u8] = h.as_slice();
+
+        h_n.iter().zip(h_g.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
+    }
 }
 
 #[cfg(test)]
