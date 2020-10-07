@@ -66,7 +66,10 @@ impl SrpGroup {
         let h = d.finalize_reset();
         let h_g: &[u8] = h.as_slice();
 
-        h_n.iter().zip(h_g.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
+        h_n.iter()
+            .zip(h_g.iter())
+            .map(|(&x1, &x2)| x1 ^ x2)
+            .collect()
     }
 }
 

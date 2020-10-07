@@ -124,10 +124,7 @@ impl<D: Digest> SrpServer<D> {
 
     /// Process user proof of having the same shared secret and compute
     /// server proof for sending to the user.
-    pub fn verify(
-        &self,
-        user_proof: &[u8],
-    ) -> Result<Output<D>, SrpAuthError> {
+    pub fn verify(&self, user_proof: &[u8]) -> Result<Output<D>, SrpAuthError> {
         // M = H(A, B, K)
         let mut d = D::new();
         d.update(&self.a_pub.to_bytes_be());

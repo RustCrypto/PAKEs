@@ -83,11 +83,7 @@ pub struct SrpClientVerifier<D: Digest> {
 
 /// Compute user private key as described in the RFC 5054. Consider using proper
 /// password hashing algorithm instead.
-pub fn srp_private_key<D: Digest>(
-    username: &[u8],
-    password: &[u8],
-    salt: &[u8],
-) -> Output<D> {
+pub fn srp_private_key<D: Digest>(username: &[u8], password: &[u8], salt: &[u8]) -> Output<D> {
     let p = {
         let mut d = D::new();
         d.update(username);
@@ -122,12 +118,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         v.to_bytes_be()
     }
 
-    fn calc_key(
-        &self,
-        b_pub: &BigUint,
-        x: &BigUint,
-        u: &BigUint,
-    ) -> Output<D> {
+    fn calc_key(&self, b_pub: &BigUint, x: &BigUint, u: &BigUint) -> Output<D> {
         let n = &self.params.n;
         let k = self.params.compute_k::<D>();
         let interm = (k * self.params.powm(x)) % n;
@@ -273,10 +264,7 @@ impl<D: Digest> SrpClientVerifier<D> {
 
     /// Verify server reply to verification data. It will return shared secret
     /// key in case of success.
-    pub fn verify_server(
-        self,
-        reply: &[u8],
-    ) -> Result<Output<D>, SrpAuthError> {
+    pub fn verify_server(self, reply: &[u8]) -> Result<Output<D>, SrpAuthError> {
         if self.server_proof.as_slice() != reply {
             Err(SrpAuthError {
                 description: "Incorrect server proof",
