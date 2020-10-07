@@ -58,8 +58,7 @@
 //! ```
 use std::marker::PhantomData;
 
-use digest::Digest;
-use generic_array::GenericArray;
+use digest::{Digest, Output};
 use num_bigint::BigUint;
 
 use crate::tools::powm;
@@ -77,29 +76,25 @@ pub struct SrpClient<'a, D: Digest> {
 
 /// SRP client state after handshake with the server.
 pub struct SrpClientVerifier<D: Digest> {
-    proof: GenericArray<u8, D::OutputSize>,
-    server_proof: GenericArray<u8, D::OutputSize>,
-    key: GenericArray<u8, D::OutputSize>,
+    proof: Output<D>,
+    server_proof: Output<D>,
+    key: Output<D>,
 }
 
 /// Compute user private key as described in the RFC 5054. Consider using proper
 /// password hashing algorithm instead.
-pub fn srp_private_key<D: Digest>(
-    username: &[u8],
-    password: &[u8],
-    salt: &[u8],
-) -> GenericArray<u8, D::OutputSize> {
+pub fn srp_private_key<D: Digest>(username: &[u8], password: &[u8], salt: &[u8]) -> Output<D> {
     let p = {
         let mut d = D::new();
-        d.input(username);
-        d.input(b":");
-        d.input(password);
-        d.result()
+        d.update(username);
+        d.update(b":");
+        d.update(password);
+        d.finalize()
     };
     let mut d = D::new();
-    d.input(salt);
-    d.input(&p);
-    d.result()
+    d.update(salt);
+    d.update(p.as_slice());
+    d.finalize()
 }
 
 impl<'a, D: Digest> SrpClient<'a, D> {
@@ -123,12 +118,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         v.to_bytes_be()
     }
 
-    fn calc_key(
-        &self,
-        b_pub: &BigUint,
-        x: &BigUint,
-        u: &BigUint,
-    ) -> GenericArray<u8, D::OutputSize> {
+    fn calc_key(&self, b_pub: &BigUint, x: &BigUint, u: &BigUint) -> Output<D> {
         let n = &self.params.n;
         let k = self.params.compute_k::<D>();
         let interm = (k * self.params.powm(x)) % n;
@@ -151,9 +141,10 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
         let u = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(b_pub);
-            BigUint::from_bytes_be(&d.result())
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(b_pub);
+            let h = d.finalize();
+            BigUint::from_bytes_be(h.as_slice())
         };
 
         let b_pub = BigUint::from_bytes_be(b_pub);
@@ -170,19 +161,79 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         // M1 = H(A, B, K)
         let proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&b_pub.to_bytes_be());
-            d.input(&key);
-            d.result()
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&b_pub.to_bytes_be());
+            d.update(&key);
+            d.finalize()
         };
 
         // M2 = H(A, M1, K)
         let server_proof = {
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(&proof);
-            d.input(&key);
-            d.result()
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&proof);
+            d.update(&key);
+            d.finalize()
+        };
+
+        Ok(SrpClientVerifier {
+            proof,
+            server_proof,
+            key,
+        })
+    }
+
+    /// Process server reply to the handshake with username and salt.
+    pub fn process_reply_with_username_and_salt(
+        self,
+        username: &[u8],
+        salt: &[u8],
+        private_key: &[u8],
+        b_pub: &[u8],
+    ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
+        let u = {
+            let mut d = D::new();
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(b_pub);
+            let h = d.finalize();
+            BigUint::from_bytes_be(h.as_slice())
+        };
+
+        let b_pub = BigUint::from_bytes_be(b_pub);
+
+        // Safeguard against malicious B
+        if &b_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError {
+                description: "Malicious b_pub value",
+            });
+        }
+
+        let x = BigUint::from_bytes_be(private_key);
+        let key = self.calc_key(&b_pub, &x, &u);
+        // M1 = H(H(N)^H(g), H(I), salt, A, B, K)
+        let proof = {
+            let mut d = D::new();
+            d.update(username);
+            let h = d.finalize_reset();
+            let I: &[u8] = h.as_slice();
+
+            d.update(self.params.compute_hash_n_xor_hash_g::<D>());
+            d.update(I);
+            d.update(salt);
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&b_pub.to_bytes_be());
+            d.update(&key.to_vec());
+            d.finalize()
+        };
+        let x = proof.to_vec().as_slice();
+
+        // M2 = H(A, M1, K)
+        let server_proof = {
+            let mut d = D::new();
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&proof);
+            d.update(&key);
+            d.finalize()
         };
 
         Ok(SrpClientVerifier {
@@ -202,21 +253,18 @@ impl<D: Digest> SrpClientVerifier<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
-    pub fn get_key(self) -> GenericArray<u8, D::OutputSize> {
+    pub fn get_key(self) -> Output<D> {
         self.key
     }
 
     /// Verification data for sending to the server.
-    pub fn get_proof(&self) -> GenericArray<u8, D::OutputSize> {
+    pub fn get_proof(&self) -> Output<D> {
         self.proof.clone()
     }
 
     /// Verify server reply to verification data. It will return shared secret
     /// key in case of success.
-    pub fn verify_server(
-        self,
-        reply: &[u8],
-    ) -> Result<GenericArray<u8, D::OutputSize>, SrpAuthError> {
+    pub fn verify_server(self, reply: &[u8]) -> Result<Output<D>, SrpAuthError> {
         if self.server_proof.as_slice() != reply {
             Err(SrpAuthError {
                 description: "Incorrect server proof",

@@ -36,8 +36,7 @@
 //! encryption.
 use std::marker::PhantomData;
 
-use digest::Digest;
-use generic_array::GenericArray;
+use digest::{Digest, Output};
 use num_bigint::BigUint;
 
 use crate::tools::powm;
@@ -57,7 +56,7 @@ pub struct SrpServer<D: Digest> {
     a_pub: BigUint,
     b_pub: BigUint,
 
-    key: GenericArray<u8, D::OutputSize>,
+    key: Output<D>,
 
     d: PhantomData<D>,
 }
@@ -86,14 +85,14 @@ impl<D: Digest> SrpServer<D> {
         // H(A || B)
         let u = {
             let mut d = D::new();
-            d.input(&a_pub.to_bytes_be());
-            d.input(&b_pub.to_bytes_be());
-            d.result()
+            d.update(&a_pub.to_bytes_be());
+            d.update(&b_pub.to_bytes_be());
+            d.finalize()
         };
         let d = Default::default();
         //(Av^u) ^ b
         let key = {
-            let u = BigUint::from_bytes_be(&u);
+            let u = BigUint::from_bytes_be(u.as_slice());
             let t = (&a_pub * powm(&v, &u, &params.n)) % &params.n;
             let s = powm(&t, &b, &params.n);
             D::digest(&s.to_bytes_be())
@@ -119,29 +118,26 @@ impl<D: Digest> SrpServer<D> {
 
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
-    pub fn get_key(&self) -> GenericArray<u8, D::OutputSize> {
+    pub fn get_key(&self) -> Output<D> {
         self.key.clone()
     }
 
     /// Process user proof of having the same shared secret and compute
     /// server proof for sending to the user.
-    pub fn verify(
-        &self,
-        user_proof: &[u8],
-    ) -> Result<GenericArray<u8, D::OutputSize>, SrpAuthError> {
+    pub fn verify(&self, user_proof: &[u8]) -> Result<Output<D>, SrpAuthError> {
         // M = H(A, B, K)
         let mut d = D::new();
-        d.input(&self.a_pub.to_bytes_be());
-        d.input(&self.b_pub.to_bytes_be());
-        d.input(&self.key);
+        d.update(&self.a_pub.to_bytes_be());
+        d.update(&self.b_pub.to_bytes_be());
+        d.update(&self.key);
 
-        if user_proof == d.result().as_slice() {
+        if user_proof == d.finalize().as_slice() {
             // H(A, M, K)
             let mut d = D::new();
-            d.input(&self.a_pub.to_bytes_be());
-            d.input(user_proof);
-            d.input(&self.key);
-            Ok(d.result())
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(user_proof);
+            d.update(&self.key);
+            Ok(d.finalize())
         } else {
             Err(SrpAuthError {
                 description: "Incorrect user proof",
