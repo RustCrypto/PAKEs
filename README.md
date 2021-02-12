@@ -1,7 +1,5 @@
-# RustCrypto: PAKEs [![Build Status](https://travis-ci.org/RustCrypto/PAKEs.svg?branch=master)](https://travis-ci.org/RustCrypto/PAKEs)
+# RustCrypto: PAKEs [![dependency status][deps-image]][deps-link]
 [Password-Authenticated Key Agreement][1] protocols implementation.
-
-[![dependency status](https://deps.rs/repo/github/RustCrypto/PAKEs/status.svg)](https://deps.rs/repo/github/RustCrypto/PAKEs)
 
 ## Warnings
 
@@ -51,6 +49,13 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+[//]: # (badges)
+
+[deps-image]: https://deps.rs/repo/github/RustCrypto/PAKEs/status.svg
+[deps-link]: https://deps.rs/repo/github/RustCrypto/PAKEs
+
+[//]: # (footnotes)
 
 [1]: https://en.wikipedia.org/wiki/Password-authenticated_key_agreement
 [2]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
