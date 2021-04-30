@@ -34,7 +34,7 @@ hex = "0.4"
 
 [dev-dependencies]
 bencher = "0.1"
-num-bigint = "0.2"
+num-bigint = "0.4"
 
 [[bench]]
 name = "spake2"
