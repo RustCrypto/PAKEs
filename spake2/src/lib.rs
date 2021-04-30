@@ -649,7 +649,7 @@ impl<G: Group> SPAKE2<G> {
                 id_a: id_a_copy,
                 id_b: id_b_copy,
                 id_s: id_s_copy,
-                msg1: msg1.clone(),
+                msg1,
                 password_scalar, // scalar
             },
             msg_and_side,

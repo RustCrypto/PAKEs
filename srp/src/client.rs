@@ -56,6 +56,7 @@
 //! let pwd_verifier = client.get_password_verifier(&private_key);
 //! conn.send_registration_data(username, salt, pwd_verifier);
 //! ```
+
 use std::marker::PhantomData;
 
 use digest::{Digest, Output};
@@ -184,6 +185,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     /// Process server reply to the handshake with username and salt.
+    #[allow(non_snake_case)]
     pub fn process_reply_with_username_and_salt(
         self,
         username: &[u8],
@@ -225,7 +227,6 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             d.update(&key.to_vec());
             d.finalize()
         };
-        let x = proof.to_vec().as_slice();
 
         // M2 = H(A, M1, K)
         let server_proof = {
