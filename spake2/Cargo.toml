@@ -27,7 +27,7 @@ is-it-maintained-open-issues = { repository = "RustCrypto/PAKEs" }
 
 [dependencies]
 curve25519-dalek = "1.2"
-rand = "0.6"
+rand = "0.8"
 sha2 = "0.8"
 hkdf = "0.8"
 hex = "0.4"
