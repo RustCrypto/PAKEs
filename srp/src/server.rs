@@ -22,7 +22,7 @@
 //! conn.reply_to_handshake(&user.salt, b_pub);
 //! ```
 //!
-//! And finally recieve user proof, verify it and send server proof in the
+//! And finally receive user proof, verify it and send server proof in the
 //! reply:
 //!
 //! ```ignore
