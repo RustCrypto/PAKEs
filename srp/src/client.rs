@@ -48,7 +48,7 @@
 //! authenticated cipher mode).
 //!
 //! For user registration on the server first generate salt (e.g. 32 bytes long)
-//! and get password verifier which depends on private key. Send useranme, salt
+//! and get password verifier which depends on private key. Send username, salt
 //! and password verifier over protected channel to protect against
 //! Man-in-the-middle (MITM) attack for registration.
 //!

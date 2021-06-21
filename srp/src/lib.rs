@@ -10,7 +10,7 @@
 //! Compatibility with over implementations was not yet tested.
 //!
 //! # Usage
-//! Add `srp` dependecy to your `Cargo.toml`:
+//! Add `srp` dependency to your `Cargo.toml`:
 //!
 //! ```toml
 //! [dependencies]
@@ -27,7 +27,7 @@
 //! [`server`](server/index.html) modules.
 //!
 //! # Algorithm description
-//! Here we briefly describe implemented algroithm. For additionall information
+//! Here we briefly describe implemented algorithm. For additional information
 //! refer to SRP literature. All arithmetic is done modulo `N`, where `N` is a
 //! large safe prime (`N = 2q+1`, where `q` is prime). Additionally `g` MUST be
 //! a generator modulo `N`. It's STRONGLY recommended to use SRP parameters
@@ -43,8 +43,7 @@
 //! |`M1 = H(A ‖ B ‖ K)`     |     — `M1` —>     | (verify `M1`)                   |
 //! |(verify `M2`)           |    <— `M2` —      | `M2 = H(A ‖ M1 ‖ K)`            |
 //!
-//! Variables and notations have the following
-//! meaning:
+//! Variables and notations have the following meaning:
 //!
 //! - `I` — user identity (username)
 //! - `P` — user password
