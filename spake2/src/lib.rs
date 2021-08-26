@@ -507,16 +507,16 @@ fn ed25519_hash_ab(
     let mut transcript = [0u8; 6 * 32];
 
     let mut pw_hash = Sha256::new();
-    pw_hash.input(password_vec);
-    transcript[0..32].copy_from_slice(&pw_hash.result());
+    pw_hash.update(password_vec);
+    transcript[0..32].copy_from_slice(&pw_hash.finalize());
 
     let mut ida_hash = Sha256::new();
-    ida_hash.input(id_a);
-    transcript[32..64].copy_from_slice(&ida_hash.result());
+    ida_hash.update(id_a);
+    transcript[32..64].copy_from_slice(&ida_hash.finalize());
 
     let mut idb_hash = Sha256::new();
-    idb_hash.input(id_b);
-    transcript[64..96].copy_from_slice(&idb_hash.result());
+    idb_hash.update(id_b);
+    transcript[64..96].copy_from_slice(&idb_hash.finalize());
 
     transcript[96..128].copy_from_slice(first_msg);
     transcript[128..160].copy_from_slice(second_msg);
@@ -526,8 +526,8 @@ fn ed25519_hash_ab(
 
     //let mut hash = G::TranscriptHash::default();
     let mut hash = Sha256::new();
-    hash.input(transcript.to_vec());
-    hash.result().to_vec()
+    hash.update(transcript.to_vec());
+    hash.finalize().to_vec()
 }
 
 fn ed25519_hash_symmetric(
@@ -554,12 +554,12 @@ fn ed25519_hash_symmetric(
     let mut transcript = [0u8; 5 * 32];
 
     let mut pw_hash = Sha256::new();
-    pw_hash.input(password_vec);
-    transcript[0..32].copy_from_slice(&pw_hash.result());
+    pw_hash.update(password_vec);
+    transcript[0..32].copy_from_slice(&pw_hash.finalize());
 
     let mut ids_hash = Sha256::new();
-    ids_hash.input(id_s);
-    transcript[32..64].copy_from_slice(&ids_hash.result());
+    ids_hash.update(id_s);
+    transcript[32..64].copy_from_slice(&ids_hash.finalize());
 
     if msg_u < msg_v {
         transcript[64..96].copy_from_slice(msg_u);
@@ -571,8 +571,8 @@ fn ed25519_hash_symmetric(
     transcript[128..160].copy_from_slice(key_bytes);
 
     let mut hash = Sha256::new();
-    hash.input(transcript.to_vec());
-    hash.result().to_vec()
+    hash.update(transcript.to_vec());
+    hash.finalize().to_vec()
 }
 
 /* "session type pattern" */
