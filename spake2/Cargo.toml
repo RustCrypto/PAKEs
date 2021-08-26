@@ -20,16 +20,11 @@ tag-message = "(cargo-release) spake2-v{{version}}"
 pre-release-commit-message = "(cargo-release) spake2-v{{version}}"
 pro-release-commit-message = "(cargo-release) start next development iteration spake2-v{{version}}"
 
-[badges]
-travis-ci = { repository = "RustCrypto/PAKEs" }
-is-it-maintained-issue-resolution = { repository = "RustCrypto/PAKEs" }
-is-it-maintained-open-issues = { repository = "RustCrypto/PAKEs" }
-
 [dependencies]
 curve25519-dalek = "1.2"
 rand = "0.6"
-sha2 = "0.8"
-hkdf = "0.8"
+sha2 = "0.9"
+hkdf = "0.11"
 hex = "0.4"
 
 [dev-dependencies]
