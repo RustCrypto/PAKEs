@@ -62,7 +62,6 @@ use std::marker::PhantomData;
 use digest::{Digest, Output};
 use num_bigint::BigUint;
 
-use crate::tools::powm;
 use crate::types::{SrpAuthError, SrpGroup};
 
 /// SRP client state before handshake with the server.
@@ -130,7 +129,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             (n + b_pub - &interm) % n
         };
         // S = |B - kg^x| ^ (a + ux)
-        let s = powm(&v, &(&self.a + (u * x) % n), n);
+        let s = v.modpow(&(&self.a + (u * x) % n), n);
         D::digest(&s.to_bytes_be())
     }
 
