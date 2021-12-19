@@ -31,7 +31,7 @@ pub struct SrpGroup {
 }
 
 impl SrpGroup {
-    pub(crate) fn powm(&self, v: &BigUint) -> BigUint {
+    pub(crate) fn modpow(&self, v: &BigUint) -> BigUint {
         self.g.modpow(v, &self.n)
     }
 

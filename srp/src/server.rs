@@ -80,7 +80,7 @@ impl<D: Digest> SrpServer<D> {
         let k = params.compute_k::<D>();
         // kv + g^b
         let interm = (k * &v) % &params.n;
-        let b_pub = (interm + &params.powm(&b)) % &params.n;
+        let b_pub = (interm + &params.modpow(&b)) % &params.n;
         // H(A || B)
         let u = {
             let mut d = D::new();

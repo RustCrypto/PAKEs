@@ -101,7 +101,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Create new SRP client instance.
     pub fn new(a: &[u8], params: &'a SrpGroup) -> Self {
         let a = BigUint::from_bytes_be(a);
-        let a_pub = params.powm(&a);
+        let a_pub = params.modpow(&a);
 
         Self {
             params,
@@ -114,14 +114,14 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Get password verfier for user registration on the server
     pub fn get_password_verifier(&self, private_key: &[u8]) -> Vec<u8> {
         let x = BigUint::from_bytes_be(private_key);
-        let v = self.params.powm(&x);
+        let v = self.params.modpow(&x);
         v.to_bytes_be()
     }
 
     fn calc_key(&self, b_pub: &BigUint, x: &BigUint, u: &BigUint) -> Output<D> {
         let n = &self.params.n;
         let k = self.params.compute_k::<D>();
-        let interm = (k * self.params.powm(x)) % n;
+        let interm = (k * self.params.modpow(x)) % n;
         // Because we do operation in modulo N we can get: (kv + g^b) < kv
         let v = if *b_pub > interm {
             (b_pub - &interm) % n
