@@ -1,22 +1,24 @@
 //! Additional SRP types.
 use num_bigint::BigUint;
-use std::{error, fmt};
+use std::fmt;
 
 /// SRP authentication error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct SrpAuthError {
-    pub(crate) description: &'static str,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum SrpAuthError {
+    IllegalParameter(String),
+    BadRecordMac(String),
 }
 
 impl fmt::Display for SrpAuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SRP authentication error")
-    }
-}
-
-impl error::Error for SrpAuthError {
-    fn description(&self) -> &str {
-        self.description
+        match self {
+            SrpAuthError::IllegalParameter(param) => {
+                write!(f, "illegal_parameter: bad '{}' value", param)
+            }
+            SrpAuthError::BadRecordMac(param) => {
+                write!(f, "bad_record_mac: incorrect '{}'  proof", param)
+            }
+        }
     }
 }
 

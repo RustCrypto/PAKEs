@@ -2,65 +2,92 @@
 //!
 //! # Usage
 //! First create SRP client struct by passing to it SRP parameters (shared
-//! between client and server) and randomly generated `a`:
+//! between client and server).
 //!
-//! ```ignore
-//! use srp::groups::G_2048;
-//! use sha2::Sha256;
+//! You can use SHA1 from SRP-6a, but it's highly recommended to use specialized
+//! password hashing algorithm instead (e.g. PBKDF2, argon2 or scrypt).
 //!
-//! let mut a = [0u8; 64];
-//! rng.fill_bytes(&mut a);
-//! let client = SrpClient::<Sha256>::new(&a, &G_2048);
+//! ```rust
+//! use crate::srp::groups::G_2048;
+//! use sha2::Sha256; // Note: You should probably use a proper password KDF
+//! # use crate::srp::client::SrpClient;
+//!
+//! let client = SrpClient::<Sha256>::new(&G_2048);
 //! ```
 //!
 //! Next send handshake data (username and `a_pub`) to the server and receive
 //! `salt` and `b_pub`:
 //!
-//! ```ignore
-//! let a_pub = client.get_a_pub();
-//! let (salt, b_pub) = conn.send_handshake(username, a_pub);
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # fn server_response()-> (Vec<u8>, Vec<u8>) { (vec![], vec![]) }
+//!
+//! let mut a = [0u8; 64];
+//! // rng.fill_bytes(&mut a);
+//! let a_pub = client.compute_public_ephemeral(&a);
+//! let (salt, b_pub) = server_response();
 //! ```
 //!
-//! Compute private key using `salt` with any password hashing function.
-//! You can use method from SRP-6a, but it's recommended to use specialized
-//! password hashing algorithm instead (e.g. PBKDF2, argon2 or scrypt).
-//! Next create verifier instance, note that `get_verifier` consumes client and
-//! can return error in case of malicious `b_pub`.
+//! Process the server response and create verifier instance.
+//! process_reply can return error in case of malicious `b_pub`.
 //!
-//! ```ignore
-//! let private_key = srp_private_key::<Sha256>(username, password, salt);
-//! let verifier = client.get_verifier(&private_key, &b_pub)?;
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let a = [0u8; 64];
+//! # let username = b"username";
+//! # let password = b"password";
+//! # let salt = b"salt";
+//! # let b_pub = b"b_pub";
+//!
+//! let private_key = (username, password, salt);
+//! let verifier = client.process_reply(&a, username, password, salt, b_pub);
 //! ```
 //!
 //! Finally verify the server: first generate user proof,
 //! send it to the server and verify server proof in the reply. Note that
 //! `verify_server` method will return error in case of incorrect server reply.
 //!
-//! ```ignore
-//! let user_proof = verifier.get_proof();
-//! let server_proof = conn.send_proof(user_proof);
-//! let key = verifier.verify_server(server_proof)?;
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
+//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
+//!
+//! let client_proof = verifier.proof();
+//! let server_proof = send_proof(client_proof);
+//! verifier.verify_server(&server_proof).unwrap();
 //! ```
 //!
-//! `key` contains shared secret key between user and the server. Alternatively
-//! you can directly extract shared secret key using `get_key()` method and
-//! handle authentication through different (secure!) means (e.g. by using
-//! authenticated cipher mode).
+//! `key` contains shared secret key between user and the server. You can extract shared secret
+//! key using `key()` method.
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
+//!
+//! verifier.key();
+//!```
+//!
 //!
 //! For user registration on the server first generate salt (e.g. 32 bytes long)
 //! and get password verifier which depends on private key. Send username, salt
 //! and password verifier over protected channel to protect against
 //! Man-in-the-middle (MITM) attack for registration.
 //!
-//! ```ignore
-//! let pwd_verifier = client.get_password_verifier(&private_key);
-//! conn.send_registration_data(username, salt, pwd_verifier);
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let username = b"username";
+//! # let password = b"password";
+//! # let salt = b"salt";
+//! # fn send_registration_data(_: &[u8], _: &[u8], _: &[u8]) {}
+//!
+//! let pwd_verifier = client.compute_verifier(username, password, salt);
+//! send_registration_data(username, salt, &pwd_verifier);
 //! ```
 
 use std::marker::PhantomData;
 
 use digest::{Digest, Output};
 use num_bigint::BigUint;
+use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
 use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
@@ -166,9 +193,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         // Safeguard against malicious B
         if &b_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError {
-                description: "illegal_parameter: malicious b_pub value",
-            });
+            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
         }
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
@@ -203,17 +228,15 @@ impl<D: Digest> SrpClientVerifier<D> {
     }
 
     /// Verification data for sending to the server.
-    pub fn proof(&self) -> &Output<D> {
-        &self.m1
+    pub fn proof(&self) -> &[u8] {
+        &self.m1.as_slice()
     }
 
     /// Verify server reply to verification data.
     pub fn verify_server(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
-        if self.m2.as_slice() != reply {
-            // TODO timing attack
-            Err(SrpAuthError {
-                description: "bad_record_mac: Incorrect server proof",
-            })
+        if self.m2.ct_eq(reply).unwrap_u8() != 1 {
+            // aka == 0
+            Err(SrpAuthError::BadRecordMac("server".to_owned()))
         } else {
             Ok(())
         }

@@ -2,42 +2,68 @@
 //!
 //! # Usage
 //! First receive user's username and public value `a_pub`, retrieve from a
-//! database `UserRecord` for a given username, generate `b` (e.g. 512 bits
-//! long) and initialize SRP server instance:
+//! database the salt and verifier for a given username. Generate `b` and public value `b_pub`.
 //!
-//! ```ignore
-//! use srp::groups::G_2048;
 //!
-//! let (username, a_pub) = conn.receive_handshake();
-//! let user = db.retrieve_user_record(username);
-//! let b = [0u8; 64];
-//! rng.fill_bytes(&mut b);
-//! let server = SrpServer::<Sha256>::new(&user, &a_pub, &b, &G_2048)?;
+//! ```rust
+//! use crate::srp::groups::G_2048;
+//! use sha2::Sha256; // Note: You should probably use a proper password KDF
+//! # use crate::srp::server::SrpServer;
+//! # fn get_client_request()-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
+//! # fn get_user(_: &[u8])-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
+//!
+//! let server = SrpServer::<Sha256>::new(&G_2048);
+//! let (username, a_pub) = get_client_request();
+//! let (salt, v) = get_user(&username);
+//! let mut b = [0u8; 64];
+//! // rng.fill_bytes(&mut b);
+//! let b_pub = server.compute_public_ephemeral(&b, &v);
 //! ```
 //!
-//! Next send to user `b_pub` and `salt` from user record:
+//! Next send to user `b_pub` and `salt` from user record
 //!
-//! ```ignore
-//! let b_pub = server.get_b_pub();
-//! conn.reply_to_handshake(&user.salt, b_pub);
+//! Next process the user response:
+//!
+//! ```rust
+//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # fn get_client_response() -> Vec<u8> { vec![1] }
+//! # let b = [0u8; 64];
+//! # let v = b"";
+//!
+//! let a_pub = get_client_response();
+//! let verifier = server.process_reply(&b, v, &a_pub).unwrap();
 //! ```
+//!
 //!
 //! And finally receive user proof, verify it and send server proof in the
 //! reply:
 //!
-//! ```ignore
-//! let user_proof = conn.receive_proof();
-//! let server_proof = server.verify(user_proof)?;
-//! conn.send_proof(server_proof);
+//! ```rust
+//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
+//! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
+//! # fn send_proof(_: &[u8]) { };
+//!
+//! let client_proof = get_client_proof();
+//! verifier.verify_client(&client_proof).unwrap();
+//! send_proof(verifier.proof());
 //! ```
 //!
-//! To get the shared secret use `get_key` method. As alternative to using
-//! `verify` method it's also possible to use this key for authentificated
-//! encryption.
+//!
+//! `key` contains shared secret key between user and the server. You can extract shared secret
+//! key using `key()` method.
+//! ```rust
+//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
+//!
+//! verifier.key();
+//!```
+//!
 use std::marker::PhantomData;
 
 use digest::{Digest, Output};
 use num_bigint::BigUint;
+use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
 use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
@@ -109,11 +135,9 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         let k = compute_k::<D>(self.params);
         let b_pub = self.compute_b_pub(&b, &k, &v);
 
-        // Safeguard against malicious B
+        // Safeguard against malicious A
         if &a_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError {
-                description: "illegal_parameter: malicious a_pub value",
-            });
+            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
         }
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
@@ -144,18 +168,16 @@ impl<D: Digest> SrpServerVerifier<D> {
     }
 
     /// Verification data for sending to the client.
-    pub fn proof(&self) -> &Output<D> {
+    pub fn proof(&self) -> &[u8] {
         // TODO not Output
-        &self.m2
+        &self.m2.as_slice()
     }
 
     /// Process user proof of having the same shared secret.
     pub fn verify_client(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
-        if self.m1.as_slice() != reply {
-            // TODO timing attack
-            Err(SrpAuthError {
-                description: "bad_record_mac: Incorrect client proof",
-            })
+        if self.m1.ct_eq(reply).unwrap_u8() != 1 {
+            // aka == 0
+            Err(SrpAuthError::BadRecordMac("client".to_owned()))
         } else {
             Ok(())
         }
