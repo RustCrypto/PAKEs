@@ -63,189 +63,133 @@ use digest::{Digest, Output};
 use num_bigint::BigUint;
 
 use crate::types::{SrpAuthError, SrpGroup};
+use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
     params: &'a SrpGroup,
-
-    a: BigUint,
-    a_pub: BigUint,
-
     d: PhantomData<D>,
 }
 
 /// SRP client state after handshake with the server.
 pub struct SrpClientVerifier<D: Digest> {
-    proof: Output<D>,
-    server_proof: Output<D>,
-    key: Output<D>,
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
 }
 
-/// Compute user private key as described in the RFC 5054. Consider using proper
-/// password hashing algorithm instead.
-pub fn srp_private_key<D: Digest>(username: &[u8], password: &[u8], salt: &[u8]) -> Output<D> {
-    let p = {
+impl<'a, D: Digest> SrpClient<'a, D> {
+    /// Create new SRP client instance.
+    pub fn new(params: &'a SrpGroup) -> Self {
+        Self {
+            params,
+            d: Default::default(),
+        }
+    }
+
+    pub fn compute_a_pub(&self, a: &BigUint) -> BigUint {
+        self.params.g.modpow(&a, &self.params.n)
+    }
+
+    pub fn compute_identity_hash(username: &[u8], password: &[u8]) -> Output<D> {
         let mut d = D::new();
         d.update(username);
         d.update(b":");
         d.update(password);
         d.finalize()
-    };
-    let mut d = D::new();
-    d.update(salt);
-    d.update(p.as_slice());
-    d.finalize()
-}
-
-impl<'a, D: Digest> SrpClient<'a, D> {
-    /// Create new SRP client instance.
-    pub fn new(a: &[u8], params: &'a SrpGroup) -> Self {
-        let a = BigUint::from_bytes_be(a);
-        let a_pub = params.modpow(&a);
-
-        Self {
-            params,
-            a,
-            a_pub,
-            d: Default::default(),
-        }
     }
 
-    /// Get password verfier for user registration on the server
-    pub fn get_password_verifier(&self, private_key: &[u8]) -> Vec<u8> {
-        let x = BigUint::from_bytes_be(private_key);
-        let v = self.params.modpow(&x);
-        v.to_bytes_be()
+    // x = H(<salt> | H(<username> | ":" | <raw password>))
+    pub fn compute_x(identity_hash: &[u8], salt: &[u8]) -> BigUint {
+        let mut x = D::new();
+        x.update(salt);
+        x.update(identity_hash);
+        BigUint::from_bytes_be(&x.finalize())
     }
 
-    fn calc_key(&self, b_pub: &BigUint, x: &BigUint, u: &BigUint) -> Output<D> {
-        let n = &self.params.n;
-        let k = self.params.compute_k::<D>();
-        let interm = (k * self.params.modpow(x)) % n;
-        // Because we do operation in modulo N we can get: (kv + g^b) < kv
-        let v = if *b_pub > interm {
-            (b_pub - &interm) % n
-        } else {
-            (n + b_pub - &interm) % n
-        };
-        // S = |B - kg^x| ^ (a + ux)
-        let s = v.modpow(&(&self.a + (u * x) % n), n);
-        D::digest(&s.to_bytes_be())
+    // (B - (k * g^x)) ^ (a + (u * x)) % N
+    pub fn compute_premaster_secret(
+        &self,
+        b_pub: &BigUint,
+        k: &BigUint,
+        x: &BigUint,
+        a: &BigUint,
+        u: &BigUint,
+    ) -> BigUint {
+        // (k * g^x)
+        let base = (k * (self.params.g.modpow(x, &self.params.n))) % &self.params.n;
+        // Because we do operation in modulo N we can get: b_pub > base. That's not good. So we add N to b_pub to make sure.
+        // B - kg^x
+        let base = (&self.params.n + b_pub - &base) % &self.params.n;
+        let exp = (u * x) + a;
+        // S = (B - kg^x) ^ (a + ux)
+        // or
+        // S = base ^ exp
+        base.modpow(&exp, &self.params.n)
     }
 
-    /// Process server reply to the handshake.
-    pub fn process_reply(
-        self,
-        private_key: &[u8],
-        b_pub: &[u8],
-    ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
-        let u = {
-            let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(b_pub);
-            let h = d.finalize();
-            BigUint::from_bytes_be(h.as_slice())
-        };
-
-        let b_pub = BigUint::from_bytes_be(b_pub);
-
-        // Safeguard against malicious B
-        if &b_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError {
-                description: "Malicious b_pub value",
-            });
-        }
-
-        let x = BigUint::from_bytes_be(private_key);
-        let key = self.calc_key(&b_pub, &x, &u);
-        // M1 = H(A, B, K)
-        let proof = {
-            let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(&b_pub.to_bytes_be());
-            d.update(&key);
-            d.finalize()
-        };
-
-        // M2 = H(A, M1, K)
-        let server_proof = {
-            let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(&proof);
-            d.update(&key);
-            d.finalize()
-        };
-
-        Ok(SrpClientVerifier {
-            proof,
-            server_proof,
-            key,
-        })
+    // v = g^x % N
+    pub fn compute_v(&self, x: &BigUint) -> BigUint {
+        self.params.g.modpow(&x, &self.params.n)
     }
 
-    /// Process server reply to the handshake with username and salt.
-    #[allow(non_snake_case)]
-    pub fn process_reply_with_username_and_salt(
-        self,
-        username: &[u8],
-        salt: &[u8],
-        private_key: &[u8],
-        b_pub: &[u8],
-    ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
-        let u = {
-            let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(b_pub);
-            let h = d.finalize();
-            BigUint::from_bytes_be(h.as_slice())
-        };
-
-        let b_pub = BigUint::from_bytes_be(b_pub);
-
-        // Safeguard against malicious B
-        if &b_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError {
-                description: "Malicious b_pub value",
-            });
-        }
-
-        let x = BigUint::from_bytes_be(private_key);
-        let key = self.calc_key(&b_pub, &x, &u);
-        // M1 = H(H(N)^H(g), H(I), salt, A, B, K)
-        let proof = {
-            let mut d = D::new();
-            d.update(username);
-            let h = d.finalize_reset();
-            let I: &[u8] = h.as_slice();
-
-            d.update(self.params.compute_hash_n_xor_hash_g::<D>());
-            d.update(I);
-            d.update(salt);
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(&b_pub.to_bytes_be());
-            d.update(&key.to_vec());
-            d.finalize()
-        };
-
-        // M2 = H(A, M1, K)
-        let server_proof = {
-            let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(&proof);
-            d.update(&key);
-            d.finalize()
-        };
-
-        Ok(SrpClientVerifier {
-            proof,
-            server_proof,
-            key,
-        })
+    /// Get password verifier (v in RFC5054) for user registration on the server.
+    pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
+        let identity_hash = Self::compute_identity_hash(username, password);
+        let x = Self::compute_x(identity_hash.as_slice(), salt);
+        self.compute_v(&x).to_bytes_be()
     }
 
     /// Get public ephemeral value for handshaking with the server.
-    pub fn get_a_pub(&self) -> Vec<u8> {
-        self.a_pub.to_bytes_be()
+    /// g^a % N
+    pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
+        self.compute_a_pub(&BigUint::from_bytes_be(&a))
+            .to_bytes_be()
+    }
+
+    /// Process server reply to the handshake.
+    /// a is a random value,
+    /// username, password is supplied by the user
+    /// salt and b_pub come from the server
+    pub fn process_reply(
+        &self,
+        a: &[u8],
+        username: &[u8],
+        password: &[u8],
+        salt: &[u8],
+        b_pub: &[u8],
+    ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
+        let a = BigUint::from_bytes_be(a);
+        let a_pub = self.compute_a_pub(&a);
+        let b_pub = BigUint::from_bytes_be(b_pub);
+
+        // Safeguard against malicious B
+        if &b_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError {
+                description: "illegal_parameter: malicious b_pub value",
+            });
+        }
+
+        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let k = compute_k::<D>(self.params);
+        let identity_hash = Self::compute_identity_hash(username, password);
+        let x = Self::compute_x(identity_hash.as_slice(), salt);
+
+        let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
+
+        let m1 = compute_m1::<D>(
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            &key.to_bytes_be(),
+        );
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+
+        Ok(SrpClientVerifier {
+            m1,
+            m2,
+            key: key.to_bytes_be(),
+        })
     }
 }
 
@@ -253,24 +197,24 @@ impl<D: Digest> SrpClientVerifier<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
-    pub fn get_key(self) -> Output<D> {
-        self.key
+    pub fn key(&self) -> &[u8] {
+        &self.key
     }
 
     /// Verification data for sending to the server.
-    pub fn get_proof(&self) -> Output<D> {
-        self.proof.clone()
+    pub fn proof(&self) -> &Output<D> {
+        &self.m1
     }
 
-    /// Verify server reply to verification data. It will return shared secret
-    /// key in case of success.
-    pub fn verify_server(self, reply: &[u8]) -> Result<Output<D>, SrpAuthError> {
-        if self.server_proof.as_slice() != reply {
+    /// Verify server reply to verification data.
+    pub fn verify_server(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
+        if self.m2.as_slice() != reply {
+            // TODO timing attack
             Err(SrpAuthError {
-                description: "Incorrect server proof",
+                description: "bad_record_mac: Incorrect server proof",
             })
         } else {
-            Ok(self.key)
+            Ok(())
         }
     }
 }

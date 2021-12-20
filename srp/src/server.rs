@@ -40,107 +40,123 @@ use digest::{Digest, Output};
 use num_bigint::BigUint;
 
 use crate::types::{SrpAuthError, SrpGroup};
-
-/// Data provided by users upon registration, usually stored in the database.
-pub struct UserRecord<'a> {
-    pub username: &'a [u8],
-    pub salt: &'a [u8],
-    /// Password verifier
-    pub verifier: &'a [u8],
-}
+use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
 
 /// SRP server state
-pub struct SrpServer<D: Digest> {
-    b: BigUint,
-    a_pub: BigUint,
-    b_pub: BigUint,
-
-    key: Output<D>,
-
+pub struct SrpServer<'a, D: Digest> {
+    params: &'a SrpGroup,
     d: PhantomData<D>,
 }
 
-impl<D: Digest> SrpServer<D> {
+/// SRP server state after handshake with the client.
+pub struct SrpServerVerifier<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
+}
+
+impl<'a, D: Digest> SrpServer<'a, D> {
     /// Create new server state.
-    pub fn new(
-        user: &UserRecord<'_>,
-        a_pub: &[u8],
+    pub fn new(params: &'a SrpGroup) -> Self {
+        Self {
+            params,
+            d: Default::default(),
+        }
+    }
+
+    //  k*v + g^b % N
+    pub fn compute_b_pub(&self, b: &BigUint, k: &BigUint, v: &BigUint) -> BigUint {
+        let inter = (k * v) % &self.params.n;
+        (inter + self.params.g.modpow(&b, &self.params.n)) % &self.params.n
+    }
+
+    // <premaster secret> = (A * v^u) ^ b % N
+    pub fn compute_premaster_secret(
+        &self,
+        a_pub: &BigUint,
+        v: &BigUint,
+        u: &BigUint,
+        b: &BigUint,
+    ) -> BigUint {
+        // (A * v^u)
+        let base = (a_pub * v.modpow(&u, &self.params.n)) % &self.params.n;
+        base.modpow(b, &self.params.n)
+    }
+
+    /// Get public ephemeral value for sending to the client.
+    pub fn compute_public_ephemeral(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
+        self.compute_b_pub(
+            &BigUint::from_bytes_be(&b),
+            &compute_k::<D>(&self.params),
+            &BigUint::from_bytes_be(&v),
+        )
+        .to_bytes_be()
+    }
+
+    /// Process client reply to the handshake.
+    /// b is a random value,
+    /// v is the provided during initial user registration
+    pub fn process_reply(
+        &self,
         b: &[u8],
-        params: &SrpGroup,
-    ) -> Result<Self, SrpAuthError> {
+        v: &[u8],
+        a_pub: &[u8],
+    ) -> Result<SrpServerVerifier<D>, SrpAuthError> {
+        let b = BigUint::from_bytes_be(b);
+        let v = BigUint::from_bytes_be(v);
         let a_pub = BigUint::from_bytes_be(a_pub);
-        // Safeguard against malicious A
-        if &a_pub % &params.n == BigUint::default() {
+
+        let k = compute_k::<D>(self.params);
+        let b_pub = self.compute_b_pub(&b, &k, &v);
+
+        // Safeguard against malicious B
+        if &a_pub % &self.params.n == BigUint::default() {
             return Err(SrpAuthError {
-                description: "Malicious a_pub value",
+                description: "illegal_parameter: malicious a_pub value",
             });
         }
-        let v = BigUint::from_bytes_be(user.verifier);
-        let b = BigUint::from_bytes_be(b) % &params.n;
-        let k = params.compute_k::<D>();
-        // kv + g^b
-        let interm = (k * &v) % &params.n;
-        let b_pub = (interm + &params.modpow(&b)) % &params.n;
-        // H(A || B)
-        let u = {
-            let mut d = D::new();
-            d.update(&a_pub.to_bytes_be());
-            d.update(&b_pub.to_bytes_be());
-            d.finalize()
-        };
-        let d = Default::default();
-        //(Av^u) ^ b
-        let key = {
-            let u = BigUint::from_bytes_be(u.as_slice());
-            let t = (&a_pub * v.modpow(&u, &params.n)) % &params.n;
-            let s = t.modpow(&b, &params.n);
-            D::digest(&s.to_bytes_be())
-        };
-        Ok(Self {
-            b,
-            a_pub,
-            b_pub,
-            key,
-            d,
+
+        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+
+        let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
+
+        let m1 = compute_m1::<D>(
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            &key.to_bytes_be(),
+        );
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+
+        Ok(SrpServerVerifier {
+            m1,
+            m2,
+            key: key.to_bytes_be(),
         })
     }
+}
 
-    /// Get private `b` value. (see `new_with_b` documentation)
-    pub fn get_b(&self) -> Vec<u8> {
-        self.b.to_bytes_be()
-    }
-
-    /// Get public `b_pub` value for sending to the user.
-    pub fn get_b_pub(&self) -> Vec<u8> {
-        self.b_pub.to_bytes_be()
-    }
-
+impl<D: Digest> SrpServerVerifier<D> {
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
-    pub fn get_key(&self) -> Output<D> {
-        self.key.clone()
+    pub fn key(&self) -> &[u8] {
+        &self.key
     }
 
-    /// Process user proof of having the same shared secret and compute
-    /// server proof for sending to the user.
-    pub fn verify(&self, user_proof: &[u8]) -> Result<Output<D>, SrpAuthError> {
-        // M = H(A, B, K)
-        let mut d = D::new();
-        d.update(&self.a_pub.to_bytes_be());
-        d.update(&self.b_pub.to_bytes_be());
-        d.update(&self.key);
+    /// Verification data for sending to the client.
+    pub fn proof(&self) -> &Output<D> {
+        &self.m2
+    }
 
-        if user_proof == d.finalize().as_slice() {
-            // H(A, M, K)
-            let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
-            d.update(user_proof);
-            d.update(&self.key);
-            Ok(d.finalize())
-        } else {
+    /// Process user proof of having the same shared secret.
+    pub fn verify_client(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
+        if self.m1.as_slice() != reply {
+            // TODO timing attack
             Err(SrpAuthError {
-                description: "Incorrect user proof",
+                description: "bad_record_mac: Incorrect client proof",
             })
+        } else {
+            Ok(())
         }
     }
 }
