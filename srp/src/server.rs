@@ -144,7 +144,7 @@ impl<D: Digest> SrpServerVerifier<D> {
     }
 
     /// Verification data for sending to the client.
-    pub fn proof(&self) -> &Output<D> {
+    pub fn proof(&self) -> &Output<D> { // TODO not Output
         &self.m2
     }
 
