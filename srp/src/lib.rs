@@ -10,12 +10,6 @@
 //! srp = "0.4"
 //! ```
 //!
-//! and this to your crate root:
-//!
-//! ```rust
-//! extern crate srp;
-//! ```
-//!
 //! Next read documentation for [`client`](client/index.html) and
 //! [`server`](server/index.html) modules.
 //!

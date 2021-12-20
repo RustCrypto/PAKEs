@@ -91,6 +91,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         self.params.g.modpow(&a, &self.params.n)
     }
 
+    //  H(<username> | ":" | <raw password>)
     pub fn compute_identity_hash(username: &[u8], password: &[u8]) -> Output<D> {
         let mut d = D::new();
         d.update(username);
@@ -120,7 +121,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         let base = (k * (self.params.g.modpow(x, &self.params.n))) % &self.params.n;
         // Because we do operation in modulo N we can get: b_pub > base. That's not good. So we add N to b_pub to make sure.
         // B - kg^x
-        let base = (&self.params.n + b_pub - &base) % &self.params.n;
+        let base = ((&self.params.n + b_pub) - &base) % &self.params.n;
         let exp = (u * x) + a;
         // S = (B - kg^x) ^ (a + ux)
         // or

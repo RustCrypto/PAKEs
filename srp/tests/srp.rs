@@ -18,6 +18,8 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     rng.fill_bytes(&mut salt);
     let verifier = client.compute_verifier(username, true_pwd, &salt);
 
+    // Client sends username and verifier and salt to the Server for storage
+
     // Registration Ends
 
     // Begin Authentication
