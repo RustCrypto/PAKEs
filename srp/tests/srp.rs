@@ -59,7 +59,6 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     client_verifier.verify_server(&server_proof).unwrap();
     let client_key = client_verifier.key();
 
-
     // our keys almost must equal but just an extra check
     assert_eq!(
         server_key, client_key,
