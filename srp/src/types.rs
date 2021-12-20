@@ -1,5 +1,4 @@
 //! Additional SRP types.
-use crate::tools::powm;
 use digest::Digest;
 use num_bigint::BigUint;
 use std::{error, fmt};
@@ -32,8 +31,8 @@ pub struct SrpGroup {
 }
 
 impl SrpGroup {
-    pub(crate) fn powm(&self, v: &BigUint) -> BigUint {
-        powm(&self.g, v, &self.n)
+    pub(crate) fn modpow(&self, v: &BigUint) -> BigUint {
+        self.g.modpow(v, &self.n)
     }
 
     /// Compute `k` with given hash function and return SRP parameters

@@ -39,7 +39,6 @@ use std::marker::PhantomData;
 use digest::{Digest, Output};
 use num_bigint::BigUint;
 
-use crate::tools::powm;
 use crate::types::{SrpAuthError, SrpGroup};
 
 /// Data provided by users upon registration, usually stored in the database.
@@ -81,7 +80,7 @@ impl<D: Digest> SrpServer<D> {
         let k = params.compute_k::<D>();
         // kv + g^b
         let interm = (k * &v) % &params.n;
-        let b_pub = (interm + &params.powm(&b)) % &params.n;
+        let b_pub = (interm + &params.modpow(&b)) % &params.n;
         // H(A || B)
         let u = {
             let mut d = D::new();
@@ -93,8 +92,8 @@ impl<D: Digest> SrpServer<D> {
         //(Av^u) ^ b
         let key = {
             let u = BigUint::from_bytes_be(u.as_slice());
-            let t = (&a_pub * powm(&v, &u, &params.n)) % &params.n;
-            let s = powm(&t, &b, &params.n);
+            let t = (&a_pub * v.modpow(&u, &params.n)) % &params.n;
+            let s = t.modpow(&b, &params.n);
             D::digest(&s.to_bytes_be())
         };
         Ok(Self {
