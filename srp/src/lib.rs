@@ -1,3 +1,5 @@
+#![allow(clippy::many_single_char_names)]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 #![doc = include_str!("../README.md")]
 
 //! # Usage
@@ -53,9 +55,6 @@
 //!
 //! [1]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 //! [2]: https://tools.ietf.org/html/rfc5054
-
-#![allow(clippy::many_single_char_names)]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 
 pub mod client;
 pub mod groups;

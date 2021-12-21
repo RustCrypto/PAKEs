@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+#![warn(rust_2018_idioms, unused_qualifications)]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 #![doc = include_str!("../README.md")]
 
 //! # Usage
@@ -213,10 +216,6 @@
 //! [5]: https://github.com/warner/python-pure25519
 //! [6]: http://eprint.iacr.org/2003/038.pdf "Pretty-Simple Password-Authenticated Key-Exchange Under Standard Assumptions"
 //! [7]: https://moderncrypto.org/mail-archive/curves/2015/000419.html "PAKE questions"
-
-#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
-#![forbid(unsafe_code)]
-#![warn(rust_2018_idioms, unused_qualifications)]
 
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 use curve25519_dalek::edwards::CompressedEdwardsY;
@@ -538,7 +537,7 @@ impl<G: Group> SPAKE2<G> {
         xy_scalar: G::Scalar,
     ) -> (SPAKE2<G>, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
-        let password_scalar: G::Scalar = G::hash_to_scalar(&password);
+        let password_scalar: G::Scalar = G::hash_to_scalar(password);
 
         // a: X = B*x + M*pw
         // b: Y = B*y + N*pw
@@ -555,20 +554,19 @@ impl<G: Group> SPAKE2<G> {
         //let m1: G::Element = &G::basepoint_mult(&x) + &(blinding * &password_scalar);
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
         let mut password_vec = Vec::new();
-        password_vec.extend_from_slice(&password);
+        password_vec.extend_from_slice(password);
         let mut id_a_copy = Vec::new();
-        id_a_copy.extend_from_slice(&id_a);
+        id_a_copy.extend_from_slice(id_a);
         let mut id_b_copy = Vec::new();
-        id_b_copy.extend_from_slice(&id_b);
+        id_b_copy.extend_from_slice(id_b);
         let mut id_s_copy = Vec::new();
-        id_s_copy.extend_from_slice(&id_s);
+        id_s_copy.extend_from_slice(id_s);
 
-        let mut msg_and_side = Vec::new();
-        msg_and_side.push(match side {
+        let mut msg_and_side = vec![match side {
             Side::A => 0x41,         // 'A'
             Side::B => 0x42,         // 'B'
             Side::Symmetric => 0x53, // 'S'
-        });
+        }];
         msg_and_side.extend_from_slice(&msg1);
 
         (
@@ -594,9 +592,9 @@ impl<G: Group> SPAKE2<G> {
     ) -> (SPAKE2<G>, Vec<u8>) {
         Self::start_internal(
             Side::A,
-            &password,
-            &id_a,
-            &id_b,
+            password,
+            id_a,
+            id_b,
             &Identity::new(b""),
             xy_scalar,
         )
@@ -610,9 +608,9 @@ impl<G: Group> SPAKE2<G> {
     ) -> (SPAKE2<G>, Vec<u8>) {
         Self::start_internal(
             Side::B,
-            &password,
-            &id_a,
-            &id_b,
+            password,
+            id_a,
+            id_b,
             &Identity::new(b""),
             xy_scalar,
         )
@@ -625,10 +623,10 @@ impl<G: Group> SPAKE2<G> {
     ) -> (SPAKE2<G>, Vec<u8>) {
         Self::start_internal(
             Side::Symmetric,
-            &password,
+            password,
             &Identity::new(b""),
             &Identity::new(b""),
-            &id_s,
+            id_s,
             xy_scalar,
         )
     }
@@ -636,19 +634,19 @@ impl<G: Group> SPAKE2<G> {
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_a_internal(&password, &id_a, &id_b, xy_scalar)
+        Self::start_a_internal(password, id_a, id_b, xy_scalar)
     }
 
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_b_internal(&password, &id_a, &id_b, xy_scalar)
+        Self::start_b_internal(password, id_a, id_b, xy_scalar)
     }
 
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_symmetric_internal(&password, &id_s, xy_scalar)
+        Self::start_symmetric_internal(password, id_s, xy_scalar)
     }
 
     pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
