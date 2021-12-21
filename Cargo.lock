@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "spake2"
-version = "0.2.1-alpha.0"
+version = "0.3.0-pre"
 dependencies = [
  "bencher",
  "curve25519-dalek",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "srp"
-version = "0.5.0"
+version = "0.6.0-pre"
 dependencies = [
  "digest 0.9.0",
  "generic-array 0.14.4",

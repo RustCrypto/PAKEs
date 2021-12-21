@@ -1,14 +1,5 @@
-//! [Secure Remote Password][1] (SRP) protocol implementation.
-//!
-//! This implementation is generic over hash functions using
-//! [`Digest`](https://docs.rs/digest) trait, so you will need to choose a hash
-//! function, e.g. `Sha256` from [`sha2`](https://crates.io/crates/sha2) crate.
-//! Additionally this crate allows to use a specialized password hashing
-//! algorithm for private key computation instead of method described in the
-//! SRP literature.
-//!
-//! Compatibility with other implementations was not yet tested.
-//!
+#![doc = include_str!("../README.md")]
+
 //! # Usage
 //! Add `srp` dependency to your `Cargo.toml`:
 //!

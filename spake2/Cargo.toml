@@ -1,7 +1,6 @@
 [package]
 name = "spake2"
-version = "0.2.1-alpha.0"
-edition = "2018"
+version = "0.3.0-pre"
 authors = ["Brian Warner <warner@lothar.com>"]
 description = "The SPAKE2 password-authenticated key-exchange algorithm."
 documentation = "https://docs.rs/spake2"
@@ -10,9 +9,10 @@ repository = "https://github.com/RustCrypto/PAKEs"
 license = "MIT OR Apache-2.0"
 keywords = ["crypto", "pake", "authentication"]
 categories = ["cryptography", "authentication"]
-exclude = [
-    ".gitignore"
-]
+exclude = [".gitignore"]
+readme = "README.md"
+edition = "2018"
+rust-version = "1.56"
 
 [package.metadata.release]
 tag-prefix = "spake2-v"
