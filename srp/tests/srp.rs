@@ -50,7 +50,7 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     // Server processes verification data
     let server_verifier = server.process_reply(&b, &verifier, &a_pub).unwrap();
     println!("Client verification on server");
-    server_verifier.verify_client(&client_proof).unwrap();
+    server_verifier.verify_client(client_proof).unwrap();
     let server_proof = server_verifier.proof();
     let server_key = server_verifier.key();
 
@@ -58,7 +58,7 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
 
     // Client verifies server
     println!("Server verification on client");
-    client_verifier.verify_server(&server_proof).unwrap();
+    client_verifier.verify_server(server_proof).unwrap();
     let client_key = client_verifier.key();
 
     // our keys almost must equal but just an extra check

@@ -93,7 +93,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
     //  k*v + g^b % N
     pub fn compute_b_pub(&self, b: &BigUint, k: &BigUint, v: &BigUint) -> BigUint {
         let inter = (k * v) % &self.params.n;
-        (inter + self.params.g.modpow(&b, &self.params.n)) % &self.params.n
+        (inter + self.params.g.modpow(b, &self.params.n)) % &self.params.n
     }
 
     // <premaster secret> = (A * v^u) ^ b % N
@@ -105,16 +105,16 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         b: &BigUint,
     ) -> BigUint {
         // (A * v^u)
-        let base = (a_pub * v.modpow(&u, &self.params.n)) % &self.params.n;
+        let base = (a_pub * v.modpow(u, &self.params.n)) % &self.params.n;
         base.modpow(b, &self.params.n)
     }
 
     /// Get public ephemeral value for sending to the client.
     pub fn compute_public_ephemeral(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
         self.compute_b_pub(
-            &BigUint::from_bytes_be(&b),
-            &compute_k::<D>(&self.params),
-            &BigUint::from_bytes_be(&v),
+            &BigUint::from_bytes_be(b),
+            &compute_k::<D>(self.params),
+            &BigUint::from_bytes_be(v),
         )
         .to_bytes_be()
     }
@@ -170,7 +170,7 @@ impl<D: Digest> SrpServerVerifier<D> {
     /// Verification data for sending to the client.
     pub fn proof(&self) -> &[u8] {
         // TODO not Output
-        &self.m2.as_slice()
+        self.m2.as_slice()
     }
 
     /// Process user proof of having the same shared secret.

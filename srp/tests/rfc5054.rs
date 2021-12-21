@@ -7,6 +7,7 @@ use srp::server::SrpServer;
 use srp::utils::{compute_k, compute_u};
 
 #[test]
+#[allow(clippy::many_single_char_names)]
 fn rfc5054() {
     let i = b"alice";
     let p = b"password123";

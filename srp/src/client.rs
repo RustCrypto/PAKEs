@@ -115,7 +115,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     pub fn compute_a_pub(&self, a: &BigUint) -> BigUint {
-        self.params.g.modpow(&a, &self.params.n)
+        self.params.g.modpow(a, &self.params.n)
     }
 
     //  H(<username> | ":" | <raw password>)
@@ -158,7 +158,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
     // v = g^x % N
     pub fn compute_v(&self, x: &BigUint) -> BigUint {
-        self.params.g.modpow(&x, &self.params.n)
+        self.params.g.modpow(x, &self.params.n)
     }
 
     /// Get password verifier (v in RFC5054) for user registration on the server.
@@ -171,8 +171,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Get public ephemeral value for handshaking with the server.
     /// g^a % N
     pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
-        self.compute_a_pub(&BigUint::from_bytes_be(&a))
-            .to_bytes_be()
+        self.compute_a_pub(&BigUint::from_bytes_be(a)).to_bytes_be()
     }
 
     /// Process server reply to the handshake.
@@ -229,7 +228,7 @@ impl<D: Digest> SrpClientVerifier<D> {
 
     /// Verification data for sending to the server.
     pub fn proof(&self) -> &[u8] {
-        &self.m1.as_slice()
+        self.m1.as_slice()
     }
 
     /// Verify server reply to verification data.

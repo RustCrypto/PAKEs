@@ -22,7 +22,7 @@ pub fn compute_k<D: Digest>(params: &SrpGroup) -> BigUint {
     let mut d = D::new();
     d.update(&n);
     d.update(&buf);
-    BigUint::from_bytes_be(&d.finalize().as_slice())
+    BigUint::from_bytes_be(d.finalize().as_slice())
 }
 
 // M1 = H(A, B, K) this doesn't follow the spec but apparently no one does for M1
