@@ -4,7 +4,7 @@
 //! "random_scalar()" function, which results in some particular scalar.
 use super::*;
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
-use hex;
+
 use num_bigint::BigUint;
 
 // the python tests show the long-integer form of scalars. the rust code

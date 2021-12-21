@@ -46,7 +46,7 @@ impl SrpGroup {
         let mut d = D::new();
         d.update(&n);
         d.update(&buf);
-        BigUint::from_bytes_be(&d.finalize().as_slice())
+        BigUint::from_bytes_be(d.finalize().as_slice())
     }
 
     /// Compute `Hash(N) xor Hash(g)` with given hash function and return SRP parameters

@@ -1,4 +1,3 @@
-use rand;
 use rand::RngCore;
 use sha2::Sha256;
 

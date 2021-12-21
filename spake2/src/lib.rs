@@ -1,76 +1,9 @@
-//! An implementation of the [SPAKE2][1] password-authenticated key-exchange
-//! algorithm
-//!
-//! This library implements the SPAKE2 password-authenticated key exchange
-//! ("PAKE") algorithm. This allows two parties, who share a weak password, to
-//! safely derive a strong shared secret (and therefore build an
-//! encrypted+authenticated channel).
-//!
-//! A passive attacker who eavesdrops on the connection learns no information
-//! about the password or the generated secret. An active attacker
-//! (man-in-the-middle) gets exactly one guess at the password, and unless they
-//! get it right, they learn no information about the password or the generated
-//! secret. Each execution of the protocol enables one guess. The use of a weak
-//! password is made safer by the rate-limiting of guesses: no off-line
-//! dictionary attack is available to the network-level attacker, and the
-//! protocol does not depend upon having previously-established confidentiality
-//! of the network (unlike e.g. sending a plaintext password over TLS).
-//!
-//! The protocol requires the exchange of one pair of messages, so only one round
-//! trip is necessary to establish the session key. If key-confirmation is
-//! necessary, that will require a second round trip.
-//!
-//! All messages are bytestrings. For the default security level (using the
-//! Ed25519 elliptic curve, roughly equivalent to an 128-bit symmetric key), the
-//! message is 33 bytes long.
-//!
-//! This implementation is generic over a `Group`, which defines the cyclic
-//! group to use, the functions which convert group elements and scalars to
-//! and from bytestrings, and the three distinctive group elements used in
-//! the blinding process. Only one such Group is implemented, named
-//! `Ed25519Group`, which provides fast operations and high security, and is
-//! compatible with my [python
-//! implementation](https://github.com/warner/python-spake2).
-//!
-//! # What Is It Good For?
-//!
-//! PAKE can be used in a pairing protocol, like the initial version of Firefox
-//! Sync (the one with J-PAKE), to introduce one device to another and help them
-//! share secrets. In this mode, one device creates a random code, the user
-//! copies that code to the second device, then both devices use the code as a
-//! one-time password and run the PAKE protocol. Once both devices have a shared
-//! strong key, they can exchange other secrets safely.
-//!
-//! PAKE can also be used (carefully) in a login protocol, where SRP is perhaps
-//! the best-known approach. Traditional non-PAKE login consists of sending a
-//! plaintext password through a TLS-encrypted channel, to a server which then
-//! checks it (by hashing/stretching and comparing against a stored verifier). In
-//! a PAKE login, both sides put the password into their PAKE protocol, and then
-//! confirm that their generated key is the same. This nominally does not require
-//! the initial TLS-protected channel. However note that it requires other,
-//! deeper design considerations (the PAKE protocol must be bound to whatever
-//! protected channel you end up using, else the attacker can wait for PAKE to
-//! complete normally and then steal the channel), and is not simply a drop-in
-//! replacement. In addition, the server cannot hash/stretch the password very
-//! much (see the note on "Augmented PAKE" below), so unless the client is
-//! willing to perform key-stretching before running PAKE, the server's stored
-//! verifier will be vulnerable to a low-cost dictionary attack.
-//!
+#![forbid(unsafe_code)]
+#![warn(rust_2018_idioms, unused_qualifications)]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
+#![doc = include_str!("../README.md")]
+
 //! # Usage
-//!
-//! Add the `spake2 dependency to your `Cargo.toml`:
-//!
-//! ```toml
-//! [dependencies]
-//! spake2 = "0.1"
-//! ```
-//!
-//! and this to your crate root:
-//!
-//! ```rust
-//! extern crate spake2;
-//! ```
-//!
 //!
 //! Alice and Bob both initialize their SPAKE2 instances with the same (weak)
 //! password. They will exchange messages to (hopefully) derive a shared secret
@@ -139,7 +72,7 @@
 //!
 //! The shared key can be used as an HMAC key to provide data integrity on
 //! subsequent messages, or as an authenticated-encryption key (e.g.
-//! nacl.secretbox). It can also be fed into [HKDF] [1] to derive other
+//! nacl.secretbox). It can also be fed into [HKDF][1] to derive other
 //! session keys as necessary.
 //!
 //! The `SPAKE2` instances, and the messages they create, are single-use. Create
@@ -283,10 +216,6 @@
 //! [5]: https://github.com/warner/python-pure25519
 //! [6]: http://eprint.iacr.org/2003/038.pdf "Pretty-Simple Password-Authenticated Key-Exchange Under Standard Assumptions"
 //! [7]: https://moderncrypto.org/mail-archive/curves/2015/000419.html "PAKE questions"
-
-#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
-#![deny(warnings)]
-#![forbid(unsafe_code)]
 
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 use curve25519_dalek::edwards::CompressedEdwardsY;
@@ -608,7 +537,7 @@ impl<G: Group> SPAKE2<G> {
         xy_scalar: G::Scalar,
     ) -> (SPAKE2<G>, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
-        let password_scalar: G::Scalar = G::hash_to_scalar(&password);
+        let password_scalar: G::Scalar = G::hash_to_scalar(password);
 
         // a: X = B*x + M*pw
         // b: Y = B*y + N*pw
@@ -625,20 +554,19 @@ impl<G: Group> SPAKE2<G> {
         //let m1: G::Element = &G::basepoint_mult(&x) + &(blinding * &password_scalar);
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
         let mut password_vec = Vec::new();
-        password_vec.extend_from_slice(&password);
+        password_vec.extend_from_slice(password);
         let mut id_a_copy = Vec::new();
-        id_a_copy.extend_from_slice(&id_a);
+        id_a_copy.extend_from_slice(id_a);
         let mut id_b_copy = Vec::new();
-        id_b_copy.extend_from_slice(&id_b);
+        id_b_copy.extend_from_slice(id_b);
         let mut id_s_copy = Vec::new();
-        id_s_copy.extend_from_slice(&id_s);
+        id_s_copy.extend_from_slice(id_s);
 
-        let mut msg_and_side = Vec::new();
-        msg_and_side.push(match side {
+        let mut msg_and_side = vec![match side {
             Side::A => 0x41,         // 'A'
             Side::B => 0x42,         // 'B'
             Side::Symmetric => 0x53, // 'S'
-        });
+        }];
         msg_and_side.extend_from_slice(&msg1);
 
         (
@@ -664,9 +592,9 @@ impl<G: Group> SPAKE2<G> {
     ) -> (SPAKE2<G>, Vec<u8>) {
         Self::start_internal(
             Side::A,
-            &password,
-            &id_a,
-            &id_b,
+            password,
+            id_a,
+            id_b,
             &Identity::new(b""),
             xy_scalar,
         )
@@ -680,9 +608,9 @@ impl<G: Group> SPAKE2<G> {
     ) -> (SPAKE2<G>, Vec<u8>) {
         Self::start_internal(
             Side::B,
-            &password,
-            &id_a,
-            &id_b,
+            password,
+            id_a,
+            id_b,
             &Identity::new(b""),
             xy_scalar,
         )
@@ -695,10 +623,10 @@ impl<G: Group> SPAKE2<G> {
     ) -> (SPAKE2<G>, Vec<u8>) {
         Self::start_internal(
             Side::Symmetric,
-            &password,
+            password,
             &Identity::new(b""),
             &Identity::new(b""),
-            &id_s,
+            id_s,
             xy_scalar,
         )
     }
@@ -706,19 +634,19 @@ impl<G: Group> SPAKE2<G> {
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_a_internal(&password, &id_a, &id_b, xy_scalar)
+        Self::start_a_internal(password, id_a, id_b, xy_scalar)
     }
 
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_b_internal(&password, &id_a, &id_b, xy_scalar)
+        Self::start_b_internal(password, id_a, id_b, xy_scalar)
     }
 
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
-        Self::start_symmetric_internal(&password, &id_s, xy_scalar)
+        Self::start_symmetric_internal(password, id_s, xy_scalar)
     }
 
     pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
