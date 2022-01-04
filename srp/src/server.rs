@@ -50,7 +50,8 @@ pub struct UserRecord<'a> {
 }
 
 /// SRP server state
-pub struct SrpServer<D: Digest> {
+pub struct SrpServer<'a, D: Digest> {
+    user: &'a UserRecord<'a>,
     b: BigUint,
     a_pub: BigUint,
     b_pub: BigUint,
@@ -58,15 +59,17 @@ pub struct SrpServer<D: Digest> {
     key: Output<D>,
 
     d: PhantomData<D>,
+
+    params: &'a SrpGroup,
 }
 
-impl<D: Digest> SrpServer<D> {
+impl<'a, D: Digest> SrpServer<'a, D> {
     /// Create new server state.
     pub fn new(
-        user: &UserRecord<'_>,
+        user: &'a UserRecord,
         a_pub: &[u8],
         b: &[u8],
-        params: &SrpGroup,
+        params: &'a SrpGroup,
     ) -> Result<Self, SrpAuthError> {
         let a_pub = BigUint::from_bytes_be(a_pub);
         // Safeguard against malicious A
@@ -97,11 +100,13 @@ impl<D: Digest> SrpServer<D> {
             D::digest(&s.to_bytes_be())
         };
         Ok(Self {
+            user,
             b,
             a_pub,
             b_pub,
             key,
             d,
+            params,
         })
     }
 
@@ -123,14 +128,40 @@ impl<D: Digest> SrpServer<D> {
 
     /// Process user proof of having the same shared secret and compute
     /// server proof for sending to the user.
-    pub fn verify(&self, user_proof: &[u8]) -> Result<Output<D>, SrpAuthError> {
-        // M = H(A, B, K)
-        let mut d = D::new();
-        d.update(&self.a_pub.to_bytes_be());
-        d.update(&self.b_pub.to_bytes_be());
-        d.update(&self.key);
+    pub fn verify(
+        &self,
+        user_proof: &[u8],
+    ) -> Result<GenericArray<u8, D::OutputSize>, SrpAuthError> {
+        // M = H(H(N) XOR H(g) | H(U) | s | A | B | K)
+        let proof = {
+            let hn = {
+                let n = &self.params.n;
+                let mut d = D::new();
+                d.update(n.to_bytes_be());
+                BigUint::from_bytes_be(&d.result())
+            };
+            let hg = {
+                let g = &self.params.g;
+                let mut d = D::new();
+                d.update(g.to_bytes_be());
+                BigUint::from_bytes_be(&d.result())
+            };
+            let hu = {
+                let mut d = D::new();
+                d.update(self.user.username);
+                d.result()
+            };
+            let mut d = D::new();
+            d.update((hn ^ hg).to_bytes_be());
+            d.update(hu);
+            d.update(self.user.salt);
+            d.update(&self.a_pub.to_bytes_be());
+            d.update(&self.b_pub.to_bytes_be());
+            d.update(&self.key);;
+            d.result()
+        };
 
-        if user_proof == d.finalize().as_slice() {
+        if user_proof == proof.as_slice() {
             // H(A, M, K)
             let mut d = D::new();
             d.update(&self.a_pub.to_bytes_be());

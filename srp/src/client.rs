@@ -136,6 +136,8 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Process server reply to the handshake.
     pub fn process_reply(
         self,
+        username: &[u8],
+        salt: &[u8],
         private_key: &[u8],
         b_pub: &[u8],
     ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
@@ -158,13 +160,33 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let x = BigUint::from_bytes_be(private_key);
         let key = self.calc_key(&b_pub, &x, &u);
-        // M1 = H(A, B, K)
+        // M = H(H(N) XOR H(g) | H(U) | s | A | B | K)
         let proof = {
+            let hn = {
+                let n = &self.params.n;
+                let mut d = D::new();
+                d.input(n.to_bytes_be());
+                BigUint::from_bytes_be(&d.result())
+            };
+            let hg = {
+                let g = &self.params.g;
+                let mut d = D::new();
+                d.input(g.to_bytes_be());
+                BigUint::from_bytes_be(&d.result())
+            };
+            let hu = {
+                let mut d = D::new();
+                d.input(username);
+                d.result()
+            };
             let mut d = D::new();
+            d.update((hn ^ hg).to_bytes_be());
+            d.update(hu);
+            d.update(salt);
             d.update(&self.a_pub.to_bytes_be());
             d.update(&b_pub.to_bytes_be());
             d.update(&key);
-            d.finalize()
+            d.result()
         };
 
         // M2 = H(A, M1, K)
