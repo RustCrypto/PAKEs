@@ -4,8 +4,7 @@
 //! groups. Additionally it is not recommended to use `G_1024` and `G_1536`,
 //! they are provided only for compatibility with the legacy software.
 use lazy_static::lazy_static;
-use num::bigint::Sign;
-use num::BigInt;
+use num_bigint::{BigInt, Sign};
 
 use crate::types::SrpGroup;
 

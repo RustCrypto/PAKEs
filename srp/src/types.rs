@@ -1,7 +1,6 @@
 //! Additional SRP types.
 use digest::Digest;
-use num::bigint::Sign;
-use num::BigInt;
+use num_bigint::{BigInt, Sign};
 use std::{error, fmt};
 
 /// SRP authentication error.
@@ -32,8 +31,8 @@ pub struct SrpGroup {
 }
 
 impl SrpGroup {
-    pub(crate) fn powm(&self, v: &BigInt) -> BigInt {
-        powm(&self.g, v, &self.n)
+    pub(crate) fn modpow(&self, v: &BigInt) -> BigInt {
+        self.g.modpow(v, &self.n)
     }
 
     /// Compute `k` with given hash function and return SRP parameters
@@ -44,7 +43,7 @@ impl SrpGroup {
         let mut d = D::new();
         d.update(&n);
         d.update(&g);
-        BigInt::from_bytes_be(Sign::Plus, &d.result())
+        BigInt::from_bytes_be(Sign::Plus, &d.finalize())
     }
 }
 

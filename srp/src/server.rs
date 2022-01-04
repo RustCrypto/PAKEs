@@ -38,8 +38,7 @@ use std::marker::PhantomData;
 
 use digest::{Digest, Output};
 use generic_array::GenericArray;
-use num::bigint::Sign;
-use num::{BigInt, Zero};
+use num_bigint::{BigInt, Sign};
 
 use crate::types::{SrpAuthError, SrpGroup};
 
@@ -75,7 +74,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
     ) -> Result<Self, SrpAuthError> {
         let a_pub = BigInt::from_bytes_be(Sign::Plus, a_pub);
         // Safeguard against malicious A
-        if &a_pub % &params.n == BigInt::zero() {
+        if &a_pub % &params.n == BigInt::default() {
             return Err(SrpAuthError {
                 description: "Malicious a_pub value",
             });
@@ -85,7 +84,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         let k = params.compute_k::<D>();
         // kv + g^b
         let interm = k * &v;
-        let b_pub = interm + &params.powm(&b);
+        let b_pub = interm + &params.modpow(&b);
         // H(A || B)
         let u = {
             let mut d = D::new();
@@ -97,8 +96,8 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         //(Av^u) ^ b
         let key = {
             let u = BigInt::from_bytes_be(Sign::Plus, &u);
-            let t = &a_pub * powm(&v, &u, &params.n);
-            let s = powm(&t, &b, &params.n);
+            let t = &a_pub * v.modpow(&u, &params.n);
+            let s = t.modpow(&b, &params.n);
             D::digest(&s.to_bytes_be().1)
         };
         Ok(Self {
@@ -140,18 +139,18 @@ impl<'a, D: Digest> SrpServer<'a, D> {
                 let n = &self.params.n;
                 let mut d = D::new();
                 d.update(n.to_bytes_be().1);
-                BigInt::from_bytes_be(Sign::Plus, &d.result())
+                BigInt::from_bytes_be(Sign::Plus, &d.finalize())
             };
             let hg = {
                 let g = &self.params.g;
                 let mut d = D::new();
                 d.update(g.to_bytes_be().1);
-                BigInt::from_bytes_be(Sign::Plus, &d.result())
+                BigInt::from_bytes_be(Sign::Plus, &d.finalize())
             };
             let hu = {
                 let mut d = D::new();
                 d.update(self.user.username);
-                d.result()
+                d.finalize()
             };
             let mut d = D::new();
             d.update((hn ^ hg).to_bytes_be().1);
@@ -160,7 +159,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             d.update(&self.a_pub.to_bytes_be().1);
             d.update(&self.b_pub.to_bytes_be().1);
             d.update(&self.key);
-            d.result()
+            d.finalize()
         };
 
         if user_proof == proof.as_slice() {
@@ -169,7 +168,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             d.update(&self.a_pub.to_bytes_be().1);
             d.update(user_proof);
             d.update(&self.key);
-            Ok(d.result())
+            Ok(d.finalize())
         } else {
             Err(SrpAuthError {
                 description: "Incorrect user proof",

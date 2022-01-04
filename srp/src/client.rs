@@ -61,8 +61,7 @@ use std::marker::PhantomData;
 
 use digest::{Digest, Output};
 use generic_array::GenericArray;
-use num::bigint::Sign;
-use num::{BigInt, Zero};
+use num_bigint::{BigInt, Sign};
 
 use crate::types::{SrpAuthError, SrpGroup};
 
@@ -103,7 +102,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Create new SRP client instance.
     pub fn new(a: &[u8], params: &'a SrpGroup) -> Self {
         let a = BigInt::from_bytes_be(Sign::Plus, a);
-        let a_pub = params.powm(&a);
+        let a_pub = params.modpow(&a);
 
         Self {
             params,
@@ -116,17 +115,17 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Get password verfier for user registration on the server
     pub fn get_password_verifier(&self, private_key: &[u8]) -> Vec<u8> {
         let x = BigInt::from_bytes_be(Sign::Plus, private_key);
-        let v = self.params.powm(&x);
+        let v = self.params.modpow(&x);
         v.to_bytes_be().1
     }
 
     fn calc_key(&self, b_pub: &BigInt, x: &BigInt, u: &BigInt) -> GenericArray<u8, D::OutputSize> {
         let n = &self.params.n;
         let k = self.params.compute_k::<D>();
-        let interm = k * self.params.powm(x);
+        let interm = k * self.params.modpow(x);
         let v = b_pub - &interm;
         // S = |B - kg^x| ^ (a + ux)
-        let s = powm(&v, &(&self.a + (u * x)), n);
+        let s = v.modpow(&(&self.a + (u * x)), n);
         D::digest(&s.to_bytes_be().1)
     }
 
@@ -149,7 +148,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         let b_pub = BigInt::from_bytes_be(Sign::Plus, b_pub);
 
         // Safeguard against malicious B
-        if &b_pub % &self.params.n == BigInt::zero() {
+        if &b_pub % &self.params.n == BigInt::default() {
             return Err(SrpAuthError {
                 description: "Malicious b_pub value",
             });
@@ -162,19 +161,19 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             let hn = {
                 let n = &self.params.n;
                 let mut d = D::new();
-                d.input(n.to_bytes_be().1);
-                BigInt::from_bytes_be(Sign::Plus, &d.result())
+                d.update(n.to_bytes_be().1);
+                BigInt::from_bytes_be(Sign::Plus, &d.finalize())
             };
             let hg = {
                 let g = &self.params.g;
                 let mut d = D::new();
-                d.input(g.to_bytes_be().1);
-                BigInt::from_bytes_be(Sign::Plus, &d.result())
+                d.update(g.to_bytes_be().1);
+                BigInt::from_bytes_be(Sign::Plus, &d.finalize())
             };
             let hu = {
                 let mut d = D::new();
-                d.input(username);
-                d.result()
+                d.update(username);
+                d.finalize()
             };
             let mut d = D::new();
             d.update((hn ^ hg).to_bytes_be().1);
@@ -183,7 +182,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             d.update(&self.a_pub.to_bytes_be().1);
             d.update(&b_pub.to_bytes_be().1);
             d.update(&key);
-            d.result()
+            d.finalize()
         };
 
         // M2 = H(A, M1, K)
@@ -192,7 +191,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             d.update(&self.a_pub.to_bytes_be().1);
             d.update(&proof);
             d.update(&key);
-            d.result()
+            d.finalize()
         };
 
         Ok(SrpClientVerifier {
