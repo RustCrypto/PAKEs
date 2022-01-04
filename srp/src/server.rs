@@ -37,7 +37,8 @@
 use std::marker::PhantomData;
 
 use digest::{Digest, Output};
-use num_bigint::BigUint;
+use generic_array::GenericArray;
+use num_bigint::{BigInt, Sign};
 
 use crate::types::{SrpAuthError, SrpGroup};
 
@@ -50,69 +51,74 @@ pub struct UserRecord<'a> {
 }
 
 /// SRP server state
-pub struct SrpServer<D: Digest> {
-    b: BigUint,
-    a_pub: BigUint,
-    b_pub: BigUint,
+pub struct SrpServer<'a, D: Digest> {
+    user: &'a UserRecord<'a>,
+    b: BigInt,
+    a_pub: BigInt,
+    b_pub: BigInt,
 
     key: Output<D>,
 
     d: PhantomData<D>,
+
+    params: &'a SrpGroup,
 }
 
-impl<D: Digest> SrpServer<D> {
+impl<'a, D: Digest> SrpServer<'a, D> {
     /// Create new server state.
     pub fn new(
-        user: &UserRecord<'_>,
+        user: &'a UserRecord,
         a_pub: &[u8],
         b: &[u8],
-        params: &SrpGroup,
+        params: &'a SrpGroup,
     ) -> Result<Self, SrpAuthError> {
-        let a_pub = BigUint::from_bytes_be(a_pub);
+        let a_pub = BigInt::from_bytes_be(Sign::Plus, a_pub);
         // Safeguard against malicious A
-        if &a_pub % &params.n == BigUint::default() {
+        if &a_pub % &params.n == BigInt::default() {
             return Err(SrpAuthError {
                 description: "Malicious a_pub value",
             });
         }
-        let v = BigUint::from_bytes_be(user.verifier);
-        let b = BigUint::from_bytes_be(b) % &params.n;
+        let v = BigInt::from_bytes_be(Sign::Plus, user.verifier);
+        let b = BigInt::from_bytes_be(Sign::Plus, b);
         let k = params.compute_k::<D>();
         // kv + g^b
-        let interm = (k * &v) % &params.n;
-        let b_pub = (interm + &params.modpow(&b)) % &params.n;
+        let interm = k * &v;
+        let b_pub = interm + &params.modpow(&b);
         // H(A || B)
         let u = {
             let mut d = D::new();
-            d.update(&a_pub.to_bytes_be());
-            d.update(&b_pub.to_bytes_be());
+            d.update(&a_pub.to_bytes_be().1);
+            d.update(&b_pub.to_bytes_be().1);
             d.finalize()
         };
         let d = Default::default();
         //(Av^u) ^ b
         let key = {
-            let u = BigUint::from_bytes_be(u.as_slice());
-            let t = (&a_pub * v.modpow(&u, &params.n)) % &params.n;
+            let u = BigInt::from_bytes_be(Sign::Plus, &u);
+            let t = &a_pub * v.modpow(&u, &params.n);
             let s = t.modpow(&b, &params.n);
-            D::digest(&s.to_bytes_be())
+            D::digest(&s.to_bytes_be().1)
         };
         Ok(Self {
+            user,
             b,
             a_pub,
             b_pub,
             key,
             d,
+            params,
         })
     }
 
     /// Get private `b` value. (see `new_with_b` documentation)
     pub fn get_b(&self) -> Vec<u8> {
-        self.b.to_bytes_be()
+        self.b.to_bytes_be().1
     }
 
     /// Get public `b_pub` value for sending to the user.
     pub fn get_b_pub(&self) -> Vec<u8> {
-        self.b_pub.to_bytes_be()
+        self.b_pub.to_bytes_be().1
     }
 
     /// Get shared secret between user and the server. (do not forget to verify
@@ -123,17 +129,43 @@ impl<D: Digest> SrpServer<D> {
 
     /// Process user proof of having the same shared secret and compute
     /// server proof for sending to the user.
-    pub fn verify(&self, user_proof: &[u8]) -> Result<Output<D>, SrpAuthError> {
-        // M = H(A, B, K)
-        let mut d = D::new();
-        d.update(&self.a_pub.to_bytes_be());
-        d.update(&self.b_pub.to_bytes_be());
-        d.update(&self.key);
+    pub fn verify(
+        &self,
+        user_proof: &[u8],
+    ) -> Result<GenericArray<u8, D::OutputSize>, SrpAuthError> {
+        // M = H(H(N) XOR H(g) | H(U) | s | A | B | K)
+        let proof = {
+            let hn = {
+                let n = &self.params.n;
+                let mut d = D::new();
+                d.update(n.to_bytes_be().1);
+                BigInt::from_bytes_be(Sign::Plus, &d.finalize())
+            };
+            let hg = {
+                let g = &self.params.g;
+                let mut d = D::new();
+                d.update(g.to_bytes_be().1);
+                BigInt::from_bytes_be(Sign::Plus, &d.finalize())
+            };
+            let hu = {
+                let mut d = D::new();
+                d.update(self.user.username);
+                d.finalize()
+            };
+            let mut d = D::new();
+            d.update((hn ^ hg).to_bytes_be().1);
+            d.update(hu);
+            d.update(self.user.salt);
+            d.update(&self.a_pub.to_bytes_be().1);
+            d.update(&self.b_pub.to_bytes_be().1);
+            d.update(&self.key);
+            d.finalize()
+        };
 
-        if user_proof == d.finalize().as_slice() {
+        if user_proof == proof.as_slice() {
             // H(A, M, K)
             let mut d = D::new();
-            d.update(&self.a_pub.to_bytes_be());
+            d.update(&self.a_pub.to_bytes_be().1);
             d.update(user_proof);
             d.update(&self.key);
             Ok(d.finalize())
