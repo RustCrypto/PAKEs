@@ -15,13 +15,13 @@ rust-version = "1.56"
 [dependencies]
 num-bigint = "0.4"
 generic-array = "0.14"
-digest = "0.9"
+digest = "0.10"
 lazy_static = "1.2"
 subtle = "2.4"
 
 [dev-dependencies]
 rand = "0.6"
-sha2 = "0.9"
-sha-1 = "0.9"
+sha2 = "0.10"
+sha-1 = "0.10"
 num-traits = "0.2"
 hex-literal = "0.3"
