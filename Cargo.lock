@@ -420,7 +420,7 @@ dependencies = [
 
 [[package]]
 name = "srp"
-version = "0.6.0-pre"
+version = "0.6.0"
 dependencies = [
  "digest 0.10.1",
  "generic-array 0.14.4",
