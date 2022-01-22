@@ -1,53 +1,71 @@
 use rand::RngCore;
 use sha2::Sha256;
+use srp::client::SrpClient;
 
-use srp::client::{srp_private_key, SrpClient};
 use srp::groups::G_2048;
-use srp::server::{SrpServer, UserRecord};
+use srp::server::SrpServer;
 
-fn auth_test(reg_pwd: &[u8], auth_pwd: &[u8]) {
+fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     let mut rng = rand::rngs::OsRng::new().unwrap();
     let username = b"alice";
 
     // Client instance creation
-    let mut a = [0u8; 64];
-    rng.fill_bytes(&mut a);
-    let client = SrpClient::<Sha256>::new(&a, &G_2048);
+    let client = SrpClient::<Sha256>::new(&G_2048);
 
-    // Registration
+    // Begin Registration
+
     let mut salt = [0u8; 16];
     rng.fill_bytes(&mut salt);
-    let reg_priv_key = srp_private_key::<Sha256>(username, reg_pwd, &salt);
-    let verif = client.get_password_verifier(&reg_priv_key);
+    let verifier = client.compute_verifier(username, true_pwd, &salt);
 
-    // User sends handshake
-    let a_pub = client.get_a_pub();
+    // Client sends username and verifier and salt to the Server for storage
 
-    // Server retrieve user record from db and processes handshake
-    let user = UserRecord {
-        username,
-        salt: &salt,
-        verifier: &verif,
-    };
+    // Registration Ends
+
+    // Begin Authentication
+
+    // User sends username
+
+    // Server instance creation
+    let server = SrpServer::<Sha256>::new(&G_2048);
+
+    // Server retrieves verifier, salt and computes a public B value
     let mut b = [0u8; 64];
     rng.fill_bytes(&mut b);
-    let server = SrpServer::<Sha256>::new(&user, &a_pub, &b, &G_2048).unwrap();
-    let (salt, b_pub) = (&user.salt, server.get_b_pub());
+    let (salt, b_pub) = (&salt, server.compute_public_ephemeral(&b, &verifier));
 
-    // Client processes handshake reply
-    let auth_priv_key = srp_private_key::<Sha256>(username, auth_pwd, salt);
-    let client2 = client.process_reply(&auth_priv_key, &b_pub).unwrap();
-    let proof = client2.get_proof();
+    // Server sends salt and b_pub to client
+
+    // Client computes the public A value and the clientVerifier containing the key, m1, and m2
+    let mut a = [0u8; 64];
+    rng.fill_bytes(&mut a);
+    let client_verifier = client
+        .process_reply(&a, username, auth_pwd, salt, &b_pub)
+        .unwrap();
+    let a_pub = client.compute_public_ephemeral(&a);
+    let client_proof = client_verifier.proof();
+
+    // Client sends a_pub and client_proof to server (M1)
 
     // Server processes verification data
-    println!("Client verification");
-    let proof2 = server.verify(&proof).unwrap();
-    let server_key = server.get_key();
+    let server_verifier = server.process_reply(&b, &verifier, &a_pub).unwrap();
+    println!("Client verification on server");
+    server_verifier.verify_client(client_proof).unwrap();
+    let server_proof = server_verifier.proof();
+    let server_key = server_verifier.key();
+
+    // Server sends server_proof to server (M2)
 
     // Client verifies server
-    println!("Server verification");
-    let user_key = client2.verify_server(&proof2).unwrap();
-    assert_eq!(server_key, user_key, "server and client keys are not equal");
+    println!("Server verification on client");
+    client_verifier.verify_server(server_proof).unwrap();
+    let client_key = client_verifier.key();
+
+    // our keys almost must equal but just an extra check
+    assert_eq!(
+        server_key, client_key,
+        "server and client keys are not equal"
+    );
 }
 
 #[test]

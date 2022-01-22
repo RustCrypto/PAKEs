@@ -10,12 +10,6 @@
 //! srp = "0.4"
 //! ```
 //!
-//! and this to your crate root:
-//!
-//! ```rust
-//! extern crate srp;
-//! ```
-//!
 //! Next read documentation for [`client`](client/index.html) and
 //! [`server`](server/index.html) modules.
 //!
@@ -60,3 +54,4 @@ pub mod client;
 pub mod groups;
 pub mod server;
 pub mod types;
+pub mod utils;
