@@ -61,13 +61,13 @@ fn test_password_to_scalar() {
 
 #[test]
 fn test_sizes() {
-    let (s1, msg1) = SPAKE2::<Ed25519Group>::start_a(
+    let (s1, msg1) = Spake2::<Ed25519Group>::start_a(
         &Password::new(b"password"),
         &Identity::new(b"idA"),
         &Identity::new(b"idB"),
     );
     assert_eq!(msg1.len(), 1 + 32);
-    let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b(
+    let (s2, msg2) = Spake2::<Ed25519Group>::start_b(
         &Password::new(b"password"),
         &Identity::new(b"idA"),
         &Identity::new(b"idB"),
@@ -78,12 +78,12 @@ fn test_sizes() {
     assert_eq!(key1.len(), 32);
     assert_eq!(key2.len(), 32);
 
-    let (s1, msg1) = SPAKE2::<Ed25519Group>::start_symmetric(
+    let (s1, msg1) = Spake2::<Ed25519Group>::start_symmetric(
         &Password::new(b"password"),
         &Identity::new(b"idS"),
     );
     assert_eq!(msg1.len(), 1 + 32);
-    let (s2, msg2) = SPAKE2::<Ed25519Group>::start_symmetric(
+    let (s2, msg2) = Spake2::<Ed25519Group>::start_symmetric(
         &Password::new(b"password"),
         &Identity::new(b"idS"),
     );
@@ -135,7 +135,7 @@ fn test_asymmetric() {
 
     println!("scalar_a is {}", hex::encode(scalar_a.as_bytes()));
 
-    let (s1, msg1) = SPAKE2::<Ed25519Group>::start_a_internal(
+    let (s1, msg1) = Spake2::<Ed25519Group>::start_a_internal(
         &Password::new(b"password"),
         &Identity::new(b"idA"),
         &Identity::new(b"idB"),
@@ -159,7 +159,7 @@ fn test_asymmetric() {
     );
     assert_eq!(hex::encode(&msg1), expected_msg1);
 
-    let (s2, msg2) = SPAKE2::<Ed25519Group>::start_b_internal(
+    let (s2, msg2) = Spake2::<Ed25519Group>::start_b_internal(
         &Password::new(b"password"),
         &Identity::new(b"idA"),
         &Identity::new(b"idB"),
@@ -182,7 +182,7 @@ fn test_asymmetric() {
 
 #[test]
 fn test_debug() {
-    let (s1, _msg1) = SPAKE2::<Ed25519Group>::start_a(
+    let (s1, _msg1) = Spake2::<Ed25519Group>::start_a(
         &Password::new(b"password"),
         &Identity::new(b"idA"),
         &Identity::new(b"idB"),
@@ -193,7 +193,7 @@ fn test_debug() {
         "SPAKE2 { group: \"Ed25519\", side: A, idA: (s=idA), idB: (s=idB), idS: (s=) }"
     );
 
-    let (s2, _msg1) = SPAKE2::<Ed25519Group>::start_symmetric(
+    let (s2, _msg1) = Spake2::<Ed25519Group>::start_symmetric(
         &Password::new(b"password"),
         &Identity::new(b"idS"),
     );
