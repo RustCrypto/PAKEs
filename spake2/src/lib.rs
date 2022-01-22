@@ -1,6 +1,10 @@
 #![no_std]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg",
+    html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"
+)]
 #![forbid(unsafe_code)]
 #![warn(rust_2018_idioms, unused_qualifications)]
 
@@ -234,8 +238,11 @@ use curve25519_dalek::{
     scalar::Scalar as c2_Scalar,
 };
 use hkdf::Hkdf;
-use rand_core::{CryptoRng, OsRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha256};
+
+#[cfg(feature = "getrandom")]
+use rand_core::OsRng;
 
 /* "newtype pattern": it's a Vec<u8>, but only used for a specific argument
  * type, to distinguish between ones that are meant as passwords, and ones
@@ -641,21 +648,50 @@ impl<G: Group> SPAKE2<G> {
         )
     }
 
+    #[cfg(feature = "getrandom")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring = OsRng;
-        let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
+        Self::start_a_with_rng(password, id_a, id_b, OsRng)
+    }
+
+    #[cfg(feature = "getrandom")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
+    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
+        Self::start_b_with_rng(password, id_a, id_b, OsRng)
+    }
+
+    #[cfg(feature = "getrandom")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
+    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
+        Self::start_symmetric_with_rng(password, id_s, OsRng)
+    }
+
+    pub fn start_a_with_rng(
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
+        mut csprng: impl CryptoRng + RngCore,
+    ) -> (SPAKE2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csprng);
         Self::start_a_internal(password, id_a, id_b, xy_scalar)
     }
 
-    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring = OsRng;
-        let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
+    pub fn start_b_with_rng(
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
+        mut csprng: impl CryptoRng + RngCore,
+    ) -> (SPAKE2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csprng);
         Self::start_b_internal(password, id_a, id_b, xy_scalar)
     }
 
-    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
-        let mut cspring = OsRng;
-        let xy_scalar: G::Scalar = G::random_scalar(&mut cspring);
+    pub fn start_symmetric_with_rng(
+        password: &Password,
+        id_s: &Identity,
+        mut csprng: impl CryptoRng + RngCore,
+    ) -> (SPAKE2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csprng);
         Self::start_symmetric_internal(password, id_s, xy_scalar)
     }
 
