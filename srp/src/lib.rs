@@ -7,7 +7,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! srp = "0.4"
+//! srp = "0.6"
 //! ```
 //!
 //! Next read documentation for [`client`](client/index.html) and
