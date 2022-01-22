@@ -17,6 +17,25 @@ env:
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.56.0 # MSRV
+          - stable
+        target:
+          - wasm32-unknown-unknown
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.target }}
+          override: true
+      - run: cargo build --target ${{ matrix.target }} --release
+
   test:
     runs-on: ubuntu-latest
     strategy:

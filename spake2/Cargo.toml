@@ -15,7 +15,7 @@ edition = "2021"
 rust-version = "1.56"
 
 [dependencies]
-curve25519-dalek = "3"
+curve25519-dalek = { version = "3", default-features = false, features = ["u64_backend"] }
 rand_core = { version = "0.5", default-features = false, features = ["getrandom"] }
 sha2 = "0.10"
 hkdf = "0.12"
@@ -24,6 +24,10 @@ hkdf = "0.12"
 bencher = "0.1"
 hex = "0.4"
 num-bigint = "0.4"
+
+[features]
+default = []
+std = []
 
 [[bench]]
 name = "spake2"

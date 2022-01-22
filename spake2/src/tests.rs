@@ -2,6 +2,9 @@
 //! spake2.test.test_compat.SPAKE2.test_asymmetric . The python test passes a
 //! deterministic RNG (used only for tests, of course) into the per-Group
 //! "random_scalar()" function, which results in some particular scalar.
+
+#![cfg(feature = "std")]
+
 use super::*;
 use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
 
