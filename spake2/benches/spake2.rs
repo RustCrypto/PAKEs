@@ -1,10 +1,10 @@
 use bencher::Bencher;
 use bencher::{benchmark_group, benchmark_main};
-use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+use spake2::{Ed25519Group, Identity, Password, Spake2};
 
 fn spake2_start(bench: &mut Bencher) {
     bench.iter(|| {
-        let (_, _) = SPAKE2::<Ed25519Group>::start_a(
+        let (_, _) = Spake2::<Ed25519Group>::start_a(
             &Password::new(b"password"),
             &Identity::new(b"idA"),
             &Identity::new(b"idB"),
@@ -31,14 +31,14 @@ fn spake2_finish(bench: &mut Bencher) {
 */
 
 fn spake2_start_and_finish(bench: &mut Bencher) {
-    let (_, msg2) = SPAKE2::<Ed25519Group>::start_b(
+    let (_, msg2) = Spake2::<Ed25519Group>::start_b(
         &Password::new(b"password"),
         &Identity::new(b"idA"),
         &Identity::new(b"idB"),
     );
     let msg2_slice = msg2.as_slice();
     bench.iter(|| {
-        let (s1, _) = SPAKE2::<Ed25519Group>::start_a(
+        let (s1, _) = Spake2::<Ed25519Group>::start_a(
             &Password::new(b"password"),
             &Identity::new(b"idA"),
             &Identity::new(b"idB"),

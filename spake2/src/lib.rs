@@ -6,7 +6,7 @@
     html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"
 )]
 #![forbid(unsafe_code)]
-#![warn(rust_2018_idioms, unused_qualifications)]
+#![warn(missing_docs, rust_2018_idioms, unused_qualifications)]
 
 //! # Usage
 //!
@@ -41,15 +41,15 @@
 //! Thus a client-side program start with:
 //!
 //! ```rust
-//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
+//! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! # fn send(msg: &[u8]) {}
-//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_a(
+//! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_a(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"client id string"),
 //!    &Identity::new(b"server id string"));
 //! send(&outbound_msg);
 //!
-//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_b(&Password::new(b"password"), &Identity::new(b"client id string"), &Identity::new(b"server id string")); i2 }
+//! # fn receive() -> Vec<u8> { let (s2, i2) = Spake2::<Ed25519Group>::start_b(&Password::new(b"password"), &Identity::new(b"client id string"), &Identity::new(b"server id string")); i2 }
 //! let inbound_msg = receive();
 //! let key1 = s1.finish(&inbound_msg).unwrap();
 //! ```
@@ -58,14 +58,14 @@
 //!
 //! ```rust
 //! # fn send(msg: &[u8]) {}
-//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
-//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_b(
+//! use spake2::{Ed25519Group, Identity, Password, Spake2};
+//! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_b(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"client id string"),
 //!    &Identity::new(b"server id string"));
 //! send(&outbound_msg);
 //!
-//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_a(&Password::new(b"password"), &Identity::new(b"client id string"), &Identity::new(b"server id string")); i2 }
+//! # fn receive() -> Vec<u8> { let (s2, i2) = Spake2::<Ed25519Group>::start_a(&Password::new(b"password"), &Identity::new(b"client id string"), &Identity::new(b"server id string")); i2 }
 //! let inbound_msg = receive();
 //! let key2 = s1.finish(&inbound_msg).unwrap();
 //! ```
@@ -102,13 +102,13 @@
 //!
 //! ```rust
 //! # fn send(msg: &[u8]) {}
-//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
-//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_symmetric(
+//! use spake2::{Ed25519Group, Identity, Password, Spake2};
+//! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_symmetric(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"shared id string"));
 //! send(&outbound_msg);
 //!
-//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_symmetric(&Password::new(b"password"), &Identity::new(b"shared id string")); i2 }
+//! # fn receive() -> Vec<u8> { let (s2, i2) = Spake2::<Ed25519Group>::start_symmetric(&Password::new(b"password"), &Identity::new(b"shared id string")); i2 }
 //! let inbound_msg = receive();
 //! let key1 = s1.finish(&inbound_msg).unwrap();
 //! ```
@@ -117,13 +117,13 @@
 //!
 //! ```rust
 //! # fn send(msg: &[u8]) {}
-//! use spake2::{Ed25519Group, Identity, Password, SPAKE2};
-//! let (s1, outbound_msg) = SPAKE2::<Ed25519Group>::start_symmetric(
+//! use spake2::{Ed25519Group, Identity, Password, Spake2};
+//! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_symmetric(
 //!    &Password::new(b"password"),
 //!    &Identity::new(b"shared id string"));
 //! send(&outbound_msg);
 //!
-//! # fn receive() -> Vec<u8> { let (s2, i2) = SPAKE2::<Ed25519Group>::start_symmetric(&Password::new(b"password"), &Identity::new(b"shared id string")); i2 }
+//! # fn receive() -> Vec<u8> { let (s2, i2) = Spake2::<Ed25519Group>::start_symmetric(&Password::new(b"password"), &Identity::new(b"shared id string")); i2 }
 //! let inbound_msg = receive();
 //! let key1 = s1.finish(&inbound_msg).unwrap();
 //! ```
@@ -244,84 +244,133 @@ use sha2::{Digest, Sha256};
 #[cfg(feature = "getrandom")]
 use rand_core::OsRng;
 
-/* "newtype pattern": it's a Vec<u8>, but only used for a specific argument
- * type, to distinguish between ones that are meant as passwords, and ones
- * that are meant as identity strings */
+/// SPAKE2 errors.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Error {
+    /// Bad side
+    BadSide,
 
+    /// Corrupt message
+    CorruptMessage,
+
+    /// Wrong length
+    WrongLength,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::BadSide => fmt.write_str("bad side"),
+            Error::CorruptMessage => fmt.write_str("corrupt message"),
+            Error::WrongLength => fmt.write_str("invalid length"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
+
+/// Password.
+// TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Password(Vec<u8>);
+
 impl Password {
+    /// Create a new password
     pub fn new(p: &[u8]) -> Password {
         Password(p.to_vec())
     }
 }
+
 impl Deref for Password {
     type Target = Vec<u8>;
+
     fn deref(&self) -> &Vec<u8> {
         &self.0
     }
 }
 
+/// SPAKE2 identity.
+// TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Identity(Vec<u8>);
+
 impl Deref for Identity {
     type Target = Vec<u8>;
+
     fn deref(&self) -> &Vec<u8> {
         &self.0
     }
 }
+
 impl Identity {
+    /// Create a new identity
     pub fn new(p: &[u8]) -> Identity {
         Identity(p.to_vec())
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ErrorType {
-    BadSide,
-    WrongLength,
-    CorruptMessage,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct SPAKEErr {
-    pub kind: ErrorType,
-}
-
+/// Group trait
+// TODO(tarcieri): replace with `group` crate?
 pub trait Group {
+    /// Scalar element
     type Scalar;
+
+    /// Base field element
     type Element;
-    //type Element: Add<Output=Self::Element>
-    //    + Mul<Self::Scalar, Output=Self::Element>;
-    // const element_length: usize; // in unstable, or u8
-    //type ElementBytes : Index<usize, Output=u8>+IndexMut<usize>; // later
+
+    /// Transcript hash
     type TranscriptHash;
+
+    /// Name
     fn name() -> &'static str;
+
+    /// `m` constant
     fn const_m() -> Self::Element;
+
+    /// `n` constant
     fn const_n() -> Self::Element;
+
+    /// `s` constant
     fn const_s() -> Self::Element;
+
+    /// Hash to scalar
     fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
+
+    /// Generate a random scalar
     fn random_scalar<T>(cspring: &mut T) -> Self::Scalar
     where
         T: RngCore + CryptoRng;
+
+    /// Scalar negation
     fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;
+
+    /// Convert base field element to bytes
     fn element_to_bytes(e: &Self::Element) -> Vec<u8>;
+
+    /// Convert bytes to base field element
     fn bytes_to_element(b: &[u8]) -> Option<Self::Element>;
+
+    /// Length of a base field element
     fn element_length() -> usize;
+
+    /// Fixed-base scalar multiplication
     fn basepoint_mult(s: &Self::Scalar) -> Self::Element;
+
+    /// Variable-base scalar multiplication
     fn scalarmult(e: &Self::Element, s: &Self::Scalar) -> Self::Element;
+
+    /// Group operation
     fn add(a: &Self::Element, b: &Self::Element) -> Self::Element;
 }
 
+/// Ed25519 elliptic curve group
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ed25519Group;
 
 impl Group for Ed25519Group {
     type Scalar = c2_Scalar;
     type Element = c2_Element;
-    //type ElementBytes = Vec<u8>;
-    //type ElementBytes = [u8; 32];
-    //type ScalarBytes
     type TranscriptHash = Sha256;
 
     fn name() -> &'static str {
@@ -367,44 +416,47 @@ impl Group for Ed25519Group {
     fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
         ed25519_hash_to_scalar(s)
     }
+
     fn random_scalar<T>(cspring: &mut T) -> c2_Scalar
     where
         T: RngCore + CryptoRng,
     {
         c2_Scalar::random(cspring)
     }
+
     fn scalar_neg(s: &c2_Scalar) -> c2_Scalar {
         -s
     }
+
     fn element_to_bytes(s: &c2_Element) -> Vec<u8> {
         s.compress().as_bytes().to_vec()
     }
+
     fn element_length() -> usize {
         32
     }
+
     fn bytes_to_element(b: &[u8]) -> Option<c2_Element> {
         if b.len() != 32 {
             return None;
         }
-        //let mut bytes: [u8; 32] =
+
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(b);
+
         let cey = CompressedEdwardsY(bytes);
-        // CompressedEdwardsY::new(b)
         cey.decompress()
     }
 
     fn basepoint_mult(s: &c2_Scalar) -> c2_Element {
-        //c2_Element::basepoint_mult(s)
         ED25519_BASEPOINT_POINT * s
     }
     fn scalarmult(e: &c2_Element, s: &c2_Scalar) -> c2_Element {
         e * s
-        //e.scalar_mult(s)
     }
+
     fn add(a: &c2_Element, b: &c2_Element) -> c2_Element {
         a + b
-        //a.add(b)
     }
 }
 
@@ -530,9 +582,9 @@ enum Side {
     Symmetric,
 }
 
-// we implement a custom Debug below, to avoid revealing secrets in a dump
-#[derive(PartialEq, Eq)]
-pub struct SPAKE2<G: Group> {
+/// SPAKE2 algorithm.
+#[derive(Eq, PartialEq)]
+pub struct Spake2<G: Group> {
     //where &G::Scalar: Neg {
     side: Side,
     xy_scalar: G::Scalar,
@@ -544,7 +596,7 @@ pub struct SPAKE2<G: Group> {
     password_scalar: G::Scalar,
 }
 
-impl<G: Group> SPAKE2<G> {
+impl<G: Group> Spake2<G> {
     fn start_internal(
         side: Side,
         password: &Password,
@@ -552,7 +604,7 @@ impl<G: Group> SPAKE2<G> {
         id_b: &Identity,
         id_s: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (SPAKE2<G>, Vec<u8>) {
+    ) -> (Spake2<G>, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
         let password_scalar: G::Scalar = G::hash_to_scalar(password);
 
@@ -587,7 +639,7 @@ impl<G: Group> SPAKE2<G> {
         msg_and_side.extend_from_slice(&msg1);
 
         (
-            SPAKE2 {
+            Spake2 {
                 side,
                 xy_scalar,
                 password_vec, // string
@@ -606,7 +658,7 @@ impl<G: Group> SPAKE2<G> {
         id_a: &Identity,
         id_b: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (SPAKE2<G>, Vec<u8>) {
+    ) -> (Spake2<G>, Vec<u8>) {
         Self::start_internal(
             Side::A,
             password,
@@ -622,7 +674,7 @@ impl<G: Group> SPAKE2<G> {
         id_a: &Identity,
         id_b: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (SPAKE2<G>, Vec<u8>) {
+    ) -> (Spake2<G>, Vec<u8>) {
         Self::start_internal(
             Side::B,
             password,
@@ -637,7 +689,7 @@ impl<G: Group> SPAKE2<G> {
         password: &Password,
         id_s: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (SPAKE2<G>, Vec<u8>) {
+    ) -> (Spake2<G>, Vec<u8>) {
         Self::start_internal(
             Side::Symmetric,
             password,
@@ -648,95 +700,90 @@ impl<G: Group> SPAKE2<G> {
         )
     }
 
+    /// Start with identity `a`.
+    ///
+    /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
     #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
-    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
+    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
         Self::start_a_with_rng(password, id_a, id_b, OsRng)
     }
 
+    /// Start with identity `b`.
+    ///
+    /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
     #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
-    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (SPAKE2<G>, Vec<u8>) {
+    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
         Self::start_b_with_rng(password, id_a, id_b, OsRng)
     }
 
+    /// Start with symmetric identity.
+    ///
+    /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
     #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
-    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (SPAKE2<G>, Vec<u8>) {
+    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Spake2<G>, Vec<u8>) {
         Self::start_symmetric_with_rng(password, id_s, OsRng)
     }
 
+    /// Start with identity `a` and the provided cryptographically secure RNG.
     pub fn start_a_with_rng(
         password: &Password,
         id_a: &Identity,
         id_b: &Identity,
-        mut csprng: impl CryptoRng + RngCore,
-    ) -> (SPAKE2<G>, Vec<u8>) {
-        let xy_scalar: G::Scalar = G::random_scalar(&mut csprng);
+        mut csrng: impl CryptoRng + RngCore,
+    ) -> (Spake2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_a_internal(password, id_a, id_b, xy_scalar)
     }
 
+    /// Start with identity `b` and the provided cryptographically secure RNG.
     pub fn start_b_with_rng(
         password: &Password,
         id_a: &Identity,
         id_b: &Identity,
-        mut csprng: impl CryptoRng + RngCore,
-    ) -> (SPAKE2<G>, Vec<u8>) {
-        let xy_scalar: G::Scalar = G::random_scalar(&mut csprng);
+        mut csrng: impl CryptoRng + RngCore,
+    ) -> (Spake2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_b_internal(password, id_a, id_b, xy_scalar)
     }
 
+    /// Start with symmetric identity and the provided cryptographically secure RNG.
     pub fn start_symmetric_with_rng(
         password: &Password,
         id_s: &Identity,
-        mut csprng: impl CryptoRng + RngCore,
-    ) -> (SPAKE2<G>, Vec<u8>) {
-        let xy_scalar: G::Scalar = G::random_scalar(&mut csprng);
+        mut csrng: impl CryptoRng + RngCore,
+    ) -> (Spake2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_symmetric_internal(password, id_s, xy_scalar)
     }
 
-    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, SPAKEErr> {
+    /// Finish SPAKE2.
+    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, Error> {
         if msg2.len() != 1 + G::element_length() {
-            return Err(SPAKEErr {
-                kind: ErrorType::WrongLength,
-            });
+            return Err(Error::WrongLength);
         }
         let msg_side = msg2[0];
 
         match self.side {
             Side::A => match msg_side {
                 0x42 => (), // 'B'
-                _ => {
-                    return Err(SPAKEErr {
-                        kind: ErrorType::BadSide,
-                    })
-                }
+                _ => return Err(Error::BadSide),
             },
             Side::B => match msg_side {
                 0x41 => (), // 'A'
-                _ => {
-                    return Err(SPAKEErr {
-                        kind: ErrorType::BadSide,
-                    })
-                }
+                _ => return Err(Error::BadSide),
             },
             Side::Symmetric => match msg_side {
                 0x53 => (), // 'S'
-                _ => {
-                    return Err(SPAKEErr {
-                        kind: ErrorType::BadSide,
-                    })
-                }
+                _ => return Err(Error::BadSide),
             },
         }
 
         let msg2_element = match G::bytes_to_element(&msg2[1..]) {
             Some(x) => x,
-            None => {
-                return Err(SPAKEErr {
-                    kind: ErrorType::CorruptMessage,
-                })
-            }
+            None => return Err(Error::CorruptMessage),
         };
 
         // a: K = (Y+N*(-pw))*x
@@ -786,7 +833,7 @@ impl<G: Group> SPAKE2<G> {
     }
 }
 
-impl<G: Group> fmt::Debug for SPAKE2<G> {
+impl<G: Group> fmt::Debug for Spake2<G> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("SPAKE2")
             .field("group", &G::name())
