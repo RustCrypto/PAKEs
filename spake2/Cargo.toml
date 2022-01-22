@@ -5,24 +5,18 @@ authors = ["Brian Warner <warner@lothar.com>"]
 description = "The SPAKE2 password-authenticated key-exchange algorithm."
 documentation = "https://docs.rs/spake2"
 homepage = "https://github.com/RustCrypto/PAKEs"
-repository = "https://github.com/RustCrypto/PAKEs"
+repository = "https://github.com/RustCrypto/PAKEs/tree/master/spake2"
 license = "MIT OR Apache-2.0"
 keywords = ["crypto", "pake", "authentication"]
 categories = ["cryptography", "authentication"]
 exclude = [".gitignore"]
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 rust-version = "1.56"
 
-[package.metadata.release]
-tag-prefix = "spake2-v"
-tag-message = "(cargo-release) spake2-v{{version}}"
-pre-release-commit-message = "(cargo-release) spake2-v{{version}}"
-pro-release-commit-message = "(cargo-release) start next development iteration spake2-v{{version}}"
-
 [dependencies]
-curve25519-dalek = "1.2"
-rand = "0.6"
+curve25519-dalek = "3"
+rand_core = { version = "0.5", default-features = false, features = ["getrandom"] }
 sha2 = "0.9"
 hkdf = "0.11"
 hex = "0.4"
