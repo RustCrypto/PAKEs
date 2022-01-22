@@ -364,7 +364,7 @@ pub trait Group {
     fn add(a: &Self::Element, b: &Self::Element) -> Self::Element;
 }
 
-/// Ed25519 elliptic curve group
+/// Ed25519 elliptic curve group.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ed25519Group;
 
