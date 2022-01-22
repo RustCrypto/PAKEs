@@ -217,15 +217,15 @@
 //! [6]: http://eprint.iacr.org/2003/038.pdf "Pretty-Simple Password-Authenticated Key-Exchange Under Standard Assumptions"
 //! [7]: https://moderncrypto.org/mail-archive/curves/2015/000419.html "PAKE questions"
 
-use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
-use curve25519_dalek::edwards::CompressedEdwardsY;
-use curve25519_dalek::edwards::EdwardsPoint as c2_Element;
-use curve25519_dalek::scalar::Scalar as c2_Scalar;
+use core::{fmt, ops::Deref, str};
+use curve25519_dalek::{
+    constants::ED25519_BASEPOINT_POINT,
+    edwards::{CompressedEdwardsY, EdwardsPoint as c2_Element},
+    scalar::Scalar as c2_Scalar,
+};
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, OsRng, RngCore};
 use sha2::{Digest, Sha256};
-use std::fmt;
-use std::ops::Deref;
 
 /* "newtype pattern": it's a Vec<u8>, but only used for a specific argument
  * type, to distinguish between ones that are meant as passwords, and ones
@@ -740,22 +740,33 @@ impl<G: Group> SPAKE2<G> {
     }
 }
 
-fn maybe_utf8(s: &[u8]) -> String {
-    match String::from_utf8(s.to_vec()) {
-        Ok(m) => format!("(s={})", m),
-        Err(_) => format!("(hex={})", hex::encode(s)),
-    }
-}
-
 impl<G: Group> fmt::Debug for SPAKE2<G> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("SPAKE2")
             .field("group", &G::name())
             .field("side", &self.side)
-            .field("idA", &maybe_utf8(&self.id_a))
-            .field("idB", &maybe_utf8(&self.id_b))
-            .field("idS", &maybe_utf8(&self.id_s))
+            .field("idA", &MaybeUtf8(&self.id_a))
+            .field("idB", &MaybeUtf8(&self.id_b))
+            .field("idS", &MaybeUtf8(&self.id_s))
             .finish()
+    }
+}
+
+struct MaybeUtf8<'a>(&'a [u8]);
+
+impl fmt::Debug for MaybeUtf8<'_> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Ok(s) = str::from_utf8(self.0) {
+            write!(fmt, "(s={})", s)
+        } else {
+            write!(fmt, "(hex=")?;
+
+            for byte in self.0 {
+                write!(fmt, "{:x}", byte)?;
+            }
+
+            write!(fmt, ")")
+        }
     }
 }
 
