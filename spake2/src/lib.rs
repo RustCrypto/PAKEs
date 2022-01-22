@@ -1,7 +1,8 @@
-#![forbid(unsafe_code)]
-#![warn(rust_2018_idioms, unused_qualifications)]
+#![no_std]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
 #![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
+#![warn(rust_2018_idioms, unused_qualifications)]
 
 //! # Usage
 //!
@@ -217,6 +218,15 @@
 //! [6]: http://eprint.iacr.org/2003/038.pdf "Pretty-Simple Password-Authenticated Key-Exchange Under Standard Assumptions"
 //! [7]: https://moderncrypto.org/mail-archive/curves/2015/000419.html "PAKE questions"
 
+#[allow(unused_imports)]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+#[cfg_attr(test, macro_use)]
+extern crate std;
+
+use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT,
