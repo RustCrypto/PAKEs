@@ -187,7 +187,7 @@ fn test_debug() {
     println!("s1: {:?}", s1);
     assert_eq!(
         format!("{:?}", s1),
-        "SPAKE2 { group: \"Ed25519\", side: A, idA: \"(s=idA)\", idB: \"(s=idB)\", idS: \"(s=)\" }"
+        "SPAKE2 { group: \"Ed25519\", side: A, idA: (s=idA), idB: (s=idB), idS: (s=) }"
     );
 
     let (s2, _msg1) = SPAKE2::<Ed25519Group>::start_symmetric(
@@ -195,6 +195,8 @@ fn test_debug() {
         &Identity::new(b"idS"),
     );
     println!("s2: {:?}", s2);
-    assert_eq!(format!("{:?}", s2),
-               "SPAKE2 { group: \"Ed25519\", side: Symmetric, idA: \"(s=)\", idB: \"(s=)\", idS: \"(s=idS)\" }");
+    assert_eq!(
+        format!("{:?}", s2),
+        "SPAKE2 { group: \"Ed25519\", side: Symmetric, idA: (s=), idB: (s=), idS: (s=idS) }"
+    );
 }
