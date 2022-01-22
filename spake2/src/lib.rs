@@ -230,55 +230,33 @@ extern crate alloc;
 #[cfg_attr(test, macro_use)]
 extern crate std;
 
+mod ed25519;
+mod error;
+mod group;
+
+pub use self::{
+    ed25519::Ed25519Group,
+    error::{Error, Result},
+    group::Group,
+};
+
 use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
-use curve25519_dalek::{
-    constants::ED25519_BASEPOINT_POINT,
-    edwards::{CompressedEdwardsY, EdwardsPoint as c2_Element},
-    scalar::Scalar as c2_Scalar,
-};
-use hkdf::Hkdf;
+use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::{CryptoRng, RngCore};
-use sha2::{Digest, Sha256};
 
 #[cfg(feature = "getrandom")]
 use rand_core::OsRng;
 
-/// SPAKE2 errors.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Error {
-    /// Bad side
-    BadSide,
-
-    /// Corrupt message
-    CorruptMessage,
-
-    /// Wrong length
-    WrongLength,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::BadSide => fmt.write_str("bad side"),
-            Error::CorruptMessage => fmt.write_str("corrupt message"),
-            Error::WrongLength => fmt.write_str("invalid length"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
-
-/// Password.
+/// Password
 // TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Password(Vec<u8>);
 
 impl Password {
-    /// Create a new password
-    pub fn new(p: &[u8]) -> Password {
-        Password(p.to_vec())
+    /// Create a new password.
+    pub fn new(p: impl AsRef<[u8]>) -> Password {
+        Password(p.as_ref().to_vec())
     }
 }
 
@@ -304,277 +282,13 @@ impl Deref for Identity {
 }
 
 impl Identity {
-    /// Create a new identity
+    /// Create a new identity.
     pub fn new(p: &[u8]) -> Identity {
         Identity(p.to_vec())
     }
 }
 
-/// Group trait
-// TODO(tarcieri): replace with `group` crate?
-pub trait Group {
-    /// Scalar element
-    type Scalar;
-
-    /// Base field element
-    type Element;
-
-    /// Transcript hash
-    type TranscriptHash;
-
-    /// Name
-    fn name() -> &'static str;
-
-    /// `m` constant
-    fn const_m() -> Self::Element;
-
-    /// `n` constant
-    fn const_n() -> Self::Element;
-
-    /// `s` constant
-    fn const_s() -> Self::Element;
-
-    /// Hash to scalar
-    fn hash_to_scalar(s: &[u8]) -> Self::Scalar;
-
-    /// Generate a random scalar
-    fn random_scalar<T>(cspring: &mut T) -> Self::Scalar
-    where
-        T: RngCore + CryptoRng;
-
-    /// Scalar negation
-    fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;
-
-    /// Convert base field element to bytes
-    fn element_to_bytes(e: &Self::Element) -> Vec<u8>;
-
-    /// Convert bytes to base field element
-    fn bytes_to_element(b: &[u8]) -> Option<Self::Element>;
-
-    /// Length of a base field element
-    fn element_length() -> usize;
-
-    /// Fixed-base scalar multiplication
-    fn basepoint_mult(s: &Self::Scalar) -> Self::Element;
-
-    /// Variable-base scalar multiplication
-    fn scalarmult(e: &Self::Element, s: &Self::Scalar) -> Self::Element;
-
-    /// Group operation
-    fn add(a: &Self::Element, b: &Self::Element) -> Self::Element;
-}
-
-/// Ed25519 elliptic curve group.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Ed25519Group;
-
-impl Group for Ed25519Group {
-    type Scalar = c2_Scalar;
-    type Element = c2_Element;
-    type TranscriptHash = Sha256;
-
-    fn name() -> &'static str {
-        "Ed25519"
-    }
-
-    fn const_m() -> c2_Element {
-        // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.M.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
-        // 15cfd18e385952982b6a8f8c7854963b58e34388c8e6dae891db756481a02312
-        CompressedEdwardsY([
-            0x15, 0xcf, 0xd1, 0x8e, 0x38, 0x59, 0x52, 0x98, 0x2b, 0x6a, 0x8f, 0x8c, 0x78, 0x54,
-            0x96, 0x3b, 0x58, 0xe3, 0x43, 0x88, 0xc8, 0xe6, 0xda, 0xe8, 0x91, 0xdb, 0x75, 0x64,
-            0x81, 0xa0, 0x23, 0x12,
-        ])
-        .decompress()
-        .unwrap()
-    }
-
-    fn const_n() -> c2_Element {
-        // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.N.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
-        // f04f2e7eb734b2a8f8b472eaf9c3c632576ac64aea650b496a8a20ff00e583c3
-        CompressedEdwardsY([
-            0xf0, 0x4f, 0x2e, 0x7e, 0xb7, 0x34, 0xb2, 0xa8, 0xf8, 0xb4, 0x72, 0xea, 0xf9, 0xc3,
-            0xc6, 0x32, 0x57, 0x6a, 0xc6, 0x4a, 0xea, 0x65, 0x0b, 0x49, 0x6a, 0x8a, 0x20, 0xff,
-            0x00, 0xe5, 0x83, 0xc3,
-        ])
-        .decompress()
-        .unwrap()
-    }
-
-    fn const_s() -> c2_Element {
-        // python -c "import binascii, spake2; b=binascii.hexlify(spake2.ParamsEd25519.S.to_bytes()); print(', '.join(['0x'+b[i:i+2] for i in range(0,len(b),2)]))"
-        // 6f00dae87c1be1a73b5922ef431cd8f57879569c222d22b1cd71e8546ab8e6f1
-        CompressedEdwardsY([
-            0x6f, 0x00, 0xda, 0xe8, 0x7c, 0x1b, 0xe1, 0xa7, 0x3b, 0x59, 0x22, 0xef, 0x43, 0x1c,
-            0xd8, 0xf5, 0x78, 0x79, 0x56, 0x9c, 0x22, 0x2d, 0x22, 0xb1, 0xcd, 0x71, 0xe8, 0x54,
-            0x6a, 0xb8, 0xe6, 0xf1,
-        ])
-        .decompress()
-        .unwrap()
-    }
-
-    fn hash_to_scalar(s: &[u8]) -> c2_Scalar {
-        ed25519_hash_to_scalar(s)
-    }
-
-    fn random_scalar<T>(cspring: &mut T) -> c2_Scalar
-    where
-        T: RngCore + CryptoRng,
-    {
-        c2_Scalar::random(cspring)
-    }
-
-    fn scalar_neg(s: &c2_Scalar) -> c2_Scalar {
-        -s
-    }
-
-    fn element_to_bytes(s: &c2_Element) -> Vec<u8> {
-        s.compress().as_bytes().to_vec()
-    }
-
-    fn element_length() -> usize {
-        32
-    }
-
-    fn bytes_to_element(b: &[u8]) -> Option<c2_Element> {
-        if b.len() != 32 {
-            return None;
-        }
-
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(b);
-
-        let cey = CompressedEdwardsY(bytes);
-        cey.decompress()
-    }
-
-    fn basepoint_mult(s: &c2_Scalar) -> c2_Element {
-        ED25519_BASEPOINT_POINT * s
-    }
-    fn scalarmult(e: &c2_Element, s: &c2_Scalar) -> c2_Element {
-        e * s
-    }
-
-    fn add(a: &c2_Element, b: &c2_Element) -> c2_Element {
-        a + b
-    }
-}
-
-fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
-    //c2_Scalar::hash_from_bytes::<Sha512>(&s)
-    // spake2.py does:
-    //  h = HKDF(salt=b"", ikm=s, hash=SHA256, info=b"SPAKE2 pw", len=32+16)
-    //  i = int(h, 16)
-    //  i % q
-
-    let mut okm = [0u8; 32 + 16];
-    Hkdf::<Sha256>::new(Some(b""), s)
-        .expand(b"SPAKE2 pw", &mut okm)
-        .unwrap();
-    //println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
-
-    let mut reducible = [0u8; 64]; // little-endian
-    for (i, x) in okm.iter().enumerate().take(32 + 16) {
-        reducible[32 + 16 - 1 - i] = *x;
-    }
-    //println!("reducible:  {}", reducible.iter().to_hex());
-    c2_Scalar::from_bytes_mod_order_wide(&reducible)
-    //let reduced = c2_Scalar::reduce(&reducible);
-    //println!("reduced:    {}", reduced.as_bytes().to_hex());
-    //println!("done");
-    //reduced
-}
-
-fn ed25519_hash_ab(
-    password_vec: &[u8],
-    id_a: &[u8],
-    id_b: &[u8],
-    first_msg: &[u8],
-    second_msg: &[u8],
-    key_bytes: &[u8],
-) -> Vec<u8> {
-    assert_eq!(first_msg.len(), 32);
-    assert_eq!(second_msg.len(), 32);
-    // the transcript is fixed-length, made up of 6 32-byte values:
-    // byte 0-31   : sha256(pw)
-    // byte 32-63  : sha256(idA)
-    // byte 64-95  : sha256(idB)
-    // byte 96-127 : X_msg
-    // byte 128-159: Y_msg
-    // byte 160-191: K_bytes
-    let mut transcript = [0u8; 6 * 32];
-
-    let mut pw_hash = Sha256::new();
-    pw_hash.update(password_vec);
-    transcript[0..32].copy_from_slice(&pw_hash.finalize());
-
-    let mut ida_hash = Sha256::new();
-    ida_hash.update(id_a);
-    transcript[32..64].copy_from_slice(&ida_hash.finalize());
-
-    let mut idb_hash = Sha256::new();
-    idb_hash.update(id_b);
-    transcript[64..96].copy_from_slice(&idb_hash.finalize());
-
-    transcript[96..128].copy_from_slice(first_msg);
-    transcript[128..160].copy_from_slice(second_msg);
-    transcript[160..192].copy_from_slice(key_bytes);
-
-    //println!("transcript: {:?}", transcript.iter().to_hex());
-
-    //let mut hash = G::TranscriptHash::default();
-    let mut hash = Sha256::new();
-    hash.update(transcript.to_vec());
-    hash.finalize().to_vec()
-}
-
-fn ed25519_hash_symmetric(
-    password_vec: &[u8],
-    id_s: &[u8],
-    msg_u: &[u8],
-    msg_v: &[u8],
-    key_bytes: &[u8],
-) -> Vec<u8> {
-    assert_eq!(msg_u.len(), 32);
-    assert_eq!(msg_v.len(), 32);
-    // # since we don't know which side is which, we must sort the messages
-    // first_msg, second_msg = sorted([msg1, msg2])
-    // transcript = b"".join([sha256(pw).digest(),
-    //                        sha256(idSymmetric).digest(),
-    //                        first_msg, second_msg, K_bytes])
-
-    // the transcript is fixed-length, made up of 5 32-byte values:
-    // byte 0-31   : sha256(pw)
-    // byte 32-63  : sha256(idSymmetric)
-    // byte 64-95  : X_msg
-    // byte 96-127 : Y_msg
-    // byte 128-159: K_bytes
-    let mut transcript = [0u8; 5 * 32];
-
-    let mut pw_hash = Sha256::new();
-    pw_hash.update(password_vec);
-    transcript[0..32].copy_from_slice(&pw_hash.finalize());
-
-    let mut ids_hash = Sha256::new();
-    ids_hash.update(id_s);
-    transcript[32..64].copy_from_slice(&ids_hash.finalize());
-
-    if msg_u < msg_v {
-        transcript[64..96].copy_from_slice(msg_u);
-        transcript[96..128].copy_from_slice(msg_v);
-    } else {
-        transcript[64..96].copy_from_slice(msg_v);
-        transcript[96..128].copy_from_slice(msg_u);
-    }
-    transcript[128..160].copy_from_slice(key_bytes);
-
-    let mut hash = Sha256::new();
-    hash.update(transcript.to_vec());
-    hash.finalize().to_vec()
-}
-
-/* "session type pattern" */
-
+/// Session type identifying the "side" in a SPAKE2 exchange.
 #[derive(Debug, PartialEq, Eq)]
 enum Side {
     A,
@@ -597,6 +311,138 @@ pub struct Spake2<G: Group> {
 }
 
 impl<G: Group> Spake2<G> {
+    /// Start with identity `idA`.
+    ///
+    /// Uses the system RNG.
+    #[cfg(feature = "getrandom")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
+    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
+        Self::start_a_with_rng(password, id_a, id_b, OsRng)
+    }
+
+    /// Start with identity `idB`.
+    ///
+    /// Uses the system RNG.
+    #[cfg(feature = "getrandom")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
+    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
+        Self::start_b_with_rng(password, id_a, id_b, OsRng)
+    }
+
+    /// Start with symmetric identity.
+    ///
+    /// Uses the system RNG.
+    #[cfg(feature = "getrandom")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
+    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Spake2<G>, Vec<u8>) {
+        Self::start_symmetric_with_rng(password, id_s, OsRng)
+    }
+
+    /// Start with identity `idA` and the provided cryptographically secure RNG.
+    pub fn start_a_with_rng(
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
+        mut csrng: impl CryptoRng + RngCore,
+    ) -> (Spake2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
+        Self::start_a_internal(password, id_a, id_b, xy_scalar)
+    }
+
+    /// Start with identity `idB` and the provided cryptographically secure RNG.
+    pub fn start_b_with_rng(
+        password: &Password,
+        id_a: &Identity,
+        id_b: &Identity,
+        mut csrng: impl CryptoRng + RngCore,
+    ) -> (Spake2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
+        Self::start_b_internal(password, id_a, id_b, xy_scalar)
+    }
+
+    /// Start with symmetric identity and the provided cryptographically secure RNG.
+    pub fn start_symmetric_with_rng(
+        password: &Password,
+        id_s: &Identity,
+        mut csrng: impl CryptoRng + RngCore,
+    ) -> (Spake2<G>, Vec<u8>) {
+        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
+        Self::start_symmetric_internal(password, id_s, xy_scalar)
+    }
+
+    /// Finish SPAKE2.
+    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>> {
+        if msg2.len() != 1 + G::element_length() {
+            return Err(Error::WrongLength);
+        }
+        let msg_side = msg2[0];
+
+        match self.side {
+            Side::A => match msg_side {
+                0x42 => (), // 'B'
+                _ => return Err(Error::BadSide),
+            },
+            Side::B => match msg_side {
+                0x41 => (), // 'A'
+                _ => return Err(Error::BadSide),
+            },
+            Side::Symmetric => match msg_side {
+                0x53 => (), // 'S'
+                _ => return Err(Error::BadSide),
+            },
+        }
+
+        let msg2_element = match G::bytes_to_element(&msg2[1..]) {
+            Some(x) => x,
+            None => return Err(Error::CorruptMessage),
+        };
+
+        // a: K = (Y+N*(-pw))*x
+        // b: K = (X+M*(-pw))*y
+        let unblinding = match self.side {
+            Side::A => G::const_n(),
+            Side::B => G::const_m(),
+            Side::Symmetric => G::const_s(),
+        };
+        let tmp1 = G::scalarmult(&unblinding, &G::scalar_neg(&self.password_scalar));
+        let tmp2 = G::add(&msg2_element, &tmp1);
+        let key_element = G::scalarmult(&tmp2, &self.xy_scalar);
+        let key_bytes = G::element_to_bytes(&key_element);
+
+        // key = H(H(pw) + H(idA) + H(idB) + X + Y + K)
+        //transcript = b"".join([sha256(pw).digest(),
+        //                       sha256(idA).digest(), sha256(idB).digest(),
+        //                       X_msg, Y_msg, K_bytes])
+        //key = sha256(transcript).digest()
+        // note that both sides must use the same order
+
+        Ok(match self.side {
+            Side::A => ed25519::hash_ab(
+                &self.password_vec,
+                &self.id_a,
+                &self.id_b,
+                self.msg1.as_slice(),
+                &msg2[1..],
+                &key_bytes,
+            ),
+            Side::B => ed25519::hash_ab(
+                &self.password_vec,
+                &self.id_a,
+                &self.id_b,
+                &msg2[1..],
+                self.msg1.as_slice(),
+                &key_bytes,
+            ),
+            Side::Symmetric => ed25519::hash_symmetric(
+                &self.password_vec,
+                &self.id_s,
+                &self.msg1,
+                &msg2[1..],
+                &key_bytes,
+            ),
+        })
+    }
+
     fn start_internal(
         side: Side,
         password: &Password,
@@ -699,138 +545,6 @@ impl<G: Group> Spake2<G> {
             xy_scalar,
         )
     }
-
-    /// Start with identity `a`.
-    ///
-    /// Uses the system RNG.
-    #[cfg(feature = "getrandom")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
-    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
-        Self::start_a_with_rng(password, id_a, id_b, OsRng)
-    }
-
-    /// Start with identity `b`.
-    ///
-    /// Uses the system RNG.
-    #[cfg(feature = "getrandom")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
-    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
-        Self::start_b_with_rng(password, id_a, id_b, OsRng)
-    }
-
-    /// Start with symmetric identity.
-    ///
-    /// Uses the system RNG.
-    #[cfg(feature = "getrandom")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
-    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Spake2<G>, Vec<u8>) {
-        Self::start_symmetric_with_rng(password, id_s, OsRng)
-    }
-
-    /// Start with identity `a` and the provided cryptographically secure RNG.
-    pub fn start_a_with_rng(
-        password: &Password,
-        id_a: &Identity,
-        id_b: &Identity,
-        mut csrng: impl CryptoRng + RngCore,
-    ) -> (Spake2<G>, Vec<u8>) {
-        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
-        Self::start_a_internal(password, id_a, id_b, xy_scalar)
-    }
-
-    /// Start with identity `b` and the provided cryptographically secure RNG.
-    pub fn start_b_with_rng(
-        password: &Password,
-        id_a: &Identity,
-        id_b: &Identity,
-        mut csrng: impl CryptoRng + RngCore,
-    ) -> (Spake2<G>, Vec<u8>) {
-        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
-        Self::start_b_internal(password, id_a, id_b, xy_scalar)
-    }
-
-    /// Start with symmetric identity and the provided cryptographically secure RNG.
-    pub fn start_symmetric_with_rng(
-        password: &Password,
-        id_s: &Identity,
-        mut csrng: impl CryptoRng + RngCore,
-    ) -> (Spake2<G>, Vec<u8>) {
-        let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
-        Self::start_symmetric_internal(password, id_s, xy_scalar)
-    }
-
-    /// Finish SPAKE2.
-    pub fn finish(self, msg2: &[u8]) -> Result<Vec<u8>, Error> {
-        if msg2.len() != 1 + G::element_length() {
-            return Err(Error::WrongLength);
-        }
-        let msg_side = msg2[0];
-
-        match self.side {
-            Side::A => match msg_side {
-                0x42 => (), // 'B'
-                _ => return Err(Error::BadSide),
-            },
-            Side::B => match msg_side {
-                0x41 => (), // 'A'
-                _ => return Err(Error::BadSide),
-            },
-            Side::Symmetric => match msg_side {
-                0x53 => (), // 'S'
-                _ => return Err(Error::BadSide),
-            },
-        }
-
-        let msg2_element = match G::bytes_to_element(&msg2[1..]) {
-            Some(x) => x,
-            None => return Err(Error::CorruptMessage),
-        };
-
-        // a: K = (Y+N*(-pw))*x
-        // b: K = (X+M*(-pw))*y
-        let unblinding = match self.side {
-            Side::A => G::const_n(),
-            Side::B => G::const_m(),
-            Side::Symmetric => G::const_s(),
-        };
-        let tmp1 = G::scalarmult(&unblinding, &G::scalar_neg(&self.password_scalar));
-        let tmp2 = G::add(&msg2_element, &tmp1);
-        let key_element = G::scalarmult(&tmp2, &self.xy_scalar);
-        let key_bytes = G::element_to_bytes(&key_element);
-
-        // key = H(H(pw) + H(idA) + H(idB) + X + Y + K)
-        //transcript = b"".join([sha256(pw).digest(),
-        //                       sha256(idA).digest(), sha256(idB).digest(),
-        //                       X_msg, Y_msg, K_bytes])
-        //key = sha256(transcript).digest()
-        // note that both sides must use the same order
-
-        Ok(match self.side {
-            Side::A => ed25519_hash_ab(
-                &self.password_vec,
-                &self.id_a,
-                &self.id_b,
-                self.msg1.as_slice(),
-                &msg2[1..],
-                &key_bytes,
-            ),
-            Side::B => ed25519_hash_ab(
-                &self.password_vec,
-                &self.id_a,
-                &self.id_b,
-                &msg2[1..],
-                self.msg1.as_slice(),
-                &key_bytes,
-            ),
-            Side::Symmetric => ed25519_hash_symmetric(
-                &self.password_vec,
-                &self.id_s,
-                &self.msg1,
-                &msg2[1..],
-                &key_bytes,
-            ),
-        })
-    }
 }
 
 impl<G: Group> fmt::Debug for Spake2<G> {
@@ -863,5 +577,207 @@ impl fmt::Debug for MaybeUtf8<'_> {
     }
 }
 
-#[cfg(test)]
-mod tests;
+/// This compares results against the python compatibility tests:
+/// spake2.test.test_compat.SPAKE2.test_asymmetric . The python test passes a
+/// deterministic RNG (used only for tests, of course) into the per-Group
+/// "random_scalar()" function, which results in some particular scalar.
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use crate::*;
+    use curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
+    use num_bigint::BigUint;
+
+    // the python tests show the long-integer form of scalars. the rust code
+    // wants an array of bytes (little-endian). Make sure the way we convert
+    // things works correctly.
+    fn decimal_to_scalar(d: &[u8]) -> c2_Scalar {
+        let bytes = BigUint::parse_bytes(d, 10).unwrap().to_bytes_le();
+        assert_eq!(bytes.len(), 32);
+        let mut b2 = [0u8; 32];
+        b2.copy_from_slice(&bytes);
+        c2_Scalar::from_bytes_mod_order(b2)
+    }
+
+    #[test]
+    fn test_convert() {
+        let t1_decimal =
+            b"2238329342913194256032495932344128051776374960164957527413114840482143558222";
+        let t1_scalar = decimal_to_scalar(t1_decimal);
+        let t1_bytes = t1_scalar.to_bytes();
+        let expected = [
+            0x4e, 0x5a, 0xb4, 0x34, 0x5d, 0x47, 0x08, 0x84, 0x59, 0x13, 0xb4, 0x64, 0x1b, 0xc2,
+            0x7d, 0x52, 0x52, 0xa5, 0x85, 0x10, 0x1b, 0xcc, 0x42, 0x44, 0xd4, 0x49, 0xf4, 0xa8,
+            0x79, 0xd9, 0xf2, 0x04,
+        ];
+        assert_eq!(t1_bytes, expected);
+        //println!("t1_scalar is {:?}", t1_scalar);
+    }
+
+    #[test]
+    fn test_serialize_basepoint() {
+        // make sure elements are serialized same as the python library
+        let exp = "5866666666666666666666666666666666666666666666666666666666666666";
+        let base_vec = ED25519_BASEPOINT_POINT.compress().as_bytes().to_vec();
+        let base_hex = hex::encode(base_vec);
+        println!("exp: {:?}", exp);
+        println!("got: {:?}", base_hex);
+        assert_eq!(exp, base_hex);
+    }
+
+    #[test]
+    fn test_password_to_scalar() {
+        let password = Password::new(b"password");
+        let expected_pw_scalar = decimal_to_scalar(
+            b"3515301705789368674385125653994241092664323519848410154015274772661223168839",
+        );
+        let pw_scalar = Ed25519Group::hash_to_scalar(&password);
+        println!("exp: {:?}", hex::encode(expected_pw_scalar.as_bytes()));
+        println!("got: {:?}", hex::encode(pw_scalar.as_bytes()));
+        assert_eq!(&pw_scalar, &expected_pw_scalar);
+    }
+
+    #[test]
+    fn test_sizes() {
+        let (s1, msg1) = Spake2::<Ed25519Group>::start_a(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+        );
+        assert_eq!(msg1.len(), 1 + 32);
+        let (s2, msg2) = Spake2::<Ed25519Group>::start_b(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+        );
+        assert_eq!(msg2.len(), 1 + 32);
+        let key1 = s1.finish(&msg2).unwrap();
+        let key2 = s2.finish(&msg1).unwrap();
+        assert_eq!(key1.len(), 32);
+        assert_eq!(key2.len(), 32);
+
+        let (s1, msg1) = Spake2::<Ed25519Group>::start_symmetric(
+            &Password::new(b"password"),
+            &Identity::new(b"idS"),
+        );
+        assert_eq!(msg1.len(), 1 + 32);
+        let (s2, msg2) = Spake2::<Ed25519Group>::start_symmetric(
+            &Password::new(b"password"),
+            &Identity::new(b"idS"),
+        );
+        assert_eq!(msg2.len(), 1 + 32);
+        let key1 = s1.finish(&msg2).unwrap();
+        let key2 = s2.finish(&msg1).unwrap();
+        assert_eq!(key1.len(), 32);
+        assert_eq!(key2.len(), 32);
+    }
+
+    #[test]
+    fn test_hash_ab() {
+        let key = ed25519::hash_ab(
+            b"pw",
+            b"idA",
+            b"idB",
+            b"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // len=32
+            b"YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+            b"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        );
+        let expected_key = "d59d9ba920f7092565cec747b08d5b2e981d553ac32fde0f25e5b4a4cfca3efd";
+        assert_eq!(hex::encode(key), expected_key);
+    }
+
+    #[test]
+    fn test_hash_symmetric() {
+        let key = ed25519::hash_symmetric(
+            b"pw",
+            b"idSymmetric",
+            b"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+            b"YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
+            b"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        );
+        let expected_key = "b0b31e4401aae37d91a9a8bf6fbb1298cafc005ff9142e3ffc5b9799fb11128b";
+        assert_eq!(hex::encode(key), expected_key);
+    }
+
+    #[test]
+    fn test_asymmetric() {
+        let scalar_a = decimal_to_scalar(
+            b"2611694063369306139794446498317402240796898290761098242657700742213257926693",
+        );
+        let scalar_b = decimal_to_scalar(
+            b"7002393159576182977806091886122272758628412261510164356026361256515836884383",
+        );
+        let expected_pw_scalar = decimal_to_scalar(
+            b"3515301705789368674385125653994241092664323519848410154015274772661223168839",
+        );
+
+        println!("scalar_a is {}", hex::encode(scalar_a.as_bytes()));
+
+        let (s1, msg1) = Spake2::<Ed25519Group>::start_a_internal(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+            scalar_a,
+        );
+        let expected_msg1 = "416fc960df73c9cf8ed7198b0c9534e2e96a5984bfc5edc023fd24dacf371f2af9";
+
+        println!();
+        println!("xys1: {:?}", hex::encode(s1.xy_scalar.as_bytes()));
+        println!();
+        println!("pws1: {:?}", hex::encode(s1.password_scalar.as_bytes()));
+        println!("exp : {:?}", hex::encode(expected_pw_scalar.as_bytes()));
+        println!();
+        println!("msg1: {:?}", hex::encode(&msg1));
+        println!("exp : {:?}", expected_msg1);
+        println!();
+
+        assert_eq!(
+            hex::encode(expected_pw_scalar.as_bytes()),
+            hex::encode(s1.password_scalar.as_bytes())
+        );
+        assert_eq!(hex::encode(&msg1), expected_msg1);
+
+        let (s2, msg2) = Spake2::<Ed25519Group>::start_b_internal(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+            scalar_b,
+        );
+        assert_eq!(expected_pw_scalar, s2.password_scalar);
+        assert_eq!(
+            hex::encode(&msg2),
+            "42354e97b88406922b1df4bea1d7870f17aed3dba7c720b313edae315b00959309"
+        );
+
+        let key1 = s1.finish(&msg2).unwrap();
+        let key2 = s2.finish(&msg1).unwrap();
+        assert_eq!(key1, key2);
+        assert_eq!(
+            hex::encode(key1),
+            "712295de7219c675ddd31942184aa26e0a957cf216bc230d165b215047b520c1"
+        );
+    }
+
+    #[test]
+    fn test_debug() {
+        let (s1, _msg1) = Spake2::<Ed25519Group>::start_a(
+            &Password::new(b"password"),
+            &Identity::new(b"idA"),
+            &Identity::new(b"idB"),
+        );
+        println!("s1: {:?}", s1);
+        assert_eq!(
+            format!("{:?}", s1),
+            "SPAKE2 { group: \"Ed25519\", side: A, idA: (s=idA), idB: (s=idB), idS: (s=) }"
+        );
+
+        let (s2, _msg1) = Spake2::<Ed25519Group>::start_symmetric(
+            &Password::new(b"password"),
+            &Identity::new(b"idS"),
+        );
+        println!("s2: {:?}", s2);
+        assert_eq!(
+            format!("{:?}", s2),
+            "SPAKE2 { group: \"Ed25519\", side: Symmetric, idA: (s=), idB: (s=), idS: (s=idS) }"
+        );
+    }
+}
