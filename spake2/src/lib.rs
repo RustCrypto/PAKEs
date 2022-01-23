@@ -248,7 +248,7 @@ use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "getrandom")]
 use rand_core::OsRng;
 
-/// Password
+/// Password type.
 // TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Password(Vec<u8>);
