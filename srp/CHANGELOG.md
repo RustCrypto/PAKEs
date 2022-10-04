@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 0.6.0 (2022-01-22)
 ### Changed
-- Use `modpow` for constant time modular exponentation ([#78])
+- Use `modpow` for constant time modular exponentiation ([#78])
 - Rebuild library ([#79])
 
 [#78]: https://github.com/RustCrypto/PAKEs/pull/78
