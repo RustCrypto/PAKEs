@@ -20,8 +20,8 @@ lazy_static = "1.2"
 subtle = "2.4"
 
 [dev-dependencies]
-rand = "0.6"
-sha2 = "0.10"
-sha-1 = "0.10"
-num-traits = "0.2"
 hex-literal = "0.3"
+num-traits = "0.2"
+rand = "0.6"
+sha1 = "0.10"
+sha2 = "0.10"
