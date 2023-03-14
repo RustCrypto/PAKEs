@@ -1,0 +1,56 @@
+[package]
+name = "aucpace"
+version = "0.1.0"
+authors = ["Sam Leonard <tritoke@protonmail.com>"]
+description = "AuCPace protocol implementation"
+documentation = "https://docs.rs/aucpace"
+homepage = "https://github.com/RustCrypto/PAKEs"
+repository = "https://github.com/RustCrypto/PAKEs/tree/master/aucpace"
+license = "MIT OR Apache-2.0"
+keywords = ["crypto", "pake", "authentication"]
+categories = ["cryptography", "authentication"]
+exclude = [".gitignore"]
+readme = "README.md"
+edition = "2021"
+rust-version = "1.60"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+curve25519-dalek = { version = "4.0.0-rc.1", default-features = false, features = ["digest", "rand_core"] }
+password-hash = { version = "0.4", default-features = false, features = ["rand_core"] }
+rand_core = { version = "0.6", default-features = false }
+serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
+serde_arrays = { version = "0.1", optional = true }
+subtle = { version = "2.4", default-features = false }
+scrypt = { version = "0.10", default-features = false, optional = true, features = ["simple"] }
+sha2 = { version = "0.10", default-features = false, optional = true }
+
+[features]
+default = ["scrypt", "sha2", "getrandom"]
+alloc = []
+partial_augmentation = []
+strong_aucpace = []
+zeroize = ["curve25519-dalek/zeroize"]
+serde = ["dep:serde", "serde_arrays", "curve25519-dalek/serde"]
+getrandom = ["rand_core/getrandom"]
+
+[dev-dependencies]
+bincode = "1"
+postcard = "1"
+
+[[example]]
+name = "key_agreement"
+required-features = ["default", "alloc", "serde"]
+
+[[example]]
+name = "key_agreement_no_std"
+required-features = ["default", "serde"]
+
+[[example]]
+name = "key_agreement_partial_aug"
+required-features = ["default", "serde", "partial_augmentation"]
+
+[[example]]
+name = "key_agreement_strong"
+required-features = ["default", "serde", "strong_aucpace"]
