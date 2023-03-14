@@ -168,7 +168,7 @@ pub(crate) fn hash_ab(
 
     //let mut hash = G::TranscriptHash::default();
     let mut hash = Sha256::new();
-    hash.update(transcript.to_vec());
+    hash.update(transcript);
     hash.finalize().to_vec()
 }
 
@@ -214,6 +214,6 @@ pub(crate) fn hash_symmetric(
     transcript[128..160].copy_from_slice(key_bytes);
 
     let mut hash = Sha256::new();
-    hash.update(transcript.to_vec());
+    hash.update(transcript);
     hash.finalize().to_vec()
 }
