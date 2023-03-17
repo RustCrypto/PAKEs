@@ -333,7 +333,7 @@ where
         let cofactor = Scalar::ONE;
         let salt_point = z * (q * cofactor);
         let salt = salt_point.compress().to_bytes();
-        let salt_string = SaltString::b64_encode(&salt).map_err(Error::PasswordHashing)?;
+        let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
 
         Ok((q, salt_string))
     }
@@ -653,7 +653,7 @@ where
         // then multiplied by cj again.
         let exponent = (self.blinding_value * cofactor * cofactor).invert() * cofactor;
         let salt = (blinded_salt * exponent).compress().to_bytes();
-        let salt_string = SaltString::b64_encode(&salt).map_err(Error::PasswordHashing)?;
+        let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
 
         // compute the PRS
         let pw_hash = hash_password::<&[u8], &[u8], &SaltString, H, BUFSIZ>(
@@ -703,7 +703,7 @@ where
         // then multiplied by cj again.
         let exponent = (self.blinding_value * cofactor * cofactor).invert() * cofactor;
         let salt = (blinded_salt * exponent).compress().to_bytes();
-        let salt_string = SaltString::b64_encode(&salt).map_err(Error::PasswordHashing)?;
+        let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
 
         // compute the PRS
         let pw_hash = hash_password_alloc(
@@ -1022,10 +1022,10 @@ mod tests {
         let password = "data_x_worf_4ever_<3";
         let mut bytes = [0u8; Salt::RECOMMENDED_LENGTH];
         OsRng.fill_bytes(&mut bytes);
-        let salt = SaltString::b64_encode(&bytes).expect("Salt length invariant broken.");
+        let salt = SaltString::encode_b64(&bytes).expect("Salt length invariant broken.");
         // These are weak parameters, do not use them
         // they are used here to make the test run faster
-        let params = Params::new(1, 8, 1).unwrap();
+        let params: Params = Default::default();
 
         let no_std_res = hash_password::<&str, &str, &SaltString, Scrypt, 100>(
             username, password, &salt, params, Scrypt,

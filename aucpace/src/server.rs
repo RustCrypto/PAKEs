@@ -455,7 +455,7 @@ where
         // It is okay to expect here because SaltString has a buffer of 64 bytes by requirement
         // from the PHC spec. 48 bytes of data when encoded as base64 transform to 64 bytes.
         // This gives us the most entropy possible from the hash in the SaltString.
-        let salt = SaltString::b64_encode(&hash_bytes[..48])
+        let salt = SaltString::encode_b64(&hash_bytes[..48])
             .expect("SaltString maximum length invariant broken");
 
         let message = ServerMessage::AugmentationInfo {
