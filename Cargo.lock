@@ -22,7 +22,7 @@ dependencies = [
  "rand_core 0.6.4",
  "scrypt",
  "serde",
- "serde_arrays",
+ "serde-byte-array",
  "sha2",
  "subtle",
 ]
@@ -487,10 +487,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_arrays"
-version = "0.1.0"
+name = "serde-byte-array"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38636132857f68ec3d5f3eb121166d2af33cb55174c4d5ff645db6165cbef0fd"
+checksum = "63213ee4ed648dbd87db6fa993d4275b46bfb4ddfd95b3756045007c2b28f742"
 dependencies = [
  "serde",
 ]

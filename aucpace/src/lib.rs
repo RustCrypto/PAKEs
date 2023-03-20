@@ -109,9 +109,9 @@ pub use self::database::PartialAugDatabase;
 pub use self::database::StrongDatabase;
 
 /// Default Server instantiation with SHA512, OsRng and a nonce size of 16 bytes
-#[cfg(feature = "default")]
+#[cfg(all(feature = "sha2", feature = "getrandom"))]
 pub type Server = AuCPaceServer<sha2::Sha512, rand_core::OsRng, 16>;
 
 /// Default Client instantiation with SHA512, Scrypt, OsRng and a nonce size of 16 bytes
-#[cfg(feature = "default")]
+#[cfg(all(feature = "scrypt", feature = "sha2", feature = "getrandom"))]
 pub type Client = AuCPaceClient<sha2::Sha512, scrypt::Scrypt, rand_core::OsRng, 16>;

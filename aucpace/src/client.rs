@@ -948,7 +948,7 @@ where
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ClientMessage<'a, const K1: usize> {
     /// SSID establishment message - the client's nonce: `t`
-    Nonce(#[cfg_attr(feature = "serde", serde(with = "serde_arrays"))] [u8; K1]),
+    Nonce(#[cfg_attr(feature = "serde", serde(with = "serde_byte_array"))] [u8; K1]),
 
     /// Username - the client's username
     Username(&'a [u8]),
@@ -967,7 +967,7 @@ pub enum ClientMessage<'a, const K1: usize> {
     PublicKey(RistrettoPoint),
 
     /// Explicit Mutual Authentication - the client's authenticator: `Tb`
-    Authenticator(#[cfg_attr(feature = "serde", serde(with = "serde_arrays"))] [u8; 64]),
+    Authenticator(#[cfg_attr(feature = "serde", serde(with = "serde_byte_array"))] [u8; 64]),
 
     /// Registration - the username, verifier, salt and parameters needed for registering a user
     /// NOTE: if the UAD field is desired this should be handled separately and sent at the same time
@@ -1009,13 +1009,11 @@ pub enum ClientMessage<'a, const K1: usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Client;
-    use rand_core::OsRng;
 
     #[test]
     #[cfg(all(feature = "alloc", feature = "getrandom", feature = "scrypt"))]
     fn test_hash_password_no_std_and_alloc_agree() {
-        use rand_core::RngCore;
+        use rand_core::{OsRng, RngCore};
         use scrypt::{Params, Scrypt};
 
         let username = "worf@starship.enterprise";
@@ -1037,8 +1035,11 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "getrandom"))]
+    #[cfg(all(feature = "getrandom", feature = "sha2"))]
     fn test_client_doesnt_accept_insecure_ssid() {
+        use crate::Client;
+        use rand_core::OsRng;
+
         let mut client = Client::new(OsRng);
         let res = client.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));

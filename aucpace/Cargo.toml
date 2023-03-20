@@ -21,7 +21,7 @@ curve25519-dalek = { version = "4.0.0-rc.1", default-features = false, features 
 password-hash = { version = "0.5", default-features = false, features = ["rand_core"] }
 rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, optional = true, features = ["derive"] }
-serde_arrays = { version = "0.1", optional = true }
+serde-byte-array = { version = "0.1", optional = true }
 subtle = { version = "2.4", default-features = false }
 scrypt = { version = "0.11", default-features = false, optional = true, features = ["simple"] }
 sha2 = { version = "0.10", default-features = false, optional = true }
@@ -32,7 +32,7 @@ alloc = []
 partial_augmentation = []
 strong_aucpace = []
 zeroize = ["curve25519-dalek/zeroize"]
-serde = ["dep:serde", "serde_arrays", "curve25519-dalek/serde"]
+serde = ["dep:serde", "serde-byte-array", "curve25519-dalek/serde"]
 getrandom = ["rand_core/getrandom"]
 
 [dev-dependencies]

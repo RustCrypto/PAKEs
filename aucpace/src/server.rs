@@ -665,7 +665,7 @@ where
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ServerMessage<'a, const K1: usize> {
     /// SSID establishment message - the server's nonce: `s`
-    Nonce(#[cfg_attr(feature = "serde", serde(with = "serde_arrays"))] [u8; K1]),
+    Nonce(#[cfg_attr(feature = "serde", serde(with = "serde_byte_array"))] [u8; K1]),
 
     /// Information required for the AuCPace Augmentation layer sub-step
     AugmentationInfo {
@@ -705,17 +705,18 @@ pub enum ServerMessage<'a, const K1: usize> {
     PublicKey(RistrettoPoint),
 
     /// Explicit Mutual Authentication - the server's authenticator: `Ta`
-    Authenticator(#[cfg_attr(feature = "serde", serde(with = "serde_arrays"))] [u8; 64]),
+    Authenticator(#[cfg_attr(feature = "serde", serde(with = "serde_byte_array"))] [u8; 64]),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Server;
-    use rand_core::OsRng;
 
     #[test]
+    #[cfg(all(feature = "sha2", feature = "getrandom"))]
     fn test_server_doesnt_accept_insecure_ssid() {
+        use crate::Server;
+        use rand_core::OsRng;
         let mut server = Server::new(OsRng);
         let res = server.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
