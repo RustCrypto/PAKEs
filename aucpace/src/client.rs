@@ -9,6 +9,7 @@ use crate::{
 use crate::constants::MIN_SSID_LEN;
 use core::marker::PhantomData;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{
     digest::consts::U64,
     digest::{Digest, Output},
@@ -526,8 +527,13 @@ where
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>>
     where
-        S: Into<Salt<'a>>,
+        S: Into<Salt<'salt>>,
     {
+        // check for the identity point
+        if x_pub.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let cofactor = Scalar::ONE;
         let pw_hash = hash_password::<&[u8], &[u8], S, H, BUFSIZ>(
             self.username,
@@ -571,6 +577,11 @@ where
     where
         S: Into<Salt<'a>>,
     {
+        // check for the identity point
+        if x_pub.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let cofactor = Scalar::ONE;
         let pw_hash = hash_password_alloc(self.username, self.password, salt, params, hasher)?;
         let w = scalar_from_hash(pw_hash)?;
@@ -645,6 +656,11 @@ where
         params: H::Params,
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>> {
+        // check for the identity point
+        if x_pub.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         // first recover the salt
         let cofactor = Scalar::ONE;
 
@@ -695,6 +711,11 @@ where
         params: H::Params,
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>> {
+        // check for the identity point
+        if x_pub.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         // first recover the salt
         let cofactor = Scalar::ONE;
 
@@ -702,7 +723,13 @@ where
         // I have interpreted this as the multiplicative inverse of (r * cj^2)
         // then multiplied by cj again.
         let exponent = (self.blinding_value * cofactor * cofactor).invert() * cofactor;
-        let salt = (blinded_salt * exponent).compress().to_bytes();
+
+        // check if the salt point is the neutral element
+        let salt_point = blinded_salt * exponent;
+        if salt_point.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+        let salt = salt_point.compress().to_bytes();
         let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
 
         // compute the PRS
@@ -804,7 +831,11 @@ where
     pub fn receive_server_pubkey(
         self,
         server_pubkey: RistrettoPoint,
-    ) -> (AuCPaceClientExpMutAuth<D, K1>, ClientMessage<'static, K1>) {
+    ) -> Result<(AuCPaceClientExpMutAuth<D, K1>, ClientMessage<'static, K1>)> {
+        if server_pubkey.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let sk1 = compute_first_session_key::<D>(self.ssid, self.priv_key, server_pubkey);
         let (ta, tb) = compute_authenticator_messages::<D>(self.ssid, sk1);
         let next_step = AuCPaceClientExpMutAuth::new(self.ssid, sk1, ta);
@@ -813,7 +844,7 @@ where
                 .try_into()
                 .expect("array length invariant broken"),
         );
-        (next_step, message)
+        Ok((next_step, message))
     }
 
     /// Allow the user to exit the protocol early in the case of implicit authentication
@@ -826,9 +857,13 @@ where
     /// # Return:
     /// `sk`: the session key reached by the AuCPace protocol
     ///
-    pub fn implicit_auth(self, server_pubkey: RistrettoPoint) -> Output<D> {
+    pub fn implicit_auth(self, server_pubkey: RistrettoPoint) -> Result<Output<D>> {
+        if server_pubkey.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let sk1 = compute_first_session_key::<D>(self.ssid, self.priv_key, server_pubkey);
-        compute_session_key::<D>(self.ssid, sk1)
+        Ok(compute_session_key::<D>(self.ssid, sk1))
     }
 }
 
@@ -1008,6 +1043,7 @@ pub enum ClientMessage<'a, const K1: usize> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused)]
     use super::*;
 
     #[test]
@@ -1043,5 +1079,188 @@ mod tests {
         let mut client = Client::new(OsRng);
         let res = client.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "scrypt"))]
+    fn test_client_doesnt_accept_invalid_x_pub() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: AuCPaceClientAugLayer<'_, sha2::Sha512, scrypt::Scrypt, 16> =
+            AuCPaceClientAugLayer::new(
+                ssid,
+                b"bob",
+                b"bob's very secure password that nobody knows about, honest",
+            );
+        let res = aug_client.generate_cpace::<'_, &SaltString, 100>(
+            RistrettoPoint::identity(),
+            &SaltString::encode_b64(b"saltyboi").unwrap(),
+            scrypt::Params::recommended(),
+            scrypt::Scrypt,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "scrypt", feature = "alloc"))]
+    fn test_alloc_client_doesnt_accept_invalid_x_pub() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: AuCPaceClientAugLayer<'_, sha2::Sha512, scrypt::Scrypt, 16> =
+            AuCPaceClientAugLayer::new(
+                ssid,
+                b"bob",
+                b"bob's very secure password that nobody knows about, honest",
+            );
+        let res = aug_client.generate_cpace_alloc(
+            RistrettoPoint::identity(),
+            &SaltString::encode_b64(b"saltyboi").unwrap(),
+            scrypt::Params::recommended(),
+            scrypt::Scrypt,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "scrypt", feature = "strong_aucpace"))]
+    fn test_strong_client_doesnt_accept_invalid_x_pub() {
+        use crate::utils::H0;
+        use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+        use curve25519_dalek::traits::Identity;
+
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: StrongAuCPaceClientAugLayer<'_, sha2::Sha512, scrypt::Scrypt, 16> =
+            StrongAuCPaceClientAugLayer::new(
+                ssid,
+                b"bob",
+                b"bob's very secure password that nobody knows about, honest",
+                Scalar::from(69u32),
+            );
+        let res = aug_client.generate_cpace::<100>(
+            RistrettoPoint::identity(),
+            RISTRETTO_BASEPOINT_POINT,
+            scrypt::Params::recommended(),
+            scrypt::Scrypt,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(
+        feature = "sha2",
+        feature = "scrypt",
+        feature = "alloc",
+        feature = "strong_aucpace"
+    ))]
+    fn test_strong_alloc_client_doesnt_accept_invalid_x_pub() {
+        use crate::utils::H0;
+        use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+        use curve25519_dalek::traits::Identity;
+
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: StrongAuCPaceClientAugLayer<'_, sha2::Sha512, scrypt::Scrypt, 16> =
+            StrongAuCPaceClientAugLayer::new(
+                ssid,
+                b"bob",
+                b"bob's very secure password that nobody knows about, honest",
+                Scalar::from(69u32),
+            );
+        let res = aug_client.generate_cpace_alloc(
+            RistrettoPoint::identity(),
+            RISTRETTO_BASEPOINT_POINT,
+            scrypt::Params::recommended(),
+            scrypt::Scrypt,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "scrypt"))]
+    fn test_client_doesnt_accept_invalid_pubkey() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: AuCPaceClientRecvServerKey<sha2::Sha512, 16> =
+            AuCPaceClientRecvServerKey::new(ssid, Scalar::from(420u32));
+        let res = aug_client.receive_server_pubkey(RistrettoPoint::identity());
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "scrypt"))]
+    fn test_client_doesnt_accept_invalid_pubkey_implicit_auth() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: AuCPaceClientRecvServerKey<sha2::Sha512, 16> =
+            AuCPaceClientRecvServerKey::new(ssid, Scalar::from(420u32));
+        let res = aug_client.implicit_auth(RistrettoPoint::identity());
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(
+        feature = "sha2",
+        feature = "scrypt",
+        feature = "alloc",
+        feature = "strong_aucpace"
+    ))]
+    fn test_strong_alloc_client_doesnt_accept_invalid_salt() {
+        use crate::utils::H0;
+        use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+        use curve25519_dalek::traits::Identity;
+
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: StrongAuCPaceClientAugLayer<'_, sha2::Sha512, scrypt::Scrypt, 16> =
+            StrongAuCPaceClientAugLayer::new(
+                ssid,
+                b"bob",
+                b"bob's very secure password that nobody knows about, honest",
+                Scalar::from(69u32),
+            );
+        let res = aug_client.generate_cpace_alloc(
+            RISTRETTO_BASEPOINT_POINT,
+            RistrettoPoint::identity(),
+            scrypt::Params::recommended(),
+            scrypt::Scrypt,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
     }
 }

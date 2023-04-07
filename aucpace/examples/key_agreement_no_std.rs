@@ -169,7 +169,7 @@ fn main() -> Result<()> {
     // now receive the client's public key
     client_message = recv!(client_buf);
     let server = if let ClientMessage::PublicKey(client_pubkey) = client_message {
-        server.receive_client_pubkey(client_pubkey)
+        server.receive_client_pubkey(client_pubkey)?
     } else {
         panic!("Received invalid client message {:?}", client_message);
     };
@@ -177,7 +177,7 @@ fn main() -> Result<()> {
     // now receive the server's public key
     server_message = recv!(server_buf);
     let (client, message) = if let ServerMessage::PublicKey(server_pubkey) = server_message {
-        client.receive_server_pubkey(server_pubkey)
+        client.receive_server_pubkey(server_pubkey)?
     } else {
         panic!("Received invalid server message {:?}", server_message);
     };

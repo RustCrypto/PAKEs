@@ -49,7 +49,7 @@ required-features = ["default", "serde"]
 
 [[example]]
 name = "key_agreement_partial_aug"
-required-features = ["default", "serde", "partial_augmentation"]
+required-features = ["default", "alloc", "serde", "partial_augmentation"]
 
 [[example]]
 name = "key_agreement_strong"

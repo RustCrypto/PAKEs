@@ -6,6 +6,7 @@ use crate::utils::{
 use crate::Database;
 use crate::{Error, Result};
 use core::marker::PhantomData;
+use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{
     digest::consts::U64,
     digest::{Digest, Output},
@@ -295,10 +296,10 @@ where
         blinded: RistrettoPoint,
         database: &DB,
         mut rng: CSPRNG,
-    ) -> (
+    ) -> Result<(
         AuCPaceServerCPaceSubstep<D, CSPRNG, K1>,
         ServerMessage<'static, K1>,
-    )
+    )>
     where
         U: AsRef<[u8]>,
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>,
@@ -308,10 +309,10 @@ where
 
         // generate the prs and client message
         let (prs, message) =
-            self.generate_prs_strong(username.as_ref(), blinded, database, &mut rng, x, x_pub);
+            self.generate_prs_strong(username.as_ref(), blinded, database, &mut rng, x, x_pub)?;
         let next_step = AuCPaceServerCPaceSubstep::new(self.ssid, prs, rng);
 
-        (next_step, message)
+        Ok((next_step, message))
     }
 
     /// Accept the user's username, and blinded point U and generate the ClientInfo for the response.
@@ -340,10 +341,10 @@ where
         blinded: RistrettoPoint,
         database: &DB,
         mut rng: CSPRNG,
-    ) -> (
+    ) -> Result<(
         AuCPaceServerCPaceSubstep<D, CSPRNG, K1>,
         ServerMessage<'static, K1>,
-    )
+    )>
     where
         U: AsRef<[u8]>,
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>
@@ -353,16 +354,16 @@ where
         let user = username.as_ref();
         let (prs, message) = if let Some((x, x_pub)) = database.lookup_long_term_keypair(user) {
             // generate the prs and client message
-            self.generate_prs_strong(user, blinded, database, &mut rng, x, x_pub)
+            self.generate_prs_strong(user, blinded, database, &mut rng, x, x_pub)?
         } else {
             // if the user does not have a keypair stored then we generate a random point on the
             // curve to be the public key, and handle the failed lookup as normal
             let x_pub = RistrettoPoint::random(&mut rng);
-            self.lookup_failed_strong(user, blinded, x_pub, &mut rng)
+            self.lookup_failed_strong(user, blinded, x_pub, &mut rng)?
         };
         let next_step = AuCPaceServerCPaceSubstep::new(self.ssid, prs, rng);
 
-        (next_step, message)
+        Ok((next_step, message))
     }
 
     /// Generate the Password Related String (PRS) and the message to be sent to the user.
@@ -406,7 +407,7 @@ where
         rng: &mut CSPRNG,
         x: Scalar,
         x_pub: RistrettoPoint,
-    ) -> ([u8; 32], ServerMessage<'static, K1>)
+    ) -> Result<([u8; 32], ServerMessage<'static, K1>)>
     where
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>,
         CSPRNG: CryptoRngCore,
@@ -415,6 +416,9 @@ where
             let cofactor = Scalar::ONE;
             let prs = (w * (x * cofactor)).compress().to_bytes();
             let uq = blinded * (q * cofactor);
+            if uq.is_identity() {
+                return Err(Error::IllegalPointError);
+            }
             let message = ServerMessage::StrongAugmentationInfo {
                 // this will have to be provided by the trait in future
                 group: "ristretto255",
@@ -422,7 +426,7 @@ where
                 blinded_salt: uq,
                 pbkdf_params: sigma,
             };
-            (prs, message)
+            Ok((prs, message))
         } else {
             // handle the failure case
             self.lookup_failed_strong(username, blinded, x_pub, rng)
@@ -476,7 +480,7 @@ where
         blinded: RistrettoPoint,
         x_pub: RistrettoPoint,
         rng: &mut CSPRNG,
-    ) -> ([u8; 32], ServerMessage<'static, K1>)
+    ) -> Result<([u8; 32], ServerMessage<'static, K1>)>
     where
         CSPRNG: CryptoRngCore,
     {
@@ -494,6 +498,11 @@ where
         let q = Scalar::from_hash(hasher);
         let fake_blinded_salt = blinded * (q * cofactor);
 
+        // check uq isn't the neutral element
+        if fake_blinded_salt.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let message = ServerMessage::StrongAugmentationInfo {
             group: "ristretto255",
             x_pub,
@@ -501,7 +510,7 @@ where
             pbkdf_params: Default::default(),
         };
 
-        (prs, message)
+        Ok((prs, message))
     }
 }
 
@@ -589,9 +598,14 @@ where
     pub fn receive_client_pubkey(
         self,
         client_pubkey: RistrettoPoint,
-    ) -> AuCPaceServerExpMutAuth<D, K1> {
+    ) -> Result<AuCPaceServerExpMutAuth<D, K1>> {
+        // check for the neutral point
+        if client_pubkey.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let sk1 = compute_first_session_key::<D>(self.ssid, self.priv_key, client_pubkey);
-        AuCPaceServerExpMutAuth::new(self.ssid, sk1)
+        Ok(AuCPaceServerExpMutAuth::new(self.ssid, sk1))
     }
 
     /// Allow exiting the protocol early in the case of implicit authentication
@@ -604,9 +618,14 @@ where
     /// # Return:
     /// `sk`: the session key reached by the AuCPace protocol
     ///
-    pub fn implicit_auth(self, client_pubkey: RistrettoPoint) -> Output<D> {
+    pub fn implicit_auth(self, client_pubkey: RistrettoPoint) -> Result<Output<D>> {
+        // check for the neutral point
+        if client_pubkey.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+
         let sk1 = compute_first_session_key::<D>(self.ssid, self.priv_key, client_pubkey);
-        compute_session_key::<D>(self.ssid, sk1)
+        Ok(compute_session_key::<D>(self.ssid, sk1))
     }
 }
 
@@ -710,7 +729,10 @@ pub enum ServerMessage<'a, const K1: usize> {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused)]
     use super::*;
+    #[allow(unused)]
+    use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 
     #[test]
     #[cfg(all(feature = "sha2", feature = "getrandom"))]
@@ -720,5 +742,140 @@ mod tests {
         let mut server = Server::new(OsRng);
         let res = server.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2"))]
+    fn test_server_doesnt_accept_invalid_pubkey() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_server: AuCPaceServerRecvClientKey<sha2::Sha512, 16> =
+            AuCPaceServerRecvClientKey::new(ssid, Scalar::from(420u32));
+        let res = aug_server.receive_client_pubkey(RistrettoPoint::identity());
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2"))]
+    fn test_server_doesnt_accept_invalid_pubkey_implicit_auth() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_server: AuCPaceServerRecvClientKey<sha2::Sha512, 16> =
+            AuCPaceServerRecvClientKey::new(ssid, Scalar::from(420u32));
+        let res = aug_server.implicit_auth(RistrettoPoint::identity());
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[cfg(all(feature = "sha2", feature = "strong_aucpace"))]
+    struct FakeDatabase();
+
+    #[cfg(all(feature = "sha2", feature = "strong_aucpace"))]
+    impl StrongDatabase for FakeDatabase {
+        type PasswordVerifier = RistrettoPoint;
+        type Exponent = Scalar;
+
+        fn lookup_verifier_strong(
+            &self,
+            _username: &[u8],
+        ) -> Option<(Self::PasswordVerifier, Self::Exponent, ParamsString)> {
+            Some((
+                RISTRETTO_BASEPOINT_POINT,
+                Scalar::ZERO,
+                ParamsString::default(),
+            ))
+        }
+
+        fn store_verifier_strong(
+            &mut self,
+            _username: &[u8],
+            _uad: Option<&[u8]>,
+            _verifier: Self::PasswordVerifier,
+            _secret_exponent: Self::Exponent,
+            _params: ParamsString,
+        ) {
+            unimplemented!()
+        }
+    }
+
+    #[cfg(all(feature = "sha2", feature = "strong_aucpace"))]
+    impl PartialAugDatabase for FakeDatabase {
+        type PrivateKey = Scalar;
+        type PublicKey = RistrettoPoint;
+
+        fn lookup_long_term_keypair(
+            &self,
+            _username: &[u8],
+        ) -> Option<(Self::PrivateKey, Self::PublicKey)> {
+            Some((Scalar::ZERO, RISTRETTO_BASEPOINT_POINT))
+        }
+
+        fn store_long_term_keypair(
+            &mut self,
+            _username: &[u8],
+            _priv_key: Self::PrivateKey,
+            _pub_key: Self::PublicKey,
+        ) -> Result<()> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "getrandom", feature = "strong_aucpace"))]
+    fn test_server_doesnt_accept_invalid_uq() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        use rand_core::OsRng;
+
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_server: AuCPaceServerAugLayer<sha2::Sha512, 16> =
+            AuCPaceServerAugLayer::new(ServerSecret(25519), ssid);
+        let res = aug_server.generate_client_info_strong(
+            b"bobbyyyy",
+            RistrettoPoint::identity(),
+            &FakeDatabase(),
+            OsRng,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+
+    #[test]
+    #[cfg(all(feature = "sha2", feature = "getrandom", feature = "strong_aucpace"))]
+    fn test_server_doesnt_accept_invalid_uq_partial() {
+        use crate::utils::H0;
+        use curve25519_dalek::traits::Identity;
+        use rand_core::OsRng;
+
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_server: AuCPaceServerAugLayer<sha2::Sha512, 16> =
+            AuCPaceServerAugLayer::new(ServerSecret(25519), ssid);
+        let res = aug_server.generate_client_info_partial_strong(
+            b"bobbyyyy",
+            RistrettoPoint::identity(),
+            &FakeDatabase(),
+            OsRng,
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
     }
 }

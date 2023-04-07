@@ -86,7 +86,9 @@ fn main() -> Result<()> {
         client_message = recv!(stream, buf);
         let (server, message) =
             if let ClientMessage::StrongUsername { username, blinded } = client_message {
-                server.generate_client_info_strong(username, blinded, &database, OsRng)
+                server
+                    .generate_client_info_strong(username, blinded, &database, OsRng)
+                    .unwrap()
             } else {
                 panic!("Received invalid client message {:?}", client_message);
             };
@@ -109,7 +111,7 @@ fn main() -> Result<()> {
 
         client_message = recv!(stream, buf);
         let server = if let ClientMessage::PublicKey(client_pubkey) = client_message {
-            server.receive_client_pubkey(client_pubkey)
+            server.receive_client_pubkey(client_pubkey)?
         } else {
             panic!("Received invalid client message {:?}", client_message);
         };
@@ -200,7 +202,7 @@ fn main() -> Result<()> {
 
         server_message = recv!(stream, buf);
         let (client, message) = if let ServerMessage::PublicKey(server_pubkey) = server_message {
-            client.receive_server_pubkey(server_pubkey)
+            client.receive_server_pubkey(server_pubkey)?
         } else {
             panic!("Received invalid server message {:?}", server_message);
         };

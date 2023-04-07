@@ -4,6 +4,8 @@ use core::fmt;
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Error {
+    /// Some points such as the Neutral or Identity point are illegal
+    IllegalPointError,
     /// Wrapper around `password_hash`'s error type, for propagating errors should they occur
     PasswordHashing(password_hash::Error),
     /// PasswordHasher produced an empty hash.
@@ -27,6 +29,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::IllegalPointError => write!(f, "illegal point encountered"),
             Error::PasswordHashing(error) => write!(f, "error while hashing password: {}", error),
             Error::HashEmpty => write!(f, "password hash empty"),
             Error::HashSizeInvalid => write!(f, "password hash invalid, should be 32 or 64 bytes"),
