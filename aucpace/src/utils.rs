@@ -201,7 +201,7 @@ pub(crate) mod serde_saltstring {
         where
             E: Error,
         {
-            SaltString::new(v).map_err(Error::custom)
+            SaltString::from_b64(v).map_err(Error::custom)
         }
     }
 

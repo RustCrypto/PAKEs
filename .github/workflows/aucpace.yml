@@ -51,5 +51,4 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
           profile: minimal
-      - run: cargo test --release
-      - run: cargo test --release --features alloc,partial_augmentation,strong_aucpace
+      - run: cargo test --release --all-features

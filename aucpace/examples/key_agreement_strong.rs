@@ -183,7 +183,7 @@ fn main() -> Result<()> {
                 let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
                 let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
 
-                Params::new(log_n, r, p).unwrap()
+                Params::new(log_n, r, p, scrypt::Params::RECOMMENDED_LEN).unwrap()
             };
             client.generate_cpace_alloc(x_pub, blinded_salt, params, Scrypt)?
         } else {

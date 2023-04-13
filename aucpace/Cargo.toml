@@ -37,7 +37,12 @@ getrandom = ["rand_core/getrandom"]
 
 [dev-dependencies]
 bincode = "1"
+curve25519-dalek = { version = "4.0.0-rc.1", features = ["digest", "rand_core"] }
+password-hash = { version = "0.5", features = ["rand_core"] }
 postcard = "1"
+rand_core = "0.6"
+scrypt = { version = "0.11", features = ["simple"] }
+sha2 = "0.10"
 
 [[example]]
 name = "key_agreement"
@@ -53,4 +58,4 @@ required-features = ["default", "alloc", "serde", "partial_augmentation"]
 
 [[example]]
 name = "key_agreement_strong"
-required-features = ["default", "serde", "strong_aucpace"]
+required-features = ["default", "alloc", "serde", "strong_aucpace"]
