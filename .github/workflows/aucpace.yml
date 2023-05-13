@@ -1,16 +1,16 @@
-name: spake2
+name: aucpace
 
 on:
   pull_request:
     paths:
-      - "spake2/**"
+      - "aucpace/**"
       - "Cargo.*"
   push:
     branches: master
 
 defaults:
   run:
-    working-directory: spake2
+    working-directory: aucpace
 
 env:
   CARGO_INCREMENTAL: 0
@@ -51,5 +51,4 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
           profile: minimal
-      - run: cargo test --release
       - run: cargo test --release --all-features

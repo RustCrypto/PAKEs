@@ -10,7 +10,7 @@ keywords = ["crypto", "pake", "authentication"]
 categories = ["cryptography", "authentication"]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.60"
 
 [dependencies]
 num-bigint = "0.4"
