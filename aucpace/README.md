@@ -2,10 +2,10 @@
 
 [![crate][crate-image]][crate-link]
 [![Docs][docs-image]][docs-link]
+[![Build Status][build-image]][build-link]
 ![Apache2/MIT licensed][license-image]
 ![Rust Version][rustc-image]
 [![Project Chat][chat-image]][chat-link]
-[![Build Status][build-image]][build-link]
 
 Pure Rust implementation of the [AuCPace] password-authenticated key-exchange algorithm.
 
@@ -82,12 +82,12 @@ dual licensed as above, without any additional terms or conditions.
 [crate-link]: https://crates.io/crates/aucpace
 [docs-image]: https://docs.rs/aucpace/badge.svg
 [docs-link]: https://docs.rs/aucpace/
+[build-image]: https://github.com/RustCrypto/PAKEs/actions/workflows/aucpace.yml/badge.svg
+[build-link]: https://github.com/RustCrypto/PAKEs/actions/workflows/aucpace.yml
 [license-image]: https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg
 [rustc-image]: https://img.shields.io/badge/rustc-1.60+-blue.svg
 [chat-image]: https://img.shields.io/badge/zulip-join_chat-blue.svg
 [chat-link]: https://rustcrypto.zulipchat.com/#narrow/stream/260045-PAKEs
-[build-image]: https://github.com/RustCrypto/PAKEs/actions/workflows/aucpace.yml/badge.svg
-[build-link]: https://github.com/RustCrypto/PAKEs/actions/workflows/aucpace.yml
 
 [//]: # (general links)
 
