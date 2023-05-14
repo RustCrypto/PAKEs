@@ -240,7 +240,7 @@ pub use self::{
     group::Group,
 };
 
-use alloc::vec::Vec;
+use alloc::{borrow::ToOwned, vec::Vec};
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::{CryptoRng, RngCore};
@@ -289,11 +289,11 @@ impl Identity {
 }
 
 /// Session type identifying the "side" in a SPAKE2 exchange.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 enum Side {
-    A,
-    B,
-    Symmetric,
+    A { id_a: Vec<u8>, id_b: Vec<u8> },
+    B { id_a: Vec<u8>, id_b: Vec<u8> },
+    Symmetric { id_s: Vec<u8> },
 }
 
 /// SPAKE2 algorithm.
@@ -303,9 +303,6 @@ pub struct Spake2<G: Group> {
     side: Side,
     xy_scalar: G::Scalar,
     password_vec: Vec<u8>,
-    id_a: Vec<u8>,
-    id_b: Vec<u8>,
-    id_s: Vec<u8>,
     msg1: Vec<u8>,
     password_scalar: G::Scalar,
 }
@@ -378,15 +375,15 @@ impl<G: Group> Spake2<G> {
         let msg_side = msg2[0];
 
         match self.side {
-            Side::A => match msg_side {
+            Side::A { id_a: _, id_b: _ } => match msg_side {
                 0x42 => (), // 'B'
                 _ => return Err(Error::BadSide),
             },
-            Side::B => match msg_side {
+            Side::B { id_a: _, id_b: _ } => match msg_side {
                 0x41 => (), // 'A'
                 _ => return Err(Error::BadSide),
             },
-            Side::Symmetric => match msg_side {
+            Side::Symmetric { id_s: _ } => match msg_side {
                 0x53 => (), // 'S'
                 _ => return Err(Error::BadSide),
             },
@@ -400,9 +397,9 @@ impl<G: Group> Spake2<G> {
         // a: K = (Y+N*(-pw))*x
         // b: K = (X+M*(-pw))*y
         let unblinding = match self.side {
-            Side::A => G::const_n(),
-            Side::B => G::const_m(),
-            Side::Symmetric => G::const_s(),
+            Side::A { id_a: _, id_b: _ } => G::const_n(),
+            Side::B { id_a: _, id_b: _ } => G::const_m(),
+            Side::Symmetric { id_s: _ } => G::const_s(),
         };
         let tmp1 = G::scalarmult(&unblinding, &G::scalar_neg(&self.password_scalar));
         let tmp2 = G::add(&msg2_element, &tmp1);
@@ -417,25 +414,25 @@ impl<G: Group> Spake2<G> {
         // note that both sides must use the same order
 
         Ok(match self.side {
-            Side::A => ed25519::hash_ab(
+            Side::A { id_a, id_b } => ed25519::hash_ab(
                 &self.password_vec,
-                &self.id_a,
-                &self.id_b,
+                &id_a,
+                &id_b,
                 self.msg1.as_slice(),
                 &msg2[1..],
                 &key_bytes,
             ),
-            Side::B => ed25519::hash_ab(
+            Side::B { id_a, id_b } => ed25519::hash_ab(
                 &self.password_vec,
-                &self.id_a,
-                &self.id_b,
+                &id_a,
+                &id_b,
                 &msg2[1..],
                 self.msg1.as_slice(),
                 &key_bytes,
             ),
-            Side::Symmetric => ed25519::hash_symmetric(
+            Side::Symmetric { id_s } => ed25519::hash_symmetric(
                 &self.password_vec,
-                &self.id_s,
+                &id_s,
                 &self.msg1,
                 &msg2[1..],
                 &key_bytes,
@@ -446,9 +443,6 @@ impl<G: Group> Spake2<G> {
     fn start_internal(
         side: Side,
         password: &Password,
-        id_a: &Identity,
-        id_b: &Identity,
-        id_s: &Identity,
         xy_scalar: G::Scalar,
     ) -> (Spake2<G>, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
@@ -458,9 +452,9 @@ impl<G: Group> Spake2<G> {
         // b: Y = B*y + N*pw
         // sym: X = B*x * S*pw
         let blinding = match side {
-            Side::A => G::const_m(),
-            Side::B => G::const_n(),
-            Side::Symmetric => G::const_s(),
+            Side::A { id_a: _, id_b: _ } => G::const_m(),
+            Side::B { id_a: _, id_b: _ } => G::const_n(),
+            Side::Symmetric { id_s: _ } => G::const_s(),
         };
         let m1: G::Element = G::add(
             &G::basepoint_mult(&xy_scalar),
@@ -470,17 +464,11 @@ impl<G: Group> Spake2<G> {
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
         let mut password_vec = Vec::new();
         password_vec.extend_from_slice(password);
-        let mut id_a_copy = Vec::new();
-        id_a_copy.extend_from_slice(id_a);
-        let mut id_b_copy = Vec::new();
-        id_b_copy.extend_from_slice(id_b);
-        let mut id_s_copy = Vec::new();
-        id_s_copy.extend_from_slice(id_s);
 
         let mut msg_and_side = vec![match side {
-            Side::A => 0x41,         // 'A'
-            Side::B => 0x42,         // 'B'
-            Side::Symmetric => 0x53, // 'S'
+            Side::A { id_a: _, id_b: _ } => 0x41, // 'A'
+            Side::B { id_a: _, id_b: _ } => 0x42, // 'B'
+            Side::Symmetric { id_s: _ } => 0x53,  // 'S'
         }];
         msg_and_side.extend_from_slice(&msg1);
 
@@ -489,9 +477,6 @@ impl<G: Group> Spake2<G> {
                 side,
                 xy_scalar,
                 password_vec, // string
-                id_a: id_a_copy,
-                id_b: id_b_copy,
-                id_s: id_s_copy,
                 msg1,
                 password_scalar, // scalar
             },
@@ -506,11 +491,11 @@ impl<G: Group> Spake2<G> {
         xy_scalar: G::Scalar,
     ) -> (Spake2<G>, Vec<u8>) {
         Self::start_internal(
-            Side::A,
+            Side::A {
+                id_a: id_a.to_owned().0,
+                id_b: id_b.to_owned().0,
+            },
             password,
-            id_a,
-            id_b,
-            &Identity::new(b""),
             xy_scalar,
         )
     }
@@ -522,11 +507,11 @@ impl<G: Group> Spake2<G> {
         xy_scalar: G::Scalar,
     ) -> (Spake2<G>, Vec<u8>) {
         Self::start_internal(
-            Side::B,
+            Side::B {
+                id_a: id_a.to_owned().0,
+                id_b: id_b.to_owned().0,
+            },
             password,
-            id_a,
-            id_b,
-            &Identity::new(b""),
             xy_scalar,
         )
     }
@@ -537,13 +522,33 @@ impl<G: Group> Spake2<G> {
         xy_scalar: G::Scalar,
     ) -> (Spake2<G>, Vec<u8>) {
         Self::start_internal(
-            Side::Symmetric,
+            Side::Symmetric {
+                id_s: id_s.to_owned().0,
+            },
             password,
-            &Identity::new(b""),
-            &Identity::new(b""),
-            id_s,
             xy_scalar,
         )
+    }
+}
+
+impl fmt::Debug for Side {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Side::A { id_a, id_b } => fmt
+                .debug_struct("Side::A")
+                .field("idA", &MaybeUtf8(id_a))
+                .field("idB", &MaybeUtf8(id_b))
+                .finish(),
+            Side::B { id_a, id_b } => fmt
+                .debug_struct("Side::B")
+                .field("idA", &MaybeUtf8(id_a))
+                .field("idB", &MaybeUtf8(id_b))
+                .finish(),
+            Side::Symmetric { id_s } => fmt
+                .debug_struct("Side::Symmetric")
+                .field("idS", &MaybeUtf8(id_s))
+                .finish(),
+        }
     }
 }
 
@@ -552,9 +557,6 @@ impl<G: Group> fmt::Debug for Spake2<G> {
         fmt.debug_struct("SPAKE2")
             .field("group", &G::name())
             .field("side", &self.side)
-            .field("idA", &MaybeUtf8(&self.id_a))
-            .field("idB", &MaybeUtf8(&self.id_b))
-            .field("idS", &MaybeUtf8(&self.id_s))
             .finish()
     }
 }
@@ -767,7 +769,7 @@ mod tests {
         println!("s1: {:?}", s1);
         assert_eq!(
             format!("{:?}", s1),
-            "SPAKE2 { group: \"Ed25519\", side: A, idA: (s=idA), idB: (s=idB), idS: (s=) }"
+            "SPAKE2 { group: \"Ed25519\", side: Side::A { idA: (s=idA), idB: (s=idB) } }"
         );
 
         let (s2, _msg1) = Spake2::<Ed25519Group>::start_symmetric(
@@ -777,7 +779,7 @@ mod tests {
         println!("s2: {:?}", s2);
         assert_eq!(
             format!("{:?}", s2),
-            "SPAKE2 { group: \"Ed25519\", side: Symmetric, idA: (s=), idB: (s=), idS: (s=idS) }"
+            "SPAKE2 { group: \"Ed25519\", side: Side::Symmetric { idS: (s=idS) } }"
         );
     }
 }
