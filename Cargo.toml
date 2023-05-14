@@ -5,3 +5,6 @@ members = [
     "spake2",
     "aucpace",
 ]
+
+[profile.dev]
+opt-level = 2
