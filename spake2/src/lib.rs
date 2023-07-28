@@ -1,5 +1,5 @@
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![doc = include_str!("../README.md")]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg",
@@ -312,7 +312,6 @@ impl<G: Group> Spake2<G> {
     ///
     /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
         Self::start_a_with_rng(password, id_a, id_b, OsRng)
     }
@@ -321,7 +320,6 @@ impl<G: Group> Spake2<G> {
     ///
     /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
         Self::start_b_with_rng(password, id_a, id_b, OsRng)
     }
@@ -330,7 +328,6 @@ impl<G: Group> Spake2<G> {
     ///
     /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Spake2<G>, Vec<u8>) {
         Self::start_symmetric_with_rng(password, id_s, OsRng)
     }
