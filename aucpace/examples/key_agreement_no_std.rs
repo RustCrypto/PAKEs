@@ -28,8 +28,8 @@ macro_rules! recv {
 
 fn main() -> Result<()> {
     // example username and password, never user these...
-    const USERNAME: &'static [u8] = b"adira.tal";
-    const PASSWORD: &'static [u8] = b"4d1rA_aND-Gr4Y_aRe_tH3-b3sT <3";
+    const USERNAME: &[u8] = b"adira.tal";
+    const PASSWORD: &[u8] = b"4d1rA_aND-Gr4Y_aRe_tH3-b3sT <3";
 
     // register the user in the database
     let mut base_server = Server::new(OsRng);
@@ -148,7 +148,7 @@ fn main() -> Result<()> {
 
     // ===== CPace substep =====
     // first generate the server's public key and send it
-    const CI: &'static str = "channel_identifier";
+    const CI: &str = "channel_identifier";
     let (server, message) = server.generate_public_key(CI);
     let bytes_sent = send!(server_buf, message);
     server_bytes_sent += bytes_sent;

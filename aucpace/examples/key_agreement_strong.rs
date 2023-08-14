@@ -32,8 +32,8 @@ macro_rules! recv {
 
 fn main() -> Result<()> {
     // example username and password, never user these...
-    const USERNAME: &'static [u8] = b"jlpicard_1701";
-    const PASSWORD: &'static [u8] = b"g04tEd_c4pT41N";
+    const USERNAME: &[u8] = b"jlpicard_1701";
+    const PASSWORD: &[u8] = b"g04tEd_c4pT41N";
 
     // the server socket address to bind to
     let server_socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 25519);
@@ -291,6 +291,7 @@ struct TcpChannelIdentifier {
 }
 
 impl TcpChannelIdentifier {
+    #[allow(clippy::unused_io_amount)]
     fn new(src: SocketAddr, dst: SocketAddr) -> std::io::Result<Self> {
         let mut id = vec![];
 

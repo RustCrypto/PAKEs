@@ -745,7 +745,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2"))]
+    #[cfg(feature = "sha2")]
     fn test_server_doesnt_accept_invalid_pubkey() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;
@@ -762,7 +762,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2"))]
+    #[cfg(feature = "sha2")]
     fn test_server_doesnt_accept_invalid_pubkey_implicit_auth() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;

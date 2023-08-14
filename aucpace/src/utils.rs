@@ -213,7 +213,7 @@ pub(crate) mod serde_saltstring {
     }
 }
 
-#[cfg(any(feature = "serde"))]
+#[cfg(feature = "serde")]
 pub(crate) mod serde_paramsstring {
     use core::fmt;
     use password_hash::ParamsString;
