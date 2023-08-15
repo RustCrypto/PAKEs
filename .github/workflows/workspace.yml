@@ -5,20 +5,25 @@ on:
     paths-ignore:
       - README.md
   push:
-    branches: master
+    branches:
+      - master
     paths-ignore:
       - README.md
 
 jobs:
   clippy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.60.0 # MSRV
+          - stable
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.60.0 # MSRV
-          components: clippy
-      - run: cargo clippy --all -- -D warnings
+          toolchain: ${{ matrix.rust }}
+      - run: cargo clippy --all --all-features -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
