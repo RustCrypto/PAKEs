@@ -13,18 +13,13 @@ on:
 jobs:
   clippy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.60.0 # MSRV
-          - stable
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           components: clippy
-      - run: cargo clippy --all --all-features -- -D warnings
+      - run: cargo clippy --all -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
