@@ -291,7 +291,6 @@ struct TcpChannelIdentifier {
 }
 
 impl TcpChannelIdentifier {
-    #[allow(clippy::unused_io_amount)]
     fn new(src: SocketAddr, dst: SocketAddr) -> std::io::Result<Self> {
         let mut id = vec![];
 
