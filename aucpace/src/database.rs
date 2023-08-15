@@ -2,7 +2,7 @@
 use crate::Result;
 use password_hash::{ParamsString, SaltString};
 
-/// trait for AuCPace to use to abstract over the storage and retrieval of verifiers
+/// trait for `AuCPace` to use to abstract over the storage and retrieval of verifiers
 pub trait Database {
     /// The type of password verifier stored in the database
     type PasswordVerifier;
@@ -46,7 +46,7 @@ pub trait Database {
     );
 }
 
-/// trait for AuCPace to use to abstract over the storage and retrieval of long-term keypairs
+/// trait for `AuCPace` to use to abstract over the storage and retrieval of long-term keypairs
 #[cfg(feature = "partial_augmentation")]
 pub trait PartialAugDatabase {
     /// The private key type
@@ -62,8 +62,8 @@ pub trait PartialAugDatabase {
     ///
     /// # Return:
     /// - Some((`public_key`, `private_key`)): if the user has a long term keypair associated with them
-    ///   - `private_key`: corresponds to x from the protocol definition
-    ///   - `public_key`: corresponds to x_pub from the protocol definition
+    ///   - `private_key`: corresponds to `x` from the protocol definition
+    ///   - `public_key`: corresponds to `x_pub` from the protocol definition
     /// - None: if the user has no associated keypair
     ///
     fn lookup_long_term_keypair(
@@ -93,7 +93,7 @@ pub trait PartialAugDatabase {
     ) -> Result<()>;
 }
 
-/// trait for AuCPace to use to abstract over the storage and retrieval of verifiers and secret exponents
+/// trait for `AuCPace` to use to abstract over the storage and retrieval of verifiers and secret exponents
 #[cfg(feature = "strong_aucpace")]
 pub trait StrongDatabase {
     /// The type of password verifier stored in the database

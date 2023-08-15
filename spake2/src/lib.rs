@@ -240,7 +240,7 @@ pub use self::{
     group::Group,
 };
 
-use alloc::{borrow::ToOwned, vec::Vec};
+use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::{CryptoRng, RngCore};
@@ -255,8 +255,8 @@ pub struct Password(Vec<u8>);
 
 impl Password {
     /// Create a new password.
-    pub fn new(p: impl AsRef<[u8]>) -> Password {
-        Password(p.as_ref().to_vec())
+    pub fn new(p: impl AsRef<[u8]>) -> Self {
+        Self(p.as_ref().to_vec())
     }
 }
 
@@ -283,8 +283,9 @@ impl Deref for Identity {
 
 impl Identity {
     /// Create a new identity.
-    pub fn new(p: &[u8]) -> Identity {
-        Identity(p.to_vec())
+    #[must_use]
+    pub fn new(p: &[u8]) -> Self {
+        Self(p.to_vec())
     }
 }
 
@@ -312,7 +313,8 @@ impl<G: Group> Spake2<G> {
     ///
     /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
-    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
+    #[must_use]
+    pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
         Self::start_a_with_rng(password, id_a, id_b, OsRng)
     }
 
@@ -320,7 +322,8 @@ impl<G: Group> Spake2<G> {
     ///
     /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
-    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Spake2<G>, Vec<u8>) {
+    #[must_use]
+    pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
         Self::start_b_with_rng(password, id_a, id_b, OsRng)
     }
 
@@ -328,17 +331,19 @@ impl<G: Group> Spake2<G> {
     ///
     /// Uses the system RNG.
     #[cfg(feature = "getrandom")]
-    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Spake2<G>, Vec<u8>) {
+    #[must_use]
+    pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Self, Vec<u8>) {
         Self::start_symmetric_with_rng(password, id_s, OsRng)
     }
 
     /// Start with identity `idA` and the provided cryptographically secure RNG.
+    #[must_use]
     pub fn start_a_with_rng(
         password: &Password,
         id_a: &Identity,
         id_b: &Identity,
         mut csrng: impl CryptoRng + RngCore,
-    ) -> (Spake2<G>, Vec<u8>) {
+    ) -> (Self, Vec<u8>) {
         let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_a_internal(password, id_a, id_b, xy_scalar)
     }
@@ -349,7 +354,7 @@ impl<G: Group> Spake2<G> {
         id_a: &Identity,
         id_b: &Identity,
         mut csrng: impl CryptoRng + RngCore,
-    ) -> (Spake2<G>, Vec<u8>) {
+    ) -> (Self, Vec<u8>) {
         let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_b_internal(password, id_a, id_b, xy_scalar)
     }
@@ -359,7 +364,7 @@ impl<G: Group> Spake2<G> {
         password: &Password,
         id_s: &Identity,
         mut csrng: impl CryptoRng + RngCore,
-    ) -> (Spake2<G>, Vec<u8>) {
+    ) -> (Self, Vec<u8>) {
         let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_symmetric_internal(password, id_s, xy_scalar)
     }
@@ -437,11 +442,7 @@ impl<G: Group> Spake2<G> {
         })
     }
 
-    fn start_internal(
-        side: Side,
-        password: &Password,
-        xy_scalar: G::Scalar,
-    ) -> (Spake2<G>, Vec<u8>) {
+    fn start_internal(side: Side, password: &Password, xy_scalar: G::Scalar) -> (Self, Vec<u8>) {
         //let password_scalar: G::Scalar = hash_to_scalar::<G::Scalar>(password);
         let password_scalar: G::Scalar = G::hash_to_scalar(password);
 
@@ -470,7 +471,7 @@ impl<G: Group> Spake2<G> {
         msg_and_side.extend_from_slice(&msg1);
 
         (
-            Spake2 {
+            Self {
                 side,
                 xy_scalar,
                 password_vec, // string
@@ -486,11 +487,11 @@ impl<G: Group> Spake2<G> {
         id_a: &Identity,
         id_b: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (Spake2<G>, Vec<u8>) {
+    ) -> (Self, Vec<u8>) {
         Self::start_internal(
             Side::A {
-                id_a: id_a.to_owned().0,
-                id_b: id_b.to_owned().0,
+                id_a: id_a.clone().0,
+                id_b: id_b.clone().0,
             },
             password,
             xy_scalar,
@@ -502,11 +503,11 @@ impl<G: Group> Spake2<G> {
         id_a: &Identity,
         id_b: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (Spake2<G>, Vec<u8>) {
+    ) -> (Self, Vec<u8>) {
         Self::start_internal(
             Side::B {
-                id_a: id_a.to_owned().0,
-                id_b: id_b.to_owned().0,
+                id_a: id_a.clone().0,
+                id_b: id_b.clone().0,
             },
             password,
             xy_scalar,
@@ -517,10 +518,10 @@ impl<G: Group> Spake2<G> {
         password: &Password,
         id_s: &Identity,
         xy_scalar: G::Scalar,
-    ) -> (Spake2<G>, Vec<u8>) {
+    ) -> (Self, Vec<u8>) {
         Self::start_internal(
             Side::Symmetric {
-                id_s: id_s.to_owned().0,
+                id_s: id_s.clone().0,
             },
             password,
             xy_scalar,
@@ -531,17 +532,17 @@ impl<G: Group> Spake2<G> {
 impl fmt::Debug for Side {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Side::A { id_a, id_b } => fmt
+            Self::A { id_a, id_b } => fmt
                 .debug_struct("Side::A")
                 .field("idA", &MaybeUtf8(id_a))
                 .field("idB", &MaybeUtf8(id_b))
                 .finish(),
-            Side::B { id_a, id_b } => fmt
+            Self::B { id_a, id_b } => fmt
                 .debug_struct("Side::B")
                 .field("idA", &MaybeUtf8(id_a))
                 .field("idB", &MaybeUtf8(id_b))
                 .finish(),
-            Side::Symmetric { id_s } => fmt
+            Self::Symmetric { id_s } => fmt
                 .debug_struct("Side::Symmetric")
                 .field("idS", &MaybeUtf8(id_s))
                 .finish(),
@@ -563,12 +564,12 @@ struct MaybeUtf8<'a>(&'a [u8]);
 impl fmt::Debug for MaybeUtf8<'_> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Ok(s) = str::from_utf8(self.0) {
-            write!(fmt, "(s={})", s)
+            write!(fmt, "(s={s})")
         } else {
             write!(fmt, "(hex=")?;
 
             for byte in self.0 {
-                write!(fmt, "{:x}", byte)?;
+                write!(fmt, "{byte:x}")?;
             }
 
             write!(fmt, ")")

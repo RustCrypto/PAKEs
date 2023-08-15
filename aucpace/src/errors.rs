@@ -29,21 +29,21 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::IllegalPointError => write!(f, "illegal point encountered"),
-            Error::PasswordHashing(error) => write!(f, "error while hashing password: {}", error),
-            Error::HashEmpty => write!(f, "password hash empty"),
-            Error::HashSizeInvalid => write!(f, "password hash invalid, should be 32 or 64 bytes"),
-            Error::MutualAuthFail => write!(
+            Self::IllegalPointError => write!(f, "illegal point encountered"),
+            Self::PasswordHashing(error) => write!(f, "error while hashing password: {error}"),
+            Self::HashEmpty => write!(f, "password hash empty"),
+            Self::HashSizeInvalid => write!(f, "password hash invalid, should be 32 or 64 bytes"),
+            Self::MutualAuthFail => write!(
                 f,
                 "explicit mutual authentication failed, authenticators didn't match"
             ),
-            Error::UsernameOrPasswordTooLong => write!(f, "username or password too long"),
-            Error::InsecureSsid => write!(
+            Self::UsernameOrPasswordTooLong => write!(f, "username or password too long"),
+            Self::InsecureSsid => write!(
                 f,
                 "provided SSID is insecure - SSIDs must be at least 16 bytes long"
             ),
             #[cfg(feature = "partial_augmentation")]
-            Error::UserNotRegistered => write!(
+            Self::UserNotRegistered => write!(
                 f,
                 "user must be registered before a long-term keypair can be stored"
             ),

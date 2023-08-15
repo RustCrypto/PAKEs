@@ -10,7 +10,7 @@ use password_hash::PasswordHash;
 use rand_core::CryptoRngCore;
 
 #[allow(non_snake_case)]
-#[inline(always)]
+#[inline]
 fn H<D: Digest + Default, const N: u32>() -> D {
     let mut hasher: D = Default::default();
     hasher.update(N.to_le_bytes());
@@ -20,7 +20,7 @@ fn H<D: Digest + Default, const N: u32>() -> D {
 macro_rules! create_h_impl {
     ($name:ident, $n:literal) => {
         #[allow(non_snake_case)]
-        pub(crate) fn $name<D: Digest + Default>() -> D {
+        pub fn $name<D: Digest + Default>() -> D {
             H::<D, $n>()
         }
     };
@@ -35,8 +35,8 @@ create_h_impl!(H4, 4);
 create_h_impl!(H5, 5);
 
 /// Generate a fixed length nonce using a CSPRNG
-#[inline(always)]
-pub(crate) fn generate_nonce<CSPRNG, const N: usize>(rng: &mut CSPRNG) -> [u8; N]
+#[inline]
+pub fn generate_nonce<CSPRNG, const N: usize>(rng: &mut CSPRNG) -> [u8; N]
 where
     CSPRNG: CryptoRngCore,
 {
@@ -46,20 +46,17 @@ where
 }
 
 /// Computes the SSID from two server and client nonces - s and t
-#[inline(always)]
-pub(crate) fn compute_ssid<D: Digest + Default, const K1: usize>(
-    s: [u8; K1],
-    t: [u8; K1],
-) -> Output<D> {
+#[inline]
+pub fn compute_ssid<D: Digest + Default, const K1: usize>(s: [u8; K1], t: [u8; K1]) -> Output<D> {
     let mut hasher: D = H0();
     hasher.update(s);
     hasher.update(t);
     hasher.finalize()
 }
 
-/// Generate a Diffie-Hellman keypair for the CPace substep of the protocol
-#[inline(always)]
-pub(crate) fn generate_keypair<D, CSPRNG, CI>(
+/// Generate a Diffie-Hellman keypair for the `CPace` substep of the protocol
+#[inline]
+pub fn generate_keypair<D, CSPRNG, CI>(
     rng: &mut CSPRNG,
     ssid: Output<D>,
     prs: [u8; 32],
@@ -84,8 +81,8 @@ where
 }
 
 /// Compute the first session key sk1 from our private key and the other participant's public key
-#[inline(always)]
-pub(crate) fn compute_first_session_key<D>(
+#[inline]
+pub fn compute_first_session_key<D>(
     ssid: Output<D>,
     priv_key: Scalar,
     pub_key: RistrettoPoint,
@@ -103,11 +100,8 @@ where
 }
 
 /// Compute the two authenticator messages Ta and Tb
-#[inline(always)]
-pub(crate) fn compute_authenticator_messages<D>(
-    ssid: Output<D>,
-    sk1: Output<D>,
-) -> (Output<D>, Output<D>)
+#[inline]
+pub fn compute_authenticator_messages<D>(ssid: Output<D>, sk1: Output<D>) -> (Output<D>, Output<D>)
 where
     D: Digest<OutputSize = U64> + Default,
 {
@@ -123,8 +117,8 @@ where
 }
 
 /// Compute the session key - sk
-#[inline(always)]
-pub(crate) fn compute_session_key<D>(ssid: Output<D>, sk1: Output<D>) -> Output<D>
+#[inline]
+pub fn compute_session_key<D>(ssid: Output<D>, sk1: Output<D>) -> Output<D>
 where
     D: Digest<OutputSize = U64> + Default,
 {
@@ -135,8 +129,10 @@ where
 }
 
 /// Compute a scalar from a password hash
-#[inline(always)]
-pub(crate) fn scalar_from_hash(pw_hash: PasswordHash<'_>) -> Result<Scalar> {
+#[inline]
+#[allow(clippy::needless_pass_by_value)]
+// TODO: change this to `&PasswordHash<'_>` on the next breaking release
+pub fn scalar_from_hash(pw_hash: PasswordHash<'_>) -> Result<Scalar> {
     let hash = pw_hash.hash.ok_or(Error::HashEmpty)?;
     let hash_bytes = hash.as_bytes();
 
@@ -159,8 +155,8 @@ pub(crate) fn scalar_from_hash(pw_hash: PasswordHash<'_>) -> Result<Scalar> {
 }
 
 /// Generate a keypair (x, X) for the server
-#[inline(always)]
-pub(crate) fn generate_server_keypair<CSPRNG>(rng: &mut CSPRNG) -> (Scalar, RistrettoPoint)
+#[inline]
+pub fn generate_server_keypair<CSPRNG>(rng: &mut CSPRNG) -> (Scalar, RistrettoPoint)
 where
     CSPRNG: CryptoRngCore,
 {
@@ -175,7 +171,7 @@ where
 
 // serde_with helper modules for serialising
 #[cfg(feature = "serde")]
-pub(crate) mod serde_saltstring {
+pub mod serde_saltstring {
     use core::fmt;
     use password_hash::SaltString;
     use serde::de::{Error, Visitor};
@@ -214,7 +210,7 @@ pub(crate) mod serde_saltstring {
 }
 
 #[cfg(feature = "serde")]
-pub(crate) mod serde_paramsstring {
+pub mod serde_paramsstring {
     use core::fmt;
     use password_hash::ParamsString;
     use serde::de::{Error, Visitor};

@@ -129,7 +129,7 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
 }
 
 /// Hash `idA` and `idB` identities.
-pub(crate) fn hash_ab(
+pub fn hash_ab(
     password_vec: &[u8],
     id_a: &[u8],
     id_b: &[u8],
@@ -173,7 +173,7 @@ pub(crate) fn hash_ab(
 }
 
 /// Hash symmetric identities.
-pub(crate) fn hash_symmetric(
+pub fn hash_symmetric(
     password_vec: &[u8],
     id_s: &[u8],
     msg_u: &[u8],

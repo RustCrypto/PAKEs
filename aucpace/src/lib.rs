@@ -21,10 +21,10 @@
 //! [`server`](server/index.html) modules.
 //!
 //! # Protocol description
-//! Here we briefly describe the AuCPace Protocol. For additional information
-//! refer to AuCPace literature[1]. All arithmetic is done on the (hyper-) elliptic curve `C`
+//! Here we briefly describe the `AuCPace` Protocol. For additional information
+//! refer to `AuCPace` literature[1]. All arithmetic is done on the (hyper-) elliptic curve `C`
 //! in group `J`, with co-factor `c_J` and Diffie-Hellman base point `B` in `J`.
-//! It's STRONGLY recommended to use AuCPace parameters provided by this crate
+//! It's STRONGLY recommended to use `AuCPace` parameters provided by this crate
 //! in the [`Client`](Client) and [`Server`](Server) default instantiations.
 //!
 //! |       Server                    |   Data transfer   |      Client                     |
@@ -86,10 +86,10 @@ mod database;
 mod errors;
 mod utils;
 
-/// Module containing the implementation of the client for the AuCPace protocol
+/// Module containing the implementation of the client for the `AuCPace` protocol
 pub mod client;
 
-/// Module containing the implementation of the server for the AuCPace protocol
+/// Module containing the implementation of the server for the `AuCPace` protocol
 pub mod server;
 
 /// Module contains constants used in the code
@@ -108,10 +108,10 @@ pub use self::database::PartialAugDatabase;
 #[cfg(feature = "strong_aucpace")]
 pub use self::database::StrongDatabase;
 
-/// Default Server instantiation with SHA512, OsRng and a nonce size of 16 bytes
+/// Default Server instantiation with `SHA512`, `OsRng` and a nonce size of 16 bytes
 #[cfg(all(feature = "sha2", feature = "getrandom"))]
 pub type Server = AuCPaceServer<sha2::Sha512, rand_core::OsRng, 16>;
 
-/// Default Client instantiation with SHA512, Scrypt, OsRng and a nonce size of 16 bytes
+/// Default Client instantiation with `SHA512`, `Scrypt`, `OsRng` and a nonce size of 16 bytes
 #[cfg(all(feature = "scrypt", feature = "sha2", feature = "getrandom"))]
 pub type Client = AuCPaceClient<sha2::Sha512, scrypt::Scrypt, rand_core::OsRng, 16>;

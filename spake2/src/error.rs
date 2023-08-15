@@ -21,9 +21,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::BadSide => fmt.write_str("bad side"),
-            Error::CorruptMessage => fmt.write_str("corrupt message"),
-            Error::WrongLength => fmt.write_str("invalid length"),
+            Self::BadSide => fmt.write_str("bad side"),
+            Self::CorruptMessage => fmt.write_str("corrupt message"),
+            Self::WrongLength => fmt.write_str("invalid length"),
         }
     }
 }
