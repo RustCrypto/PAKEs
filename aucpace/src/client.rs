@@ -32,7 +32,7 @@ use crate::utils::{serde_paramsstring, serde_saltstring};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Implementation of the client side of the AuCPace protocol
+/// Implementation of the client side of the `AuCPace` protocol
 pub struct AuCPaceClient<D, H, CSPRNG, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
@@ -51,11 +51,11 @@ where
     CSPRNG: CryptoRngCore,
 {
     /// Create new server
-    pub fn new(rng: CSPRNG) -> Self {
+    pub const fn new(rng: CSPRNG) -> Self {
         Self {
             rng,
-            d: Default::default(),
-            h: Default::default(),
+            d: PhantomData,
+            h: PhantomData,
         }
     }
 
@@ -135,11 +135,11 @@ where
             password,
             &salt_string,
             params.clone(),
-            hasher,
+            &hasher,
         )?;
 
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -192,10 +192,10 @@ where
             password,
             &salt_string,
             params.clone(),
-            hasher,
+            &hasher,
         )?;
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -240,9 +240,9 @@ where
 
         // compute the verifier W
         let pw_hash =
-            hash_password_alloc(username, password, &salt_string, params.clone(), hasher)?;
+            hash_password_alloc(username, password, &salt_string, params.clone(), &hasher)?;
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -297,10 +297,10 @@ where
             password,
             salt_string.as_salt(),
             params.clone(),
-            hasher,
+            &hasher,
         )?;
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -362,8 +362,8 @@ where
     {
         Self {
             nonce: generate_nonce(rng),
-            d: Default::default(),
-            h: Default::default(),
+            d: PhantomData,
+            h: PhantomData,
         }
     }
 
@@ -375,6 +375,7 @@ where
     /// # return:
     /// [`next_step`](AuCPaceClientPreAug): the client in the pre-augmentation stage
     ///
+    #[must_use]
     pub fn agree_ssid(self, server_nonce: [u8; K1]) -> AuCPaceClientPreAug<D, H, K1> {
         let ssid = compute_ssid::<D, K1>(server_nonce, self.nonce);
         AuCPaceClientPreAug::new(ssid)
@@ -396,10 +397,10 @@ where
     D: Digest<OutputSize = U64> + Default,
     H: PasswordHasher,
 {
-    fn new(ssid: Output<D>) -> Self {
+    const fn new(ssid: Output<D>) -> Self {
         Self {
             ssid,
-            h: Default::default(),
+            h: PhantomData,
         }
     }
 
@@ -413,7 +414,8 @@ where
     /// - [`next_step`](AuCPaceClientAugLayer): the client in the augmentation layer
     /// - [`message`](ClientMessage::Username): the message to send to the server
     ///
-    pub fn start_augmentation<'a>(
+    #[must_use]
+    pub const fn start_augmentation<'a>(
         self,
         username: &'a [u8],
         password: &'a [u8],
@@ -488,12 +490,12 @@ where
     D: Digest<OutputSize = U64> + Default,
     H: PasswordHasher,
 {
-    fn new(ssid: Output<D>, username: &'a [u8], password: &'a [u8]) -> Self {
+    const fn new(ssid: Output<D>, username: &'a [u8], password: &'a [u8]) -> Self {
         Self {
             ssid,
             username,
             password,
-            h: Default::default(),
+            h: PhantomData,
         }
     }
 
@@ -540,9 +542,9 @@ where
             self.password,
             salt,
             params,
-            hasher,
+            &hasher,
         )?;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
 
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
@@ -583,8 +585,8 @@ where
         }
 
         let cofactor = Scalar::ONE;
-        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, hasher)?;
-        let w = scalar_from_hash(pw_hash)?;
+        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, &hasher)?;
+        let w = scalar_from_hash(&pw_hash)?;
 
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
@@ -612,7 +614,7 @@ where
     D: Digest<OutputSize = U64> + Default,
     H: PasswordHasher,
 {
-    fn new(
+    const fn new(
         ssid: Output<D>,
         username: &'a [u8],
         password: &'a [u8],
@@ -623,7 +625,7 @@ where
             username,
             password,
             blinding_value,
-            h: Default::default(),
+            h: PhantomData,
         }
     }
 
@@ -677,9 +679,9 @@ where
             self.password,
             &salt_string,
             params,
-            hasher,
+            &hasher,
         )?;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
         Ok(AuCPaceClientCPaceSubstep::new(self.ssid, prs))
@@ -738,16 +740,16 @@ where
             self.password,
             salt_string.as_salt(),
             params,
-            hasher,
+            &hasher,
         )?;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
         Ok(AuCPaceClientCPaceSubstep::new(self.ssid, prs))
     }
 }
 
-/// Client in the CPace substep
+/// Client in the `CPace` substep
 pub struct AuCPaceClientCPaceSubstep<D, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
@@ -760,12 +762,12 @@ impl<D, const K1: usize> AuCPaceClientCPaceSubstep<D, K1>
 where
     D: Digest<OutputSize = U64> + Default,
 {
-    fn new(ssid: Output<D>, prs: [u8; 32]) -> Self {
+    const fn new(ssid: Output<D>, prs: [u8; 32]) -> Self {
         Self { ssid, prs }
     }
 
     /// Generate a public key
-    /// moving the protocol onto the second half of the CPace substep - Receive Server Pubkey
+    /// moving the protocol onto the second half of the `CPace` substep - Receive Server Pubkey
     ///
     /// # Arguments:
     /// - `channel_identifier` - `CI` from the protocol definition, in the context of TCP/IP this
@@ -813,12 +815,12 @@ impl<D, const K1: usize> AuCPaceClientRecvServerKey<D, K1>
 where
     D: Digest<OutputSize = U64> + Default,
 {
-    fn new(ssid: Output<D>, priv_key: Scalar) -> Self {
+    const fn new(ssid: Output<D>, priv_key: Scalar) -> Self {
         Self { ssid, priv_key }
     }
 
     /// Receive the server's public key
-    /// This completes the CPace substep and moves the client on to explicit mutual authentication.
+    /// This completes the `CPace` substep and moves the client on to explicit mutual authentication.
     ///
     /// # Arguments:
     /// - `server_pubkey` - the server's public key
@@ -855,7 +857,7 @@ where
     /// - `server_pubkey` - the server's public key
     ///
     /// # Return:
-    /// `sk`: the session key reached by the AuCPace protocol
+    /// `sk`: the session key reached by the `AuCPace` protocol
     ///
     pub fn implicit_auth(self, server_pubkey: RistrettoPoint) -> Result<Output<D>> {
         if server_pubkey.is_identity() {
@@ -881,7 +883,7 @@ impl<D, const K1: usize> AuCPaceClientExpMutAuth<D, K1>
 where
     D: Digest<OutputSize = U64> + Default,
 {
-    fn new(ssid: Output<D>, sk1: Output<D>, server_authenticator: Output<D>) -> Self {
+    const fn new(ssid: Output<D>, sk1: Output<D>, server_authenticator: Output<D>) -> Self {
         Self {
             ssid,
             sk1,
@@ -897,7 +899,7 @@ where
     ///
     /// # Return:
     /// either:
-    /// - Ok(`sk`): the session key reached by the AuCPace protocol
+    /// - Ok(`sk`): the session key reached by the `AuCPace` protocol
     /// - Err([`Error::MutualAuthFail`](Error::MutualAuthFail)): an error if the authenticator we computed doesn't match
     ///     the server's authenticator, compared in constant time.
     ///
@@ -920,7 +922,7 @@ fn hash_password<'a, U, P, S, H, const BUFSIZ: usize>(
     password: P,
     salt: S,
     params: H::Params,
-    hasher: H,
+    hasher: &H,
 ) -> Result<PasswordHash<'a>>
 where
     H: PasswordHasher,
@@ -940,10 +942,10 @@ where
     let mut buf = [0u8; BUFSIZ];
     buf[0..u].copy_from_slice(user);
     buf[u] = b':';
-    buf[u + 1..u + p + 1].copy_from_slice(pass);
+    buf[(u + 1)..=(u + p)].copy_from_slice(pass);
 
     let hash = hasher
-        .hash_password_customized(&buf[0..u + p + 1], None, None, params, salt)
+        .hash_password_customized(&buf[0..=(u + p)], None, None, params, salt)
         .map_err(Error::PasswordHashing);
 
     hash
@@ -956,7 +958,7 @@ fn hash_password_alloc<'a, U, P, S, H>(
     password: P,
     salt: S,
     params: H::Params,
-    hasher: H,
+    hasher: &H,
 ) -> Result<PasswordHash<'a>>
 where
     H: PasswordHasher,
@@ -988,7 +990,7 @@ pub enum ClientMessage<'a, const K1: usize> {
     /// Username - the client's username
     Username(&'a [u8]),
 
-    /// StrongUsername - the strong AuCPace username message
+    /// StrongUsername - the strong `AuCPace` username message
     /// also contains the blinded point `U`
     #[cfg(feature = "strong_aucpace")]
     StrongUsername {
@@ -1062,10 +1064,10 @@ mod tests {
         let params: Params = Default::default();
 
         let no_std_res = hash_password::<&str, &str, &SaltString, Scrypt, 100>(
-            username, password, &salt, params, Scrypt,
+            username, password, &salt, params, &Scrypt,
         )
         .unwrap();
-        let alloc_res = hash_password_alloc(username, password, &salt, params, Scrypt).unwrap();
+        let alloc_res = hash_password_alloc(username, password, &salt, params, &Scrypt).unwrap();
 
         assert_eq!(alloc_res, no_std_res);
     }

@@ -1,6 +1,6 @@
 [package]
 name = "srp"
-version = "0.6.0"
+version = "0.7.0-pre"
 authors = ["RustCrypto Developers"]
 license = "MIT OR Apache-2.0"
 description = "Secure Remote Password (SRP) protocol implementation"
@@ -10,7 +10,7 @@ keywords = ["crypto", "pake", "authentication"]
 categories = ["cryptography", "authentication"]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.61"
 
 [dependencies]
 num-bigint = "0.4"

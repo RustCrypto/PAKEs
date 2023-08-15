@@ -12,11 +12,11 @@ pub enum SrpAuthError {
 impl fmt::Display for SrpAuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SrpAuthError::IllegalParameter(param) => {
-                write!(f, "illegal_parameter: bad '{}' value", param)
+            Self::IllegalParameter(param) => {
+                write!(f, "illegal_parameter: bad '{param}' value")
             }
-            SrpAuthError::BadRecordMac(param) => {
-                write!(f, "bad_record_mac: incorrect '{}'  proof", param)
+            Self::BadRecordMac(param) => {
+                write!(f, "bad_record_mac: incorrect '{param}'  proof")
             }
         }
     }

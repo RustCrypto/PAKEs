@@ -34,8 +34,8 @@ macro_rules! recv {
 
 fn main() -> Result<()> {
     // example username and password, never user these...
-    const USERNAME: &'static [u8] = b"jlpicard_1701";
-    const PASSWORD: &'static [u8] = b"g04tEd_c4pT41N";
+    const USERNAME: &[u8] = b"jlpicard_1701";
+    const PASSWORD: &[u8] = b"g04tEd_c4pT41N";
 
     // the server socket address to bind to
     let server_socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 25519);
@@ -297,7 +297,7 @@ impl PartialAugDatabase for SingleUserDatabase {
         username: &[u8],
     ) -> Option<(Self::PrivateKey, Self::PublicKey)> {
         match &self.user {
-            Some(stored_user) if stored_user == username => self.long_term_keypair.clone(),
+            Some(stored_user) if stored_user == username => self.long_term_keypair,
             _ => None,
         }
     }
@@ -330,18 +330,18 @@ impl TcpChannelIdentifier {
 
         // write src.ip:src.port:dst.ip:dst.port
         match src.ip() {
-            IpAddr::V4(addr) => id.write(&addr.octets()),
-            IpAddr::V6(addr) => id.write(&addr.octets()),
+            IpAddr::V4(addr) => id.write_all(&addr.octets()),
+            IpAddr::V6(addr) => id.write_all(&addr.octets()),
         }?;
         id.push(b':');
-        id.write(&src.port().to_be_bytes())?;
+        id.write_all(&src.port().to_be_bytes())?;
         id.push(b':');
         match dst.ip() {
-            IpAddr::V4(addr) => id.write(&addr.octets()),
-            IpAddr::V6(addr) => id.write(&addr.octets()),
+            IpAddr::V4(addr) => id.write_all(&addr.octets()),
+            IpAddr::V6(addr) => id.write_all(&addr.octets()),
         }?;
         id.push(b':');
-        id.write(&dst.port().to_be_bytes())?;
+        id.write_all(&dst.port().to_be_bytes())?;
 
         Ok(Self { id })
     }

@@ -46,6 +46,7 @@ fn test_reflected_message() {
 }
 
 #[test]
+#[allow(clippy::slow_vector_initialization)]
 fn test_bad_length() {
     let (s1, msg1) = Spake2::<Ed25519Group>::start_a(
         &Password::new(b"password"),

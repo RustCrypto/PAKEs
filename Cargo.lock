@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "aucpace"
-version = "0.1.1"
+version = "0.2.0-pre"
 dependencies = [
  "bincode",
  "curve25519-dalek",
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "srp"
-version = "0.6.0"
+version = "0.7.0-pre"
 dependencies = [
  "digest",
  "generic-array",

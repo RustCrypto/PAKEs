@@ -39,7 +39,7 @@ impl ServerSecret {
     }
 }
 
-/// Implementation of the server side of the AuCPace protocol
+/// Implementation of the server side of the `AuCPace` protocol
 pub struct AuCPaceServer<D, CSPRNG, const K1: usize>
 where
     D: Digest + Default,
@@ -65,7 +65,7 @@ where
         Self {
             rng,
             secret,
-            d: Default::default(),
+            d: PhantomData,
         }
     }
 
@@ -150,7 +150,7 @@ where
         Self {
             secret,
             nonce: generate_nonce(rng),
-            _d: Default::default(),
+            _d: PhantomData,
         }
     }
 
@@ -162,6 +162,7 @@ where
     /// # return:
     /// [`next_step`](AuCPaceServerAugLayer): the server in the augmentation layer
     ///
+    #[must_use]
     pub fn agree_ssid(self, client_nonce: [u8; K1]) -> AuCPaceServerAugLayer<D, K1> {
         let ssid = compute_ssid::<D, K1>(self.nonce, client_nonce);
         AuCPaceServerAugLayer::new(self.secret, ssid)
@@ -181,12 +182,12 @@ impl<D, const K1: usize> AuCPaceServerAugLayer<D, K1>
 where
     D: Digest<OutputSize = U64> + Default,
 {
-    fn new(secret: ServerSecret, ssid: Output<D>) -> Self {
+    const fn new(secret: ServerSecret, ssid: Output<D>) -> Self {
         Self { secret, ssid }
     }
 
-    /// Accept the user's username and generate the ClientInfo for the response.
-    /// Moves the protocol into the CPace substep phase
+    /// Accept the user's username and generate the `ClientInfo` for the response.
+    /// Moves the protocol into the `CPace` substep phase
     ///
     /// # Arguments:
     /// - `username`: the client's username
@@ -194,7 +195,7 @@ where
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
-    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the CPace substep stage
+    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the `CPace` substep stage
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
     ///
     pub fn generate_client_info<U, DB, CSPRNG>(
@@ -220,11 +221,11 @@ where
         (next_step, message)
     }
 
-    /// Accept the user's username and generate the ClientInfo for the response.
-    /// Moves the protocol into the CPace substep phase
+    /// Accept the user's username and generate the `ClientInfo` for the response.
+    /// Moves the protocol into the `CPace` substep phase
     ///
     /// This method performs the "partial augmentation" variant of the protocol.
-    /// This means that instead of generating x and x_pub as ephemeral keys, a long term keypair is
+    /// This means that instead of generating `x` and `x_pub` as ephemeral keys, a long term keypair is
     /// retrieved from the database instead. This comes with decreased security in the case of
     /// server compromise but significantly decreases the amount of computation the server has to
     /// do. The reference paper goes into more detail on the tradeoffs and why you might choose to
@@ -233,11 +234,11 @@ where
     /// # Arguments:
     /// - `username`: the client's username
     /// - `database`: the password verifier database to retrieve the client's information from
-    ///    This is a PartialAugDatabase so we can lookup the server's long term keypair.
+    ///    This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
-    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the CPace substep stage
+    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the `CPace` substep stage
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
     ///
     #[cfg(feature = "partial_augmentation")]
@@ -271,8 +272,8 @@ where
         (next_step, message)
     }
 
-    /// Accept the user's username, and blinded point U and generate the ClientInfo for the response.
-    /// Moves the protocol into the CPace substep phase
+    /// Accept the user's username, and blinded point U and generate the `ClientInfo` for the response.
+    /// Moves the protocol into the `CPace` substep phase
     ///
     /// This method performs the Strong variant of the protocol.
     /// This means that the information is blinded in transit so that it is impossible to do any
@@ -282,11 +283,11 @@ where
     /// - `username`: the client's username
     /// - `blinded`: the client's blinded point `U`
     /// - `database`: the password verifier database to retrieve the client's information from
-    ///    This is a PartialAugDatabase so we can lookup the server's long term keypair.
+    ///    This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
-    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the CPace substep stage
+    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the `CPace` substep stage
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
     ///
     #[cfg(feature = "strong_aucpace")]
@@ -315,8 +316,8 @@ where
         Ok((next_step, message))
     }
 
-    /// Accept the user's username, and blinded point U and generate the ClientInfo for the response.
-    /// Moves the protocol into the CPace substep phase
+    /// Accept the user's username, and blinded point U and generate the `ClientInfo` for the response.
+    /// Moves the protocol into the `CPace` substep phase
     ///
     /// This method performs the Strong + Partially augmented variant of the protocol.
     /// This means that the information is blinded in transit so that it is impossible to do any
@@ -327,11 +328,11 @@ where
     /// - `username`: the client's username
     /// - `blinded`: the client's blinded point `U`
     /// - `database`: the password verifier database to retrieve the client's information from
-    ///    This is a PartialAugDatabase so we can lookup the server's long term keypair.
+    ///    This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
-    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the CPace substep stage
+    /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the `CPace` substep stage
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
     ///
     #[cfg(all(feature = "strong_aucpace", feature = "partial_augmentation"))]
@@ -466,7 +467,7 @@ where
             group: "ristretto255",
             x_pub,
             salt,
-            pbkdf_params: Default::default(),
+            pbkdf_params: ParamsString::default(),
         };
 
         (prs, message)
@@ -507,14 +508,14 @@ where
             group: "ristretto255",
             x_pub,
             blinded_salt: fake_blinded_salt,
-            pbkdf_params: Default::default(),
+            pbkdf_params: ParamsString::default(),
         };
 
         Ok((prs, message))
     }
 }
 
-/// Server in the CPace substep phase
+/// Server in the `CPace` substep phase
 pub struct AuCPaceServerCPaceSubstep<D, CSPRNG, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
@@ -530,12 +531,12 @@ where
     D: Digest<OutputSize = U64> + Default,
     CSPRNG: CryptoRngCore,
 {
-    fn new(ssid: Output<D>, prs: [u8; 32], rng: CSPRNG) -> Self {
+    const fn new(ssid: Output<D>, prs: [u8; 32], rng: CSPRNG) -> Self {
         Self { ssid, prs, rng }
     }
 
     /// Generate a public key
-    /// moving the protocol onto the second half of the CPace substep - Receive Server Pubkey
+    /// moving the protocol onto the second half of the `CPace` substep - Receive Server Pubkey
     ///
     /// # Arguments:
     /// - `channel_identifier` - `CI` from the protocol definition, in the context of TCP/IP this
@@ -569,7 +570,7 @@ where
     }
 }
 
-/// Server in the CPace substep phase
+/// Server in the `CPace` substep phase
 pub struct AuCPaceServerRecvClientKey<D, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
@@ -582,12 +583,12 @@ impl<D, const K1: usize> AuCPaceServerRecvClientKey<D, K1>
 where
     D: Digest<OutputSize = U64> + Default,
 {
-    fn new(ssid: Output<D>, priv_key: Scalar) -> Self {
+    const fn new(ssid: Output<D>, priv_key: Scalar) -> Self {
         Self { ssid, priv_key }
     }
 
     /// Receive the client's public key
-    /// This completes the CPace substep and moves the client on to explicit mutual authentication.
+    /// This completes the `CPace` substep and moves the client on to explicit mutual authentication.
     ///
     /// # Arguments:
     /// - `client_pubkey` - the client's public key
@@ -616,7 +617,7 @@ where
     /// - `client_pubkey` - the client's public key
     ///
     /// # Return:
-    /// `sk`: the session key reached by the AuCPace protocol
+    /// `sk`: the session key reached by the `AuCPace` protocol
     ///
     pub fn implicit_auth(self, client_pubkey: RistrettoPoint) -> Result<Output<D>> {
         // check for the neutral point
@@ -642,7 +643,7 @@ impl<D, const K1: usize> AuCPaceServerExpMutAuth<D, K1>
 where
     D: Digest<OutputSize = U64> + Default,
 {
-    fn new(ssid: Output<D>, sk1: Output<D>) -> Self {
+    const fn new(ssid: Output<D>, sk1: Output<D>) -> Self {
         Self { ssid, sk1 }
     }
 
@@ -655,7 +656,7 @@ where
     /// # Return:
     /// either:
     /// - Ok((`sk`, `message`)):
-    ///     - `sk` - the session key reached by the AuCPace protocol
+    ///     - `sk` - the session key reached by the `AuCPace` protocol
     ///     - [`message`](ServerMessage::Authenticator) - the message to send to the client
     /// - Err([`Error::MutualAuthFail`](Error::MutualAuthFail)): an error if the authenticator we computed doesn't match
     ///     the client's authenticator, compared in constant time.
@@ -720,7 +721,7 @@ pub enum ServerMessage<'a, const K1: usize> {
         pbkdf_params: ParamsString,
     },
 
-    /// CPace substep message - the server's public key: `Ya`
+    /// `CPace` substep message - the server's public key: `Ya`
     PublicKey(RistrettoPoint),
 
     /// Explicit Mutual Authentication - the server's authenticator: `Ta`
@@ -745,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2"))]
+    #[cfg(feature = "sha2")]
     fn test_server_doesnt_accept_invalid_pubkey() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;
@@ -762,7 +763,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2"))]
+    #[cfg(feature = "sha2")]
     fn test_server_doesnt_accept_invalid_pubkey_implicit_auth() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;

@@ -29,7 +29,7 @@
 //! ```
 //!
 //! Process the server response and create verifier instance.
-//! process_reply can return error in case of malicious `b_pub`.
+//! `process_reply` can return error in case of malicious `b_pub`.
 //!
 //! ```rust
 //! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
@@ -107,18 +107,21 @@ pub struct SrpClientVerifier<D: Digest> {
 
 impl<'a, D: Digest> SrpClient<'a, D> {
     /// Create new SRP client instance.
-    pub fn new(params: &'a SrpGroup) -> Self {
+    #[must_use]
+    pub const fn new(params: &'a SrpGroup) -> Self {
         Self {
             params,
-            d: Default::default(),
+            d: PhantomData,
         }
     }
 
+    #[must_use]
     pub fn compute_a_pub(&self, a: &BigUint) -> BigUint {
         self.params.g.modpow(a, &self.params.n)
     }
 
     //  H(<username> | ":" | <raw password>)
+    #[must_use]
     pub fn compute_identity_hash(username: &[u8], password: &[u8]) -> Output<D> {
         let mut d = D::new();
         d.update(username);
@@ -128,6 +131,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     // x = H(<salt> | H(<username> | ":" | <raw password>))
+    #[must_use]
     pub fn compute_x(identity_hash: &[u8], salt: &[u8]) -> BigUint {
         let mut x = D::new();
         x.update(salt);
@@ -136,6 +140,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     // (B - (k * g^x)) ^ (a + (u * x)) % N
+    #[must_use]
     pub fn compute_premaster_secret(
         &self,
         b_pub: &BigUint,
@@ -157,11 +162,13 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     // v = g^x % N
+    #[must_use]
     pub fn compute_v(&self, x: &BigUint) -> BigUint {
         self.params.g.modpow(x, &self.params.n)
     }
 
     /// Get password verifier (v in RFC5054) for user registration on the server.
+    #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
         let identity_hash = Self::compute_identity_hash(username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
@@ -170,14 +177,15 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
     /// Get public ephemeral value for handshaking with the server.
     /// g^a % N
+    #[must_use]
     pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
         self.compute_a_pub(&BigUint::from_bytes_be(a)).to_bytes_be()
     }
 
     /// Process server reply to the handshake.
-    /// a is a random value,
-    /// username, password is supplied by the user
-    /// salt and b_pub come from the server
+    /// `a` is a random value,
+    /// `username`, `password` is supplied by the user
+    /// `salt` and `b_pub` come from the server
     pub fn process_reply(
         &self,
         a: &[u8],
@@ -233,11 +241,10 @@ impl<D: Digest> SrpClientVerifier<D> {
 
     /// Verify server reply to verification data.
     pub fn verify_server(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
-        if self.m2.ct_eq(reply).unwrap_u8() != 1 {
-            // aka == 0
-            Err(SrpAuthError::BadRecordMac("server".to_owned()))
-        } else {
+        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
+        } else {
+            Err(SrpAuthError::BadRecordMac("server".to_owned()))
         }
     }
 }

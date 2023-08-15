@@ -83,20 +83,23 @@ pub struct SrpServerVerifier<D: Digest> {
 
 impl<'a, D: Digest> SrpServer<'a, D> {
     /// Create new server state.
-    pub fn new(params: &'a SrpGroup) -> Self {
+    #[must_use]
+    pub const fn new(params: &'a SrpGroup) -> Self {
         Self {
             params,
-            d: Default::default(),
+            d: PhantomData,
         }
     }
 
     //  k*v + g^b % N
+    #[must_use]
     pub fn compute_b_pub(&self, b: &BigUint, k: &BigUint, v: &BigUint) -> BigUint {
         let inter = (k * v) % &self.params.n;
         (inter + self.params.g.modpow(b, &self.params.n)) % &self.params.n
     }
 
     // <premaster secret> = (A * v^u) ^ b % N
+    #[must_use]
     pub fn compute_premaster_secret(
         &self,
         a_pub: &BigUint,
@@ -110,6 +113,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
     }
 
     /// Get public ephemeral value for sending to the client.
+    #[must_use]
     pub fn compute_public_ephemeral(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
         self.compute_b_pub(
             &BigUint::from_bytes_be(b),
@@ -175,11 +179,10 @@ impl<D: Digest> SrpServerVerifier<D> {
 
     /// Process user proof of having the same shared secret.
     pub fn verify_client(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
-        if self.m1.ct_eq(reply).unwrap_u8() != 1 {
-            // aka == 0
-            Err(SrpAuthError::BadRecordMac("client".to_owned()))
-        } else {
+        if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
+        } else {
+            Err(SrpAuthError::BadRecordMac("client".to_owned()))
         }
     }
 }

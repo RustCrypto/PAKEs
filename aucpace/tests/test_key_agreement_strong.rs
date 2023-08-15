@@ -7,8 +7,8 @@ use rand_core::OsRng;
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
 
-const USERNAME: &'static [u8] = b"jlpicard_1701";
-const PASSWORD: &'static [u8] = b"g04tEd_c4pT41N";
+const USERNAME: &[u8] = b"jlpicard_1701";
+const PASSWORD: &[u8] = b"g04tEd_c4pT41N";
 const CI: &[u8] = b"test_channel_identifier";
 const PRE_SSID: &[u8] = b"bestest_ssid_ever_i_promise";
 const K1: usize = 16;
