@@ -135,11 +135,11 @@ where
             password,
             &salt_string,
             params.clone(),
-            hasher,
+            &hasher,
         )?;
 
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -192,10 +192,10 @@ where
             password,
             &salt_string,
             params.clone(),
-            hasher,
+            &hasher,
         )?;
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -240,9 +240,9 @@ where
 
         // compute the verifier W
         let pw_hash =
-            hash_password_alloc(username, password, &salt_string, params.clone(), hasher)?;
+            hash_password_alloc(username, password, &salt_string, params.clone(), &hasher)?;
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -297,10 +297,10 @@ where
             password,
             salt_string.as_salt(),
             params.clone(),
-            hasher,
+            &hasher,
         )?;
         let cofactor = Scalar::ONE;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
         // attempt to convert the parameters to a ParamsString
@@ -542,9 +542,9 @@ where
             self.password,
             salt,
             params,
-            hasher,
+            &hasher,
         )?;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
 
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
@@ -585,8 +585,8 @@ where
         }
 
         let cofactor = Scalar::ONE;
-        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, hasher)?;
-        let w = scalar_from_hash(pw_hash)?;
+        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, &hasher)?;
+        let w = scalar_from_hash(&pw_hash)?;
 
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
@@ -679,9 +679,9 @@ where
             self.password,
             &salt_string,
             params,
-            hasher,
+            &hasher,
         )?;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
         Ok(AuCPaceClientCPaceSubstep::new(self.ssid, prs))
@@ -740,9 +740,9 @@ where
             self.password,
             salt_string.as_salt(),
             params,
-            hasher,
+            &hasher,
         )?;
-        let w = scalar_from_hash(pw_hash)?;
+        let w = scalar_from_hash(&pw_hash)?;
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
         Ok(AuCPaceClientCPaceSubstep::new(self.ssid, prs))
@@ -917,13 +917,12 @@ where
 }
 
 /// Hash a username and password with the given password hasher
-// TODO: change this to `hasher: &H` on the next breaking release
 fn hash_password<'a, U, P, S, H, const BUFSIZ: usize>(
     username: U,
     password: P,
     salt: S,
     params: H::Params,
-    hasher: H,
+    hasher: &H,
 ) -> Result<PasswordHash<'a>>
 where
     H: PasswordHasher,
@@ -953,14 +952,13 @@ where
 }
 
 /// Hash a username and password with the given password hasher
-// TODO: change this to `hasher: &H` on the next breaking release
 #[cfg(feature = "alloc")]
 fn hash_password_alloc<'a, U, P, S, H>(
     username: U,
     password: P,
     salt: S,
     params: H::Params,
-    hasher: H,
+    hasher: &H,
 ) -> Result<PasswordHash<'a>>
 where
     H: PasswordHasher,
@@ -1066,10 +1064,10 @@ mod tests {
         let params: Params = Default::default();
 
         let no_std_res = hash_password::<&str, &str, &SaltString, Scrypt, 100>(
-            username, password, &salt, params, Scrypt,
+            username, password, &salt, params, &Scrypt,
         )
         .unwrap();
-        let alloc_res = hash_password_alloc(username, password, &salt, params, Scrypt).unwrap();
+        let alloc_res = hash_password_alloc(username, password, &salt, params, &Scrypt).unwrap();
 
         assert_eq!(alloc_res, no_std_res);
     }

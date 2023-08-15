@@ -130,9 +130,7 @@ where
 
 /// Compute a scalar from a password hash
 #[inline]
-#[allow(clippy::needless_pass_by_value)]
-// TODO: change this to `&PasswordHash<'_>` on the next breaking release
-pub fn scalar_from_hash(pw_hash: PasswordHash<'_>) -> Result<Scalar> {
+pub fn scalar_from_hash(pw_hash: &PasswordHash<'_>) -> Result<Scalar> {
     let hash = pw_hash.hash.ok_or(Error::HashEmpty)?;
     let hash_bytes = hash.as_bytes();
 
