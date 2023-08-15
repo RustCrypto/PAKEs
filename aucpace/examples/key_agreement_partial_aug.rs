@@ -331,18 +331,18 @@ impl TcpChannelIdentifier {
 
         // write src.ip:src.port:dst.ip:dst.port
         match src.ip() {
-            IpAddr::V4(addr) => id.write(&addr.octets()),
-            IpAddr::V6(addr) => id.write(&addr.octets()),
+            IpAddr::V4(addr) => id.write_all(&addr.octets()),
+            IpAddr::V6(addr) => id.write_all(&addr.octets()),
         }?;
         id.push(b':');
-        id.write(&src.port().to_be_bytes())?;
+        id.write_all(&src.port().to_be_bytes())?;
         id.push(b':');
         match dst.ip() {
-            IpAddr::V4(addr) => id.write(&addr.octets()),
-            IpAddr::V6(addr) => id.write(&addr.octets()),
+            IpAddr::V4(addr) => id.write_all(&addr.octets()),
+            IpAddr::V6(addr) => id.write_all(&addr.octets()),
         }?;
         id.push(b':');
-        id.write(&dst.port().to_be_bytes())?;
+        id.write_all(&dst.port().to_be_bytes())?;
 
         Ok(Self { id })
     }
