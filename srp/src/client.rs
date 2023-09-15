@@ -82,6 +82,17 @@
 //! let pwd_verifier = client.compute_verifier(username, password, salt);
 //! send_registration_data(username, salt, &pwd_verifier);
 //! ```
+//!
+//!
+//! Alternatively, you can instantiate the client with options to use the implementation
+//! from the specification of SRP (that generates M1 differently) or omit the username
+//! when calculating X to be able to authenticate the same users with their different IDs.
+//!
+//! ```rust
+//! let by_the_spec = true;
+//! let no_user_in_x = true;
+//! let client = crate::srp::client::SrpClient::<sha2::Sha256>::new_with_options(&crate::srp::groups::G_2048, by_the_spec, no_user_in_x);
+//! ```
 
 use std::marker::PhantomData;
 
@@ -90,11 +101,13 @@ use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
-use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
+use crate::utils::{compute_k, compute_m1, compute_m1_std, compute_m2, compute_u};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
     params: &'a SrpGroup,
+    by_the_spec: bool,
+    no_user_in_x: bool,
     d: PhantomData<D>,
 }
 
@@ -111,6 +124,21 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     pub const fn new(params: &'a SrpGroup) -> Self {
         Self {
             params,
+            by_the_spec: false,
+            no_user_in_x: false,
+            d: PhantomData,
+        }
+    }
+
+    pub const fn new_with_options(
+        params: &'a SrpGroup,
+        by_the_spec: bool,
+        no_user_in_x: bool,
+    ) -> Self {
+        Self {
+            params,
+            by_the_spec,
+            no_user_in_x,
             d: PhantomData,
         }
     }
@@ -170,6 +198,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Get password verifier (v in RFC5054) for user registration on the server.
     #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
+        let username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
         self.compute_v(&x).to_bytes_be()
@@ -205,24 +234,36 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
         let k = compute_k::<D>(self.params);
+        let username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
 
-        let m1 = compute_m1::<D>(
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
-            &key.to_bytes_be(),
-        );
+        let key = if self.by_the_spec {
+            let mut u = D::new();
+            u.update(key.to_bytes_be());
+            u.finalize().to_vec()
+        } else {
+            key.to_bytes_be()
+        };
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+        let m1 = if self.by_the_spec {
+            compute_m1_std::<D>(
+                &self.params,
+                username,
+                salt,
+                &a_pub.to_bytes_be(),
+                &b_pub.to_bytes_be(),
+                key.as_slice(),
+            )
+        } else {
+            compute_m1::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be(), key.as_slice())
+        };
 
-        Ok(SrpClientVerifier {
-            m1,
-            m2,
-            key: key.to_bytes_be(),
-        })
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, key.as_slice());
+
+        Ok(SrpClientVerifier { m1, m2, key })
     }
 }
 
