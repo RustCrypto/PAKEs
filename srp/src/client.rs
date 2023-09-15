@@ -250,7 +250,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let m1 = if self.by_the_spec {
             compute_m1_std::<D>(
-                &self.params,
+                self.params,
                 username,
                 salt,
                 &a_pub.to_bytes_be(),
