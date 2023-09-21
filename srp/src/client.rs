@@ -75,7 +75,7 @@
 //! ```rust
 //! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
-//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
+//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
 //!
 //! let client_proof = verifier.proof();
 //! let server_proof = send_proof(client_proof);
