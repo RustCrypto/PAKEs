@@ -117,14 +117,14 @@ fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
     println!("Client verification on server");
     let server_session_key = server_verifier.verify_client(client_proof).unwrap();
     let server_proof = server_verifier.proof();
-    let server_shared_secret = server_verifier.premaster_secret();
+    let server_shared_secret = server_verifier.key();
 
     // Server sends server_proof to server (M2)
 
     // Client verifies server
     println!("Server verification on client");
     let client_session_key = client_verifier.verify_server(server_proof).unwrap();
-    let client_shared_secret = client_verifier.premaster_secret();
+    let client_shared_secret = client_verifier.key();
 
     // our shared secrets almost must equal but just an extra check
     assert_eq!(

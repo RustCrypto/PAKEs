@@ -64,7 +64,23 @@
 //! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
-//!```
+//! ```
+//!
+//!
+//! Alternatively, you can use `process_reply_rfc5054` method to process parameters
+//! according to RFC 5054 if the server is using it. This way, it generates M1 and
+//! M2 differently and also the `verify_server` method will return a shared session
+//! key in case of correct server data.
+//!
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
+//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
+//!
+//! let client_proof = verifier.proof();
+//! let server_proof = send_proof(client_proof);
+//! let session_key = verifier.verify_server(&server_proof).unwrap();
+//! ```
 //!
 //!
 //! For user registration on the server first generate salt (e.g. 32 bytes long)
@@ -83,16 +99,6 @@
 //! send_registration_data(username, salt, &pwd_verifier);
 //! ```
 //!
-//!
-//! Alternatively, you can instantiate the client with options to use the implementation
-//! from the specification of SRP (that generates M1 differently) or omit the username
-//! when calculating X to be able to authenticate the same users with their different IDs.
-//!
-//! ```rust
-//! let by_the_spec = true;
-//! let no_user_in_x = true;
-//! let client = crate::srp::client::SrpClient::<sha2::Sha256>::new_with_options(&crate::srp::groups::G_2048, by_the_spec, no_user_in_x);
-//! ```
 
 use std::marker::PhantomData;
 
@@ -122,7 +128,7 @@ pub struct SrpClientVerifier<D: Digest> {
 pub struct SrpClientVerifierRfc5054<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
-    premaster_secret: Vec<u8>,
+    key: Vec<u8>,
     session_key: Vec<u8>,
 }
 
@@ -292,7 +298,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         Ok(SrpClientVerifierRfc5054 {
             m1,
             m2,
-            premaster_secret,
+            key: premaster_secret,
             session_key: session_key.to_vec(),
         })
     }
@@ -325,8 +331,8 @@ impl<D: Digest> SrpClientVerifierRfc5054<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
-    pub fn premaster_secret(&self) -> &[u8] {
-        &self.premaster_secret
+    pub fn key(&self) -> &[u8] {
+        &self.key
     }
 
     /// Verification data for sending to the server.

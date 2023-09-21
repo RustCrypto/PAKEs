@@ -57,7 +57,25 @@
 //! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
-//!```
+//! ```
+//!
+//!
+//! Alternatively, you can use `process_reply_rfc5054` method to process parameters
+//! according to RFC 5054 if the client is using it. You need to pass `username` and
+//! `salt` in addition to other parameters to this method. This way, it generates M1
+//! and M2 differently and also the `verify_client` method will return a shared session
+//! key in case of correct server data.
+//!
+//! ```rust
+//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = server.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
+//! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
+//! # fn send_proof(_: &[u8]) { };
+//!
+//! let client_proof = get_client_proof();
+//! let session_key = verifier.verify_client(&client_proof).unwrap();
+//! send_proof(verifier.proof());
+//! ```
 //!
 use std::marker::PhantomData;
 
@@ -87,7 +105,7 @@ pub struct SrpServerVerifier<D: Digest> {
 pub struct SrpServerVerifierRfc5054<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
-    premaster_secret: Vec<u8>,
+    key: Vec<u8>,
     session_key: Vec<u8>,
 }
 
@@ -218,7 +236,7 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         Ok(SrpServerVerifierRfc5054 {
             m1,
             m2,
-            premaster_secret,
+            key: premaster_secret,
             session_key: session_key.to_vec(),
         })
     }
@@ -250,8 +268,8 @@ impl<D: Digest> SrpServerVerifier<D> {
 impl<D: Digest> SrpServerVerifierRfc5054<D> {
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
-    pub fn premaster_secret(&self) -> &[u8] {
-        &self.premaster_secret
+    pub fn key(&self) -> &[u8] {
+        &self.key
     }
 
     /// Verification data for sending to the client.
