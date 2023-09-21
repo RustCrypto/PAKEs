@@ -66,7 +66,9 @@ use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
-use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
+use crate::utils::{
+    compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u,
+};
 
 /// SRP server state
 pub struct SrpServer<'a, D: Digest> {
@@ -79,6 +81,14 @@ pub struct SrpServerVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
+}
+
+/// RFC 5054 SRP server state after handshake with the client.
+pub struct SrpServerVerifierRfc5054<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    premaster_secret: Vec<u8>,
+    session_key: Vec<u8>,
 }
 
 impl<'a, D: Digest> SrpServer<'a, D> {
@@ -162,6 +172,56 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             key: key.to_bytes_be(),
         })
     }
+
+    /// Process client reply to the handshake according to RFC 5054.
+    /// b is a random value,
+    /// v is the provided during initial user registration
+    pub fn process_reply_rfc5054(
+        &self,
+        username: &[u8],
+        salt: &[u8],
+        b: &[u8],
+        v: &[u8],
+        a_pub: &[u8],
+    ) -> Result<SrpServerVerifierRfc5054<D>, SrpAuthError> {
+        let b = BigUint::from_bytes_be(b);
+        let v = BigUint::from_bytes_be(v);
+        let a_pub = BigUint::from_bytes_be(a_pub);
+
+        let k = compute_k::<D>(self.params);
+        let b_pub = self.compute_b_pub(&b, &k, &v);
+
+        // Safeguard against malicious A
+        if &a_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
+        }
+
+        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+
+        let premaster_secret = self
+            .compute_premaster_secret(&a_pub, &v, &u, &b)
+            .to_bytes_be();
+
+        let session_key = compute_hash::<D>(&premaster_secret);
+
+        let m1 = compute_m1_rfc5054::<D>(
+            self.params,
+            username,
+            salt,
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            session_key.as_slice(),
+        );
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, session_key.as_slice());
+
+        Ok(SrpServerVerifierRfc5054 {
+            m1,
+            m2,
+            premaster_secret,
+            session_key: session_key.to_vec(),
+        })
+    }
 }
 
 impl<D: Digest> SrpServerVerifier<D> {
@@ -181,6 +241,29 @@ impl<D: Digest> SrpServerVerifier<D> {
     pub fn verify_client(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
         if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
+        } else {
+            Err(SrpAuthError::BadRecordMac("client".to_owned()))
+        }
+    }
+}
+
+impl<D: Digest> SrpServerVerifierRfc5054<D> {
+    /// Get shared secret between user and the server. (do not forget to verify
+    /// that keys are the same!)
+    pub fn premaster_secret(&self) -> &[u8] {
+        &self.premaster_secret
+    }
+
+    /// Verification data for sending to the client.
+    pub fn proof(&self) -> &[u8] {
+        // TODO not Output
+        self.m2.as_slice()
+    }
+
+    /// Process user proof of having the same shared secret and return shared session key.
+    pub fn verify_client(&self, reply: &[u8]) -> Result<&[u8], SrpAuthError> {
+        if self.m1.ct_eq(reply).unwrap_u8() == 1 {
+            Ok(self.session_key.as_slice())
         } else {
             Err(SrpAuthError::BadRecordMac("client".to_owned()))
         }

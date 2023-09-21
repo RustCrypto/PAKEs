@@ -101,13 +101,13 @@ use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
-use crate::utils::{compute_k, compute_m1, compute_m1_std, compute_m2, compute_u};
+use crate::utils::{
+    compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u,
+};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
     params: &'a SrpGroup,
-    by_the_spec: bool,
-    no_user_in_x: bool,
     d: PhantomData<D>,
 }
 
@@ -118,27 +118,20 @@ pub struct SrpClientVerifier<D: Digest> {
     key: Vec<u8>,
 }
 
+/// RFC 5054 SRP client state after handshake with the server.
+pub struct SrpClientVerifierRfc5054<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    premaster_secret: Vec<u8>,
+    session_key: Vec<u8>,
+}
+
 impl<'a, D: Digest> SrpClient<'a, D> {
     /// Create new SRP client instance.
     #[must_use]
     pub const fn new(params: &'a SrpGroup) -> Self {
         Self {
             params,
-            by_the_spec: false,
-            no_user_in_x: false,
-            d: PhantomData,
-        }
-    }
-
-    pub const fn new_with_options(
-        params: &'a SrpGroup,
-        by_the_spec: bool,
-        no_user_in_x: bool,
-    ) -> Self {
-        Self {
-            params,
-            by_the_spec,
-            no_user_in_x,
             d: PhantomData,
         }
     }
@@ -198,7 +191,6 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Get password verifier (v in RFC5054) for user registration on the server.
     #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
-        let username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
         self.compute_v(&x).to_bytes_be()
@@ -234,36 +226,75 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
         let k = compute_k::<D>(self.params);
-        let username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
 
-        let key = if self.by_the_spec {
-            let mut u = D::new();
-            u.update(key.to_bytes_be());
-            u.finalize().to_vec()
-        } else {
-            key.to_bytes_be()
-        };
+        let m1 = compute_m1::<D>(
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            &key.to_bytes_be(),
+        );
 
-        let m1 = if self.by_the_spec {
-            compute_m1_std::<D>(
-                self.params,
-                username,
-                salt,
-                &a_pub.to_bytes_be(),
-                &b_pub.to_bytes_be(),
-                key.as_slice(),
-            )
-        } else {
-            compute_m1::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be(), key.as_slice())
-        };
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, key.as_slice());
+        Ok(SrpClientVerifier {
+            m1,
+            m2,
+            key: key.to_bytes_be(),
+        })
+    }
 
-        Ok(SrpClientVerifier { m1, m2, key })
+    /// Process server reply to the handshake according to RFC 5054.
+    /// `a` is a random value,
+    /// `username`, `password` is supplied by the user
+    /// `salt` and `b_pub` come from the server
+    pub fn process_reply_rfc5054(
+        &self,
+        a: &[u8],
+        username: &[u8],
+        password: &[u8],
+        salt: &[u8],
+        b_pub: &[u8],
+    ) -> Result<SrpClientVerifierRfc5054<D>, SrpAuthError> {
+        let a = BigUint::from_bytes_be(a);
+        let a_pub = self.compute_a_pub(&a);
+        let b_pub = BigUint::from_bytes_be(b_pub);
+
+        // Safeguard against malicious B
+        if &b_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
+        }
+
+        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let k = compute_k::<D>(self.params);
+        let identity_hash = Self::compute_identity_hash(username, password);
+        let x = Self::compute_x(identity_hash.as_slice(), salt);
+
+        let premaster_secret = self
+            .compute_premaster_secret(&b_pub, &k, &x, &a, &u)
+            .to_bytes_be();
+
+        let session_key = compute_hash::<D>(&premaster_secret);
+
+        let m1 = compute_m1_rfc5054::<D>(
+            self.params,
+            username,
+            salt,
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            session_key.as_slice(),
+        );
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, session_key.as_slice());
+
+        Ok(SrpClientVerifierRfc5054 {
+            m1,
+            m2,
+            premaster_secret,
+            session_key: session_key.to_vec(),
+        })
     }
 }
 
@@ -284,6 +315,29 @@ impl<D: Digest> SrpClientVerifier<D> {
     pub fn verify_server(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
         if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
+        } else {
+            Err(SrpAuthError::BadRecordMac("server".to_owned()))
+        }
+    }
+}
+
+impl<D: Digest> SrpClientVerifierRfc5054<D> {
+    /// Get shared secret key without authenticating server, e.g. for using with
+    /// authenticated encryption modes. DO NOT USE this method without
+    /// some kind of secure authentication
+    pub fn premaster_secret(&self) -> &[u8] {
+        &self.premaster_secret
+    }
+
+    /// Verification data for sending to the server.
+    pub fn proof(&self) -> &[u8] {
+        self.m1.as_slice()
+    }
+
+    /// Verify server reply to verification data and return shared session key.
+    pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], SrpAuthError> {
+        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
+            Ok(self.session_key.as_slice())
         } else {
             Err(SrpAuthError::BadRecordMac("server".to_owned()))
         }

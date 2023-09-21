@@ -62,9 +62,9 @@ pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
     d.finalize()
 }
 
-// M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K) this follows the spec
+// M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K) following RFC5054
 #[must_use]
-pub fn compute_m1_std<D: Digest>(
+pub fn compute_m1_rfc5054<D: Digest>(
     params: &SrpGroup,
     username: &[u8],
     salt: &[u8],
