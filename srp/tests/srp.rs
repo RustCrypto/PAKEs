@@ -54,14 +54,14 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     let server_proof = server_verifier.proof();
     let server_key = server_verifier.key();
 
-    // Server sends server_proof to server (M2)
+    // Server sends server_proof to client (M2)
 
     // Client verifies server
     println!("Server verification on client");
     client_verifier.verify_server(server_proof).unwrap();
     let client_key = client_verifier.key();
 
-    // our keys almost must equal but just an extra check
+    // our keys also must be equal, but just an extra check to be sure
     assert_eq!(
         server_key, client_key,
         "server and client keys are not equal"
