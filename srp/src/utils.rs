@@ -27,8 +27,10 @@ pub fn compute_k<D: Digest>(params: &SrpGroup) -> BigUint {
     BigUint::from_bytes_be(d.finalize().as_slice())
 }
 
-// M1 = H(A, B, K) this doesn't follow the spec but apparently no one does for M1
-// M1 should equal =  H(H(N) XOR H(g) | H(U) | s | A | B | K) according to the spec
+// M1 = H(A, B, S) follows SRP-6 required by a strict interpretation of RFC
+// 5054; this doesn't follow RFC 2945, where
+//    M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K)
+// as RFC 5054 doesn't mandate its use.
 #[must_use]
 pub fn compute_m1<D: Digest>(a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> Output<D> {
     let mut d = D::new();
@@ -38,7 +40,7 @@ pub fn compute_m1<D: Digest>(a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> Output<D
     d.finalize()
 }
 
-// M2 = H(A, M1, K)
+// M2 = H(A, M1, S)
 #[must_use]
 pub fn compute_m2<D: Digest>(a_pub: &[u8], m1: &Output<D>, key: &[u8]) -> Output<D> {
     let mut d = D::new();
