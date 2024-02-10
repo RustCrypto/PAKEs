@@ -64,7 +64,23 @@
 //! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
-//!```
+//! ```
+//!
+//!
+//! Alternatively, you can use `process_reply_rfc5054` method to process parameters
+//! according to RFC 5054 if the server is using it. This way, it generates M1 and
+//! M2 differently and also the `verify_server` method will return a shared session
+//! key in case of correct server data.
+//!
+//! ```rust
+//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
+//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
+//!
+//! let client_proof = verifier.proof();
+//! let server_proof = send_proof(client_proof);
+//! let session_key = verifier.verify_server(&server_proof).unwrap();
+//! ```
 //!
 //!
 //! For user registration on the server first generate salt (e.g. 32 bytes long)
@@ -82,6 +98,7 @@
 //! let pwd_verifier = client.compute_verifier(username, password, salt);
 //! send_registration_data(username, salt, &pwd_verifier);
 //! ```
+//!
 
 use std::marker::PhantomData;
 
@@ -90,7 +107,9 @@ use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
-use crate::utils::{compute_k, compute_m1, compute_m2, compute_u};
+use crate::utils::{
+    compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u,
+};
 
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
@@ -103,6 +122,14 @@ pub struct SrpClientVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
+}
+
+/// RFC 5054 SRP client state after handshake with the server.
+pub struct SrpClientVerifierRfc5054<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
+    session_key: Vec<u8>,
 }
 
 impl<'a, D: Digest> SrpClient<'a, D> {
@@ -224,6 +251,57 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             key: key.to_bytes_be(),
         })
     }
+
+    /// Process server reply to the handshake according to RFC 5054.
+    /// `a` is a random value,
+    /// `username`, `password` is supplied by the user
+    /// `salt` and `b_pub` come from the server
+    pub fn process_reply_rfc5054(
+        &self,
+        a: &[u8],
+        username: &[u8],
+        password: &[u8],
+        salt: &[u8],
+        b_pub: &[u8],
+    ) -> Result<SrpClientVerifierRfc5054<D>, SrpAuthError> {
+        let a = BigUint::from_bytes_be(a);
+        let a_pub = self.compute_a_pub(&a);
+        let b_pub = BigUint::from_bytes_be(b_pub);
+
+        // Safeguard against malicious B
+        if &b_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
+        }
+
+        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let k = compute_k::<D>(self.params);
+        let identity_hash = Self::compute_identity_hash(username, password);
+        let x = Self::compute_x(identity_hash.as_slice(), salt);
+
+        let premaster_secret = self
+            .compute_premaster_secret(&b_pub, &k, &x, &a, &u)
+            .to_bytes_be();
+
+        let session_key = compute_hash::<D>(&premaster_secret);
+
+        let m1 = compute_m1_rfc5054::<D>(
+            self.params,
+            username,
+            salt,
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            session_key.as_slice(),
+        );
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, session_key.as_slice());
+
+        Ok(SrpClientVerifierRfc5054 {
+            m1,
+            m2,
+            key: premaster_secret,
+            session_key: session_key.to_vec(),
+        })
+    }
 }
 
 impl<D: Digest> SrpClientVerifier<D> {
@@ -243,6 +321,29 @@ impl<D: Digest> SrpClientVerifier<D> {
     pub fn verify_server(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
         if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
+        } else {
+            Err(SrpAuthError::BadRecordMac("server".to_owned()))
+        }
+    }
+}
+
+impl<D: Digest> SrpClientVerifierRfc5054<D> {
+    /// Get shared secret key without authenticating server, e.g. for using with
+    /// authenticated encryption modes. DO NOT USE this method without
+    /// some kind of secure authentication
+    pub fn key(&self) -> &[u8] {
+        &self.key
+    }
+
+    /// Verification data for sending to the server.
+    pub fn proof(&self) -> &[u8] {
+        self.m1.as_slice()
+    }
+
+    /// Verify server reply to verification data and return shared session key.
+    pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], SrpAuthError> {
+        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
+            Ok(self.session_key.as_slice())
         } else {
             Err(SrpAuthError::BadRecordMac("server".to_owned()))
         }
