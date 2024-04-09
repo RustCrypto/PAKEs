@@ -203,25 +203,25 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
         }
 
-        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let a_pub_bytes = a_pub.to_bytes_be();
+        let b_pub_bytes = b_pub.to_bytes_be();
+
+        let u = compute_u::<D>(&a_pub_bytes, &b_pub_bytes);
         let k = compute_k::<D>(self.params);
         let identity_hash = Self::compute_identity_hash(username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
+        let key_bytes = key.to_bytes_be();
 
-        let m1 = compute_m1::<D>(
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
-            &key.to_bytes_be(),
-        );
+        let m1 = compute_m1::<D>(&a_pub_bytes, &b_pub_bytes, &key_bytes);
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+        let m2 = compute_m2::<D>(&a_pub_bytes, &m1, &key_bytes);
 
         Ok(SrpClientVerifier {
             m1,
             m2,
-            key: key.to_bytes_be(),
+            key: key_bytes,
         })
     }
 }
