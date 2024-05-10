@@ -8,3 +8,13 @@ members = [
 
 [profile.dev]
 opt-level = 2
+
+[patch.crates-io]
+curve25519-dalek = { git = "https://github.com/baloo/curve25519-dalek.git", branch = "baloo/rust-crypto/digest-sha2-bumps" }
+
+# https://github.com/RustCrypto/password-hashes/pull/497
+scrypt = { git = "https://github.com/RustCrypto/password-hashes.git" }
+
+# https://github.com/RustCrypto/stream-ciphers/pull/345
+# https://github.com/RustCrypto/stream-ciphers/pull/346
+salsa20  = { git = "https://github.com/RustCrypto/stream-ciphers.git" }

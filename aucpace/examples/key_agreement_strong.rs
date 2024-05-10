@@ -235,8 +235,8 @@ fn main() -> Result<()> {
     let server_key: Output<Sha512> = server_thread.join().unwrap().unwrap();
     assert_eq!(client_key, server_key);
     println!(
-        "Negotiation finished, both parties arrived at a key of: {:X}",
-        client_key
+        "Negotiation finished, both parties arrived at a key of: {:X?}",
+        client_key.as_slice()
     );
     println!(
         "Client sent {} bytes total",
