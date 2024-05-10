@@ -12,7 +12,7 @@ categories = ["cryptography", "authentication"]
 exclude = [".gitignore"]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.61"
+rust-version = "1.72"
 
 [dependencies]
 curve25519-dalek = { version = "=4.2.0-pre", default-features = false, features = [
