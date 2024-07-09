@@ -27,7 +27,7 @@ serde = { version = "1.0.184", default-features = false, optional = true, featur
     "derive",
 ] }
 serde-byte-array = { version = "0.1", optional = true }
-subtle = { version = "2.4", default-features = false }
+subtle = { version = "2.6", default-features = false }
 scrypt = { version = "0.11", default-features = false, optional = true, features = [
     "simple",
 ] }
