@@ -41,7 +41,7 @@
 //! ```rust
 //! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
-//! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
+//! # fn get_client_proof()-> Vec<u8> { vec![23, 114, 237, 254, 188, 79, 108, 224, 243, 235, 111, 117, 125, 247, 69, 205, 106, 176, 176, 80, 240, 125, 25, 227, 117, 155, 148, 139, 217, 121, 74, 208] };
 //! # fn send_proof(_: &[u8]) { };
 //!
 //! let client_proof = get_client_proof();
@@ -146,20 +146,18 @@ impl<'a, D: Digest> SrpServer<'a, D> {
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
 
-        let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
+        let s = self.compute_premaster_secret(&a_pub, &v, &u, &b);
 
-        let m1 = compute_m1::<D>(
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
-            &key.to_bytes_be(),
-        );
+        let key = D::digest(s.to_bytes_be());
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+        let m1 = compute_m1::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be(), key.as_slice());
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, key.as_slice());
 
         Ok(SrpServerVerifier {
             m1,
             m2,
-            key: key.to_bytes_be(),
+            key: key.to_vec(),
         })
     }
 }
