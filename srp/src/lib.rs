@@ -25,10 +25,9 @@
 //! |`a_pub = g^a`           | — `a_pub`, `I` —> | (lookup `s`, `v` for given `I`) |
 //! |`x = PH(P, s)`          | <— `b_pub`, `s` — | `b_pub = k*v + g^b`             |
 //! |`u = H(a_pub ‖ b_pub)`  |                   | `u = H(a_pub ‖ b_pub)`          |
-//! |`s = (b_pub - k*g^x)^(a+u*x)` |             | `S = (b_pub - k*g^x)^(a+u*x)`   |
-//! |`K = H(s)`              |                   | `K = H(s)`                      |
-//! |`M1 = H(A ‖ B ‖ K)`     |     — `M1` —>     | (verify `M1`)                   |
-//! |(verify `M2`)           |    <— `M2` —      | `M2 = H(A ‖ M1 ‖ K)`            |
+//! |`S = (b_pub - k*g^x)^(a+u*x)` |             | `S = (b_pub - k*g^x)^(a+u*x)`   |
+//! |`M1 = H(A ‖ B ‖ S)`     |     — `M1` —>     | (verify `M1`)                   |
+//! |(verify `M2`)           |    <— `M2` —      | `M2 = H(A ‖ M1 ‖ S)`            |
 //!
 //! Variables and notations have the following meaning:
 //!
