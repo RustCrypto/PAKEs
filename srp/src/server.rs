@@ -144,22 +144,22 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
         }
 
-        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let a_pub_bytes = a_pub.to_bytes_be();
+        let b_pub_bytes = b_pub.to_bytes_be();
+
+        let u = compute_u::<D>(&a_pub_bytes, &b_pub_bytes);
 
         let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
+        let key_bytes = key.to_bytes_be();
 
-        let m1 = compute_m1::<D>(
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
-            &key.to_bytes_be(),
-        );
+        let m1 = compute_m1::<D>(&a_pub_bytes, &b_pub_bytes, &key_bytes);
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+        let m2 = compute_m2::<D>(&a_pub_bytes, &m1, &key_bytes);
 
         Ok(SrpServerVerifier {
             m1,
             m2,
-            key: key.to_bytes_be(),
+            key: key_bytes,
         })
     }
 }
