@@ -540,8 +540,8 @@ where
     ///
     /// # Arguments:
     /// - `channel_identifier` - `CI` from the protocol definition, in the context of TCP/IP this
-    ///     is usually some combination of the server and client's IP address and TCP port numbers.
-    ///     It's purpose is to prevent relay attacks.
+    ///   is usually some combination of the server and client's IP address and TCP port numbers.
+    ///   Its purpose is to prevent relay attacks.
     /// - `rng` - the CSPRNG used when generating the public/private keypair
     ///
     /// # Return:
@@ -659,7 +659,7 @@ where
     ///     - `sk` - the session key reached by the `AuCPace` protocol
     ///     - [`message`](ServerMessage::Authenticator) - the message to send to the client
     /// - Err([`Error::MutualAuthFail`](Error::MutualAuthFail)): an error if the authenticator we computed doesn't match
-    ///     the client's authenticator, compared in constant time.
+    ///   the client's authenticator, compared in constant time.
     ///
     pub fn receive_client_authenticator(
         self,

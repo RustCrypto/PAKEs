@@ -294,8 +294,8 @@ fn test_core(
 ) -> Result<(
     AuCPaceClientRecvServerKey<Sha512, K1>,
     AuCPaceServerRecvClientKey<Sha512, K1>,
-    ClientMessage<K1>,
-    ServerMessage<K1>,
+    ClientMessage<'_, K1>,
+    ServerMessage<'_, K1>,
 )> {
     // ===== Augmentation Layer =====
     // client initiates the augmentation phase
