@@ -31,11 +31,11 @@ pub trait Database {
     /// - `username`: The name of the user who is storing a verifier
     /// - `salt`: The salt used when creating the verifier
     /// - `uad`: Optional - User Attached Data - "represents application data associated with
-    ///          this specific user account, e.g. specifying the granted authorization level
-    ///          on the server."
+    ///   this specific user account, e.g. specifying the granted authorization level
+    ///   on the server."
     /// - `verifier`: The password verifier for the given user
     /// - `params`: The parameters used when hashing the password into the verifier -
-    ///             It is called sigma in the protocol defionition
+    ///   it is called sigma in the protocol definition
     fn store_verifier(
         &mut self,
         username: &[u8],
