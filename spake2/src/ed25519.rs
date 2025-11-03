@@ -1,6 +1,6 @@
 //! "Edwards25519" elliptic curve group.
 
-use crate::{c2_Element, c2_Scalar, Group};
+use crate::{Group, c2_Element, c2_Scalar};
 use alloc::vec::Vec;
 use curve25519_dalek::{constants::ED25519_BASEPOINT_POINT, edwards::CompressedEdwardsY};
 use hkdf::Hkdf;

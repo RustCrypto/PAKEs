@@ -1,9 +1,9 @@
+use crate::Database;
 use crate::constants::MIN_SSID_LEN;
 use crate::utils::{
-    compute_authenticator_messages, compute_first_session_key, compute_session_key, compute_ssid,
-    generate_keypair, generate_nonce, generate_server_keypair, H0,
+    H0, compute_authenticator_messages, compute_first_session_key, compute_session_key,
+    compute_ssid, generate_keypair, generate_nonce, generate_server_keypair,
 };
-use crate::Database;
 use crate::{Error, Result};
 use core::marker::PhantomData;
 use curve25519_dalek::traits::IsIdentity;

@@ -11,8 +11,8 @@ keywords = ["crypto", "pake", "authentication"]
 categories = ["cryptography", "authentication"]
 exclude = [".gitignore"]
 readme = "README.md"
-edition = "2021"
-rust-version = "1.61"
+edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 curve25519-dalek = { version = "4", default-features = false, features = [
