@@ -85,7 +85,8 @@ use subtle::ConstantTimeEq;
 
 use crate::types::{SrpAuthError, SrpGroup};
 use crate::utils::{
-    compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u,
+    compute_hash, compute_k, compute_k_nopad, compute_m1, compute_m1_csrp, compute_m1_rfc5054,
+    compute_m2, compute_u,
 };
 
 /// SRP server state
@@ -126,6 +127,13 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         (inter + self.params.g.modpow(b, &self.params.n)) % &self.params.n
     }
 
+    //  k*v + g^b
+    #[must_use]
+    pub fn compute_b_pub_csrp(&self, b: &BigUint, k: &BigUint, v: &BigUint) -> BigUint {
+        let inter = k * v;
+        inter + self.params.g.modpow(b, &self.params.n)
+    }
+
     // <premaster secret> = (A * v^u) ^ b % N
     #[must_use]
     pub fn compute_premaster_secret(
@@ -146,6 +154,16 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         self.compute_b_pub(
             &BigUint::from_bytes_be(b),
             &compute_k::<D>(self.params),
+            &BigUint::from_bytes_be(v),
+        )
+        .to_bytes_be()
+    }
+
+    #[must_use]
+    pub fn compute_public_ephemeral_csrp(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
+        self.compute_b_pub_csrp(
+            &BigUint::from_bytes_be(b),
+            &compute_k_nopad::<D>(self.params),
             &BigUint::from_bytes_be(v),
         )
         .to_bytes_be()
@@ -223,6 +241,56 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         let session_key = compute_hash::<D>(&premaster_secret);
 
         let m1 = compute_m1_rfc5054::<D>(
+            self.params,
+            username,
+            salt,
+            &a_pub.to_bytes_be(),
+            &b_pub.to_bytes_be(),
+            session_key.as_slice(),
+        );
+
+        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, session_key.as_slice());
+
+        Ok(SrpServerVerifierRfc5054 {
+            m1,
+            m2,
+            key: premaster_secret,
+            session_key: session_key.to_vec(),
+        })
+    }
+
+    /// Process client reply to the handshake according to RFC 5054.
+    /// b is a random value,
+    /// v is the provided during initial user registration
+    pub fn process_reply_csrp(
+        &self,
+        username: &[u8],
+        salt: &[u8],
+        b: &[u8],
+        v: &[u8],
+        a_pub: &[u8],
+    ) -> Result<SrpServerVerifierRfc5054<D>, SrpAuthError> {
+        let b = BigUint::from_bytes_be(b);
+        let v = BigUint::from_bytes_be(v);
+        let a_pub = BigUint::from_bytes_be(a_pub);
+
+        let k = compute_k_nopad::<D>(self.params);
+        let b_pub = self.compute_b_pub_csrp(&b, &k, &v);
+
+        // Safeguard against malicious A
+        if &a_pub % &self.params.n == BigUint::default() {
+            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
+        }
+
+        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+
+        let premaster_secret = self
+            .compute_premaster_secret(&a_pub, &v, &u, &b)
+            .to_bytes_be();
+
+        let session_key = compute_hash::<D>(&premaster_secret);
+
+        let m1 = compute_m1_csrp::<D>(
             self.params,
             username,
             salt,
