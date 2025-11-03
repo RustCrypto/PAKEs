@@ -56,7 +56,7 @@ USE AT YOUR OWN RISK!
 
 ## Minimum Supported Rust Version
 
-Rust **1.61** or higher.
+Rust **1.85** or higher.
 
 Minimum supported Rust version can be changed in the future, but it will be
 done with a minor version bump.
@@ -85,7 +85,7 @@ dual licensed as above, without any additional terms or conditions.
 [build-image]: https://github.com/RustCrypto/PAKEs/actions/workflows/aucpace.yml/badge.svg
 [build-link]: https://github.com/RustCrypto/PAKEs/actions/workflows/aucpace.yml
 [license-image]: https://img.shields.io/badge/license-Apache2.0/MIT-blue.svg
-[rustc-image]: https://img.shields.io/badge/rustc-1.60+-blue.svg
+[rustc-image]: https://img.shields.io/badge/rustc-1.85+-blue.svg
 [chat-image]: https://img.shields.io/badge/zulip-join_chat-blue.svg
 [chat-link]: https://rustcrypto.zulipchat.com/#narrow/stream/260045-PAKEs
 

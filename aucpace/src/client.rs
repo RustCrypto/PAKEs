@@ -1,8 +1,8 @@
 use crate::{
     errors::{Error, Result},
     utils::{
-        compute_authenticator_messages, compute_first_session_key, compute_session_key,
-        compute_ssid, generate_keypair, generate_nonce, scalar_from_hash, H0,
+        H0, compute_authenticator_messages, compute_first_session_key, compute_session_key,
+        compute_ssid, generate_keypair, generate_nonce, scalar_from_hash,
     },
 };
 
@@ -944,11 +944,9 @@ where
     buf[u] = b':';
     buf[(u + 1)..=(u + p)].copy_from_slice(pass);
 
-    let hash = hasher
+    hasher
         .hash_password_customized(&buf[0..=(u + p)], None, None, params, salt)
-        .map_err(Error::PasswordHashing);
-
-    hash
+        .map_err(Error::PasswordHashing)
 }
 
 /// Hash a username and password with the given password hasher

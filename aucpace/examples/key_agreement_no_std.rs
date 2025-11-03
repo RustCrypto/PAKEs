@@ -21,9 +21,7 @@ macro_rules! send {
 
 /// function like macro to wrap receiving data over a tcp stream, returns the message received
 macro_rules! recv {
-    ($buf:ident) => {{
-        postcard::from_bytes(&$buf).unwrap()
-    }};
+    ($buf:ident) => {{ postcard::from_bytes(&$buf).unwrap() }};
 }
 
 fn main() -> Result<()> {
