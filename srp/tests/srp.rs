@@ -6,7 +6,7 @@ use srp::groups::G_2048;
 use srp::server::SrpServer;
 
 fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = rand::rngs::OsRng;
+    let mut rng = rand::rng();
     let username = b"alice";
 
     // Client instance creation
@@ -69,7 +69,7 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
 }
 
 fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = rand::rngs::OsRng;
+    let mut rng = rand::rng();
     let username = b"alice";
 
     // Client instance creation

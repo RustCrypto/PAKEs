@@ -14,7 +14,7 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use password_hash::{ParamsString, SaltString};
-use rand_core::CryptoRngCore;
+use rand_core::CryptoRng;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "partial_augmentation")]
@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 struct ServerSecret(u64);
 
 impl ServerSecret {
-    fn new<CSPRNG: CryptoRngCore>(rng: &mut CSPRNG) -> Self {
+    fn new<CSPRNG: CryptoRng>(rng: &mut CSPRNG) -> Self {
         Self(rng.next_u64())
     }
 }
@@ -43,7 +43,7 @@ impl ServerSecret {
 pub struct AuCPaceServer<D, CSPRNG, const K1: usize>
 where
     D: Digest + Default,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     /// The CSPRNG used to generate random values where needed
     rng: CSPRNG,
@@ -57,7 +57,7 @@ where
 impl<D, CSPRNG, const K1: usize> AuCPaceServer<D, CSPRNG, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     /// Create a new server
     pub fn new(mut rng: CSPRNG) -> Self {
@@ -145,7 +145,7 @@ where
 {
     fn new<CSPRNG>(secret: ServerSecret, rng: &mut CSPRNG) -> Self
     where
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         Self {
             secret,
@@ -210,7 +210,7 @@ where
     where
         U: AsRef<[u8]>,
         DB: Database<PasswordVerifier = RistrettoPoint>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let (x, x_pub) = generate_server_keypair(&mut rng);
 
@@ -234,7 +234,7 @@ where
     /// # Arguments:
     /// - `username`: the client's username
     /// - `database`: the password verifier database to retrieve the client's information from
-    ///    This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
+    ///   This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
@@ -255,7 +255,7 @@ where
         U: AsRef<[u8]>,
         DB: Database<PasswordVerifier = RistrettoPoint>
             + PartialAugDatabase<PrivateKey = Scalar, PublicKey = RistrettoPoint>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let user = username.as_ref();
         let (prs, message) = if let Some((x, x_pub)) = database.lookup_long_term_keypair(user) {
@@ -283,7 +283,7 @@ where
     /// - `username`: the client's username
     /// - `blinded`: the client's blinded point `U`
     /// - `database`: the password verifier database to retrieve the client's information from
-    ///    This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
+    ///   This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
@@ -304,7 +304,7 @@ where
     where
         U: AsRef<[u8]>,
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let (x, x_pub) = generate_server_keypair(&mut rng);
 
@@ -328,7 +328,7 @@ where
     /// - `username`: the client's username
     /// - `blinded`: the client's blinded point `U`
     /// - `database`: the password verifier database to retrieve the client's information from
-    ///    This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
+    ///   This is a `PartialAugDatabase` so we can lookup the server's long term keypair.
     ///
     /// # Return:
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
@@ -350,7 +350,7 @@ where
         U: AsRef<[u8]>,
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>
             + PartialAugDatabase<PrivateKey = Scalar, PublicKey = RistrettoPoint>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let user = username.as_ref();
         let (prs, message) = if let Some((x, x_pub)) = database.lookup_long_term_keypair(user) {
@@ -378,7 +378,7 @@ where
     ) -> ([u8; 32], ServerMessage<'static, K1>)
     where
         DB: Database<PasswordVerifier = RistrettoPoint>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         if let Some((w, salt, sigma)) = database.lookup_verifier(username.as_ref()) {
             let cofactor = Scalar::ONE;
@@ -411,7 +411,7 @@ where
     ) -> Result<([u8; 32], ServerMessage<'static, K1>)>
     where
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         if let Some((w, q, sigma)) = database.lookup_verifier_strong(username.as_ref()) {
             let cofactor = Scalar::ONE;
@@ -442,7 +442,7 @@ where
         rng: &mut CSPRNG,
     ) -> ([u8; 32], ServerMessage<'static, K1>)
     where
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let prs = {
             let mut tmp = [0u8; 32];
@@ -483,7 +483,7 @@ where
         rng: &mut CSPRNG,
     ) -> Result<([u8; 32], ServerMessage<'static, K1>)>
     where
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let prs = {
             let mut tmp = [0u8; 32];
@@ -519,7 +519,7 @@ where
 pub struct AuCPaceServerCPaceSubstep<D, CSPRNG, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     ssid: Output<D>,
     prs: [u8; 32],
@@ -529,7 +529,7 @@ where
 impl<D, CSPRNG, const K1: usize> AuCPaceServerCPaceSubstep<D, CSPRNG, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     const fn new(ssid: Output<D>, prs: [u8; 32], rng: CSPRNG) -> Self {
         Self { ssid, prs, rng }
@@ -735,12 +735,14 @@ mod tests {
     #[allow(unused)]
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 
+    #[cfg(all(feature = "sha2", feature = "rand"))]
+    use crate::{OsRng, rand_core::TryRngCore};
+
     #[test]
-    #[cfg(all(feature = "sha2", feature = "getrandom"))]
+    #[cfg(all(feature = "sha2", feature = "rand"))]
     fn test_server_doesnt_accept_insecure_ssid() {
         use crate::Server;
-        use rand_core::OsRng;
-        let mut server = Server::new(OsRng);
+        let mut server = Server::new(OsRng.unwrap_err());
         let res = server.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
     }
@@ -833,11 +835,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2", feature = "getrandom", feature = "strong_aucpace"))]
+    #[cfg(all(feature = "sha2", feature = "rand", feature = "strong_aucpace"))]
     fn test_server_doesnt_accept_invalid_uq() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;
-        use rand_core::OsRng;
 
         let ssid = H0::<sha2::Sha512>().finalize();
         let aug_server: AuCPaceServerAugLayer<sha2::Sha512, 16> =
@@ -846,7 +847,7 @@ mod tests {
             b"bobbyyyy",
             RistrettoPoint::identity(),
             &FakeDatabase(),
-            OsRng,
+            OsRng.unwrap_err(),
         );
 
         if let Err(e) = res {
@@ -857,11 +858,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2", feature = "getrandom", feature = "strong_aucpace"))]
+    #[cfg(all(feature = "sha2", feature = "rand", feature = "strong_aucpace"))]
     fn test_server_doesnt_accept_invalid_uq_partial() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;
-        use rand_core::OsRng;
 
         let ssid = H0::<sha2::Sha512>().finalize();
         let aug_server: AuCPaceServerAugLayer<sha2::Sha512, 16> =
@@ -870,7 +870,7 @@ mod tests {
             b"bobbyyyy",
             RistrettoPoint::identity(),
             &FakeDatabase(),
-            OsRng,
+            OsRng.unwrap_err(),
         );
 
         if let Err(e) = res {

@@ -15,41 +15,34 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-curve25519-dalek = { version = "4", default-features = false, features = [
-    "digest",
-    "rand_core",
-] }
-password-hash = { version = "0.5", default-features = false, features = [
-    "rand_core",
-] }
-rand_core = { version = "0.6", default-features = false }
-serde = { version = "1.0.184", default-features = false, optional = true, features = [
-    "derive",
-] }
-serde-byte-array = { version = "0.1", optional = true }
+curve25519-dalek = { version = "5.0.0-pre.1", default-features = false, features = ["digest", "rand_core"] }
+password-hash = { version = "0.6.0-rc.2", default-features = false, features = ["rand_core"] }
+rand_core = { version = "0.10.0-rc.2", default-features = false }
 subtle = { version = "2.4", default-features = false }
-scrypt = { version = "0.11", default-features = false, optional = true, features = [
-    "simple",
-] }
-sha2 = { version = "0.10", default-features = false, optional = true }
+
+# optional dependencies
+rand = { version = "0.10.0-rc.1", optional = true }
+serde = { version = "1.0.184", default-features = false, optional = true, features = ["derive"] }
+serde-byte-array = { version = "0.1", optional = true }
+scrypt = { version = "0.12.0-rc.3", default-features = false, optional = true, features = ["simple"] }
+sha2 = { version = "0.11.0-rc.3", default-features = false, optional = true }
 
 [dev-dependencies]
 bincode = "1"
-curve25519-dalek = { version = "4", features = ["digest", "rand_core"] }
-password-hash = { version = "0.5", features = ["rand_core"] }
+curve25519-dalek = { version = "5.0.0-pre.1", features = ["digest", "rand_core"] }
+password-hash = { version = "0.6.0-rc.2", features = ["rand_core"] }
 postcard = "1"
-rand_core = "0.6"
-scrypt = { version = "0.11", features = ["simple"] }
-sha2 = "0.10"
+scrypt = { version = "0.12.0-rc.3", features = ["simple"] }
+sha2 = "0.11.0-rc.3"
 
 [features]
-default = ["scrypt", "sha2", "getrandom"]
+default = ["rand", "scrypt", "sha2"]
 alloc = []
+
 partial_augmentation = []
+serde = ["dep:serde", "serde-byte-array", "curve25519-dalek/serde"]
 strong_aucpace = []
 zeroize = ["curve25519-dalek/zeroize"]
-serde = ["dep:serde", "serde-byte-array", "curve25519-dalek/serde"]
-getrandom = ["rand_core/getrandom"]
 
 [[example]]
 name = "key_agreement"

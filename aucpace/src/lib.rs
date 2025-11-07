@@ -102,16 +102,25 @@ pub use self::{
     server::{AuCPaceServer, ServerMessage},
 };
 
+pub use rand_core;
+
 #[cfg(feature = "partial_augmentation")]
 pub use self::database::PartialAugDatabase;
 
 #[cfg(feature = "strong_aucpace")]
 pub use self::database::StrongDatabase;
 
+#[cfg(feature = "rand")]
+pub use rand::rngs::OsRng;
+
+/// Infallible version of `OsRng` which panics on error
+#[cfg(feature = "rand")]
+pub type UnwrapOsRng = rand_core::UnwrapErr<OsRng>;
+
 /// Default Server instantiation with `SHA512`, `OsRng` and a nonce size of 16 bytes
-#[cfg(all(feature = "sha2", feature = "getrandom"))]
-pub type Server = AuCPaceServer<sha2::Sha512, rand_core::OsRng, 16>;
+#[cfg(all(feature = "sha2", feature = "rand"))]
+pub type Server = AuCPaceServer<sha2::Sha512, UnwrapOsRng, 16>;
 
 /// Default Client instantiation with `SHA512`, `Scrypt`, `OsRng` and a nonce size of 16 bytes
-#[cfg(all(feature = "scrypt", feature = "sha2", feature = "getrandom"))]
-pub type Client = AuCPaceClient<sha2::Sha512, scrypt::Scrypt, rand_core::OsRng, 16>;
+#[cfg(all(feature = "scrypt", feature = "sha2", feature = "rand"))]
+pub type Client = AuCPaceClient<sha2::Sha512, scrypt::Scrypt, UnwrapOsRng, 16>;

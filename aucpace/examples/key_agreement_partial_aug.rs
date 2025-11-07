@@ -1,10 +1,11 @@
+use aucpace::rand_core::TryRngCore;
 use aucpace::{
-    Client, ClientMessage, Database, Error, PartialAugDatabase, Result, Server, ServerMessage,
+    Client, ClientMessage, Database, Error, OsRng, PartialAugDatabase, Result, Server,
+    ServerMessage,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
 use password_hash::{ParamsString, SaltString};
-use rand_core::OsRng;
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
 use sha2::digest::Output;
@@ -40,9 +41,12 @@ fn main() -> Result<()> {
     // the server socket address to bind to
     let server_socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 25519);
 
+    // random number generator from OS
+    let mut rng = OsRng.unwrap_err();
+
     // register the user in the database
-    let mut base_client = Client::new(OsRng);
-    let mut base_server = Server::new(OsRng);
+    let mut base_client = Client::new(rng);
+    let mut base_server = Server::new(rng);
     let mut database: SingleUserDatabase = Default::default();
 
     let params = Params::recommended();
@@ -92,7 +96,7 @@ fn main() -> Result<()> {
         client_message = recv!(stream, buf);
         let (server, message) = if let ClientMessage::Username(username) = client_message {
             // This is the only difference from the non-augmented protocol flow
-            server.generate_client_info_partial_aug(username, &database, OsRng)
+            server.generate_client_info_partial_aug(username, &database, rng)
         } else {
             panic!("Received invalid client message {:?}", client_message);
         };
@@ -187,7 +191,7 @@ fn main() -> Result<()> {
                 let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
                 let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
 
-                Params::new(log_n, r, p, scrypt::Params::RECOMMENDED_LEN).unwrap()
+                Params::new(log_n, r, p).unwrap()
             };
             client.generate_cpace_alloc(x_pub, &salt, params, Scrypt)?
         } else {
@@ -196,7 +200,7 @@ fn main() -> Result<()> {
 
         // ===== CPace substep =====
         let ci = TcpChannelIdentifier::new(stream.local_addr().unwrap(), server_socket).unwrap();
-        let (client, message) = client.generate_public_key(ci, &mut OsRng);
+        let (client, message) = client.generate_public_key(ci, &mut rng);
         let bytes_sent = send!(stream, message);
         CLIENT_BYTES_SENT.fetch_add(bytes_sent, Ordering::SeqCst);
         println!(
@@ -239,7 +243,7 @@ fn main() -> Result<()> {
     let server_key: Output<Sha512> = server_thread.join().unwrap().unwrap();
     assert_eq!(client_key, server_key);
     println!(
-        "Negotiation finished, both parties arrived at a key of: {:X}",
+        "Negotiation finished, both parties arrived at a key of: {:?}",
         client_key
     );
     println!(

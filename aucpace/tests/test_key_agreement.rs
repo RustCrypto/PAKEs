@@ -1,9 +1,11 @@
-use aucpace::client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey};
-use aucpace::server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey};
-use aucpace::{Client, ClientMessage, Database, Result, Server, ServerMessage};
+use aucpace::{
+    Client, ClientMessage, Database, OsRng, Result, Server, ServerMessage,
+    client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},
+    rand_core::TryRngCore,
+    server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
+};
 use curve25519_dalek::RistrettoPoint;
 use password_hash::{ParamsString, SaltString};
-use rand_core::OsRng;
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
 
@@ -230,9 +232,11 @@ fn test_key_agreement_prestablished_ssid_implicit_auth() -> Result<()> {
 
 /// Perform the initialisation step for all tests
 fn init() -> Result<(Client, Server, SingleUserDatabase)> {
+    let rng = OsRng.unwrap_err();
+
     // Create the client, server and database
-    let base_server = Server::new(OsRng);
-    let mut base_client = Client::new(OsRng);
+    let base_server = Server::new(rng);
+    let mut base_client = Client::new(rng);
     let mut database: SingleUserDatabase = Default::default();
 
     // register a user in the database
@@ -262,13 +266,15 @@ fn test_core(
     ClientMessage<'_, K1>,
     ServerMessage<'_, K1>,
 )> {
+    let mut rng = OsRng.unwrap_err();
+
     // ===== Augmentation Layer =====
     // client initiates the augmentation phase
     let (client, client_message) = client.start_augmentation(USERNAME, PASSWORD);
 
     // server generates augmentation info from client's username
     let (server, server_message) = if let ClientMessage::Username(username) = client_message {
-        server.generate_client_info(username, database, OsRng)
+        server.generate_client_info(username, database, rng)
     } else {
         panic!("Received invalid client message {:?}", client_message);
     };
@@ -287,7 +293,7 @@ fn test_core(
             let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
             let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
 
-            Params::new(log_n, r, p, Params::RECOMMENDED_LEN).unwrap()
+            Params::new(log_n, r, p).unwrap()
         };
         client.generate_cpace_alloc(x_pub, &salt, params, Scrypt)?
     } else {
@@ -296,7 +302,7 @@ fn test_core(
 
     // ===== CPace substep =====
     let (server, server_message) = server.generate_public_key(CI);
-    let (client, client_message) = client.generate_public_key(CI, &mut OsRng);
+    let (client, client_message) = client.generate_public_key(CI, &mut rng);
 
     Ok((client, server, client_message, server_message))
 }

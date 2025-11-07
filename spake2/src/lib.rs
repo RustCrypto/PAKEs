@@ -40,7 +40,8 @@
 //!
 //! Thus a client-side program start with:
 //!
-//! ```rust
+#![cfg_attr(feature = "rand", doc = "```")]
+#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! # fn send(msg: &[u8]) {}
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_a(
@@ -56,7 +57,8 @@
 //!
 //! while the server-side might do:
 //!
-//! ```rust
+#![cfg_attr(feature = "rand", doc = "```")]
+#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
 //! # fn send(msg: &[u8]) {}
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_b(
@@ -100,7 +102,8 @@
 //!
 //! Carol does:
 //!
-//! ```rust
+#![cfg_attr(feature = "rand", doc = "```")]
+#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
 //! # fn send(msg: &[u8]) {}
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_symmetric(
@@ -115,7 +118,8 @@
 //!
 //! Dave does exactly the same:
 //!
-//! ```rust
+#![cfg_attr(feature = "rand", doc = "```")]
+#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
 //! # fn send(msg: &[u8]) {}
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_symmetric(
@@ -239,14 +243,18 @@ pub use self::{
     error::{Error, Result},
     group::Group,
 };
+pub use rand_core;
 
 use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
-#[cfg(feature = "getrandom")]
-use rand_core::OsRng;
+#[cfg(feature = "rand")]
+pub use rand::rngs::OsRng;
+
+#[cfg(feature = "rand")]
+use rand::TryRngCore;
 
 /// Password type.
 // TODO(tarcieri): avoid allocation?
@@ -312,28 +320,28 @@ impl<G: Group> Spake2<G> {
     /// Start with identity `idA`.
     ///
     /// Uses the system RNG.
-    #[cfg(feature = "getrandom")]
+    #[cfg(feature = "rand")]
     #[must_use]
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
-        Self::start_a_with_rng(password, id_a, id_b, OsRng)
+        Self::start_a_with_rng(password, id_a, id_b, OsRng.unwrap_mut())
     }
 
     /// Start with identity `idB`.
     ///
     /// Uses the system RNG.
-    #[cfg(feature = "getrandom")]
+    #[cfg(feature = "rand")]
     #[must_use]
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
-        Self::start_b_with_rng(password, id_a, id_b, OsRng)
+        Self::start_b_with_rng(password, id_a, id_b, OsRng.unwrap_mut())
     }
 
     /// Start with symmetric identity.
     ///
     /// Uses the system RNG.
-    #[cfg(feature = "getrandom")]
+    #[cfg(feature = "rand")]
     #[must_use]
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Self, Vec<u8>) {
-        Self::start_symmetric_with_rng(password, id_s, OsRng)
+        Self::start_symmetric_with_rng(password, id_s, OsRng.unwrap_mut())
     }
 
     /// Start with identity `idA` and the provided cryptographically secure RNG.
@@ -342,7 +350,7 @@ impl<G: Group> Spake2<G> {
         password: &Password,
         id_a: &Identity,
         id_b: &Identity,
-        mut csrng: impl CryptoRng + RngCore,
+        mut csrng: impl CryptoRng,
     ) -> (Self, Vec<u8>) {
         let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_a_internal(password, id_a, id_b, xy_scalar)
@@ -353,7 +361,7 @@ impl<G: Group> Spake2<G> {
         password: &Password,
         id_a: &Identity,
         id_b: &Identity,
-        mut csrng: impl CryptoRng + RngCore,
+        mut csrng: impl CryptoRng,
     ) -> (Self, Vec<u8>) {
         let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_b_internal(password, id_a, id_b, xy_scalar)
@@ -363,7 +371,7 @@ impl<G: Group> Spake2<G> {
     pub fn start_symmetric_with_rng(
         password: &Password,
         id_s: &Identity,
-        mut csrng: impl CryptoRng + RngCore,
+        mut csrng: impl CryptoRng,
     ) -> (Self, Vec<u8>) {
         let xy_scalar: G::Scalar = G::random_scalar(&mut csrng);
         Self::start_symmetric_internal(password, id_s, xy_scalar)
