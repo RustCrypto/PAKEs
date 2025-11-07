@@ -1,3 +1,5 @@
+#![cfg(all(feature = "alloc", feature = "rand", feature = "strong_aucpace"))]
+
 use aucpace::{
     Client, ClientMessage, OsRng, Result, Server, ServerMessage, StrongDatabase,
     client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},

@@ -1,3 +1,5 @@
+#![cfg(all(feature = "alloc", feature = "rand"))]
+
 use aucpace::{
     Client, ClientMessage, Database, OsRng, Result, Server, ServerMessage,
     client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},

@@ -1,3 +1,10 @@
+#![cfg(all(
+    feature = "alloc",
+    feature = "partial_augmentation",
+    feature = "rand",
+    feature = "strong_aucpace"
+))]
+
 use aucpace::{
     Client, ClientMessage, Error, OsRng, PartialAugDatabase, Result, Server, ServerMessage,
     StrongDatabase,

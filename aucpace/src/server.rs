@@ -334,7 +334,6 @@ where
     /// ([`next_step`](AuCPaceServerCPaceSubstep), [`message`](ServerMessage::AugmentationInfo))
     /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the `CPace` substep stage
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
-    ///
     #[cfg(all(feature = "strong_aucpace", feature = "partial_augmentation"))]
     pub fn generate_client_info_partial_strong<U, DB, CSPRNG>(
         self,
@@ -812,7 +811,11 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "sha2", feature = "strong_aucpace"))]
+    #[cfg(all(
+        feature = "partial_augmentation",
+        feature = "sha2",
+        feature = "strong_aucpace"
+    ))]
     impl PartialAugDatabase for FakeDatabase {
         type PrivateKey = Scalar;
         type PublicKey = RistrettoPoint;
@@ -858,7 +861,12 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2", feature = "rand", feature = "strong_aucpace"))]
+    #[cfg(all(
+        feature = "partial_augmentation",
+        feature = "sha2",
+        feature = "rand",
+        feature = "strong_aucpace"
+    ))]
     fn test_server_doesnt_accept_invalid_uq_partial() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;
