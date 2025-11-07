@@ -1,8 +1,10 @@
-use aucpace::OsRng;
-use aucpace::client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey};
-use aucpace::server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey};
+#![cfg(all(feature = "alloc", feature = "partial_augmentation", feature = "rand"))]
+
 use aucpace::{
-    Client, ClientMessage, Database, Error, PartialAugDatabase, Result, Server, ServerMessage,
+    Client, ClientMessage, Database, Error, OsRng, PartialAugDatabase, Result, Server,
+    ServerMessage,
+    client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},
+    server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
 };
 use curve25519_dalek::{RistrettoPoint, Scalar};
 use password_hash::{ParamsString, SaltString};
