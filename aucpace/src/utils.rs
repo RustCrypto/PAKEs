@@ -7,7 +7,7 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use password_hash::PasswordHash;
-use rand_core::CryptoRngCore;
+use rand_core::CryptoRng;
 
 #[allow(non_snake_case)]
 #[inline]
@@ -38,7 +38,7 @@ create_h_impl!(H5, 5);
 #[inline]
 pub fn generate_nonce<CSPRNG, const N: usize>(rng: &mut CSPRNG) -> [u8; N]
 where
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     let mut nonce = [0; N];
     rng.fill_bytes(&mut nonce);
@@ -64,7 +64,7 @@ pub fn generate_keypair<D, CSPRNG, CI>(
 ) -> (Scalar, RistrettoPoint)
 where
     D: Digest<OutputSize = U64> + Default,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
     CI: AsRef<[u8]>,
 {
     let mut hasher: D = H1();
@@ -156,7 +156,7 @@ pub fn scalar_from_hash(pw_hash: &PasswordHash<'_>) -> Result<Scalar> {
 #[inline]
 pub fn generate_server_keypair<CSPRNG>(rng: &mut CSPRNG) -> (Scalar, RistrettoPoint)
 where
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     // for ristretto255 the cofactor is 1, for normal curve25519 it is 8
     // this will need to be provided by a group trait in the future

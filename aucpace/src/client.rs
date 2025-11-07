@@ -17,7 +17,7 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use password_hash::{ParamsString, PasswordHash, PasswordHasher, Salt, SaltString};
-use rand_core::CryptoRngCore;
+use rand_core::CryptoRng;
 use subtle::ConstantTimeEq;
 
 #[cfg(feature = "strong_aucpace")]
@@ -37,7 +37,7 @@ pub struct AuCPaceClient<D, H, CSPRNG, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
     H: PasswordHasher,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     rng: CSPRNG,
     d: PhantomData<D>,
@@ -48,7 +48,7 @@ impl<D, H, CSPRNG, const K1: usize> AuCPaceClient<D, H, CSPRNG, K1>
 where
     D: Digest<OutputSize = U64> + Default,
     H: PasswordHasher,
-    CSPRNG: CryptoRngCore,
+    CSPRNG: CryptoRng,
 {
     /// Create new server
     pub const fn new(rng: CSPRNG) -> Self {
@@ -127,7 +127,7 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let salt_string = SaltString::generate(&mut self.rng);
+        let salt_string = SaltString::from_rng(&mut self.rng);
 
         // compute the verifier W
         let pw_hash = hash_password::<&[u8], P, &SaltString, H, BUFSIZ>(
@@ -235,8 +235,7 @@ where
     where
         P: AsRef<[u8]>,
     {
-        // adapted from SaltString::generate, which we cannot use due to curve25519 versions of rand_core
-        let salt_string = SaltString::generate(&mut self.rng);
+        let salt_string = SaltString::from_rng(&mut self.rng);
 
         // compute the verifier W
         let pw_hash =
@@ -358,7 +357,7 @@ where
 {
     fn new<CSPRNG>(rng: &mut CSPRNG) -> Self
     where
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         Self {
             nonce: generate_nonce(rng),
@@ -448,7 +447,7 @@ where
         ClientMessage<'a, K1>,
     )
     where
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         // compute the blinding value and blind the hash of the username and password
         // ensuring that it is non-zero as required by `invert`
@@ -790,7 +789,7 @@ where
     )
     where
         CI: AsRef<[u8]>,
-        CSPRNG: CryptoRngCore,
+        CSPRNG: CryptoRng,
     {
         let (priv_key, pub_key) =
             generate_keypair::<D, CSPRNG, CI>(rng, self.ssid, self.prs, channel_identifier);
@@ -1046,16 +1045,18 @@ mod tests {
     #[allow(unused)]
     use super::*;
 
+    #[cfg(all(feature = "rand", feature = "sha2"))]
+    use crate::{OsRng, rand_core::TryRngCore};
+
     #[test]
-    #[cfg(all(feature = "alloc", feature = "getrandom", feature = "scrypt"))]
+    #[cfg(all(feature = "alloc", feature = "rand", feature = "scrypt"))]
     fn test_hash_password_no_std_and_alloc_agree() {
-        use rand_core::{OsRng, RngCore};
         use scrypt::{Params, Scrypt};
 
         let username = "worf@starship.enterprise";
         let password = "data_x_worf_4ever_<3";
         let mut bytes = [0u8; Salt::RECOMMENDED_LENGTH];
-        OsRng.fill_bytes(&mut bytes);
+        OsRng.try_fill_bytes(&mut bytes).unwrap();
         let salt = SaltString::encode_b64(&bytes).expect("Salt length invariant broken.");
         // These are weak parameters, do not use them
         // they are used here to make the test run faster
@@ -1071,12 +1072,11 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "getrandom", feature = "sha2"))]
+    #[cfg(all(feature = "rand", feature = "sha2"))]
     fn test_client_doesnt_accept_insecure_ssid() {
         use crate::Client;
-        use rand_core::OsRng;
 
-        let mut client = Client::new(OsRng);
+        let mut client = Client::new(OsRng.unwrap_err());
         let res = client.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
     }

@@ -4,10 +4,11 @@
 extern crate std;
 use std::{println, time::Instant};
 
-use aucpace::{Client, ClientMessage, Database, Result, Server, ServerMessage};
+use aucpace::{
+    Client, ClientMessage, Database, OsRng, Result, Server, ServerMessage, rand_core::TryRngCore,
+};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use password_hash::{ParamsString, SaltString};
-use rand_core::OsRng;
 use scrypt::{Params, Scrypt};
 
 /// function like macro to wrap sending data over a tcp stream, returns the number of bytes sent
@@ -29,9 +30,12 @@ fn main() -> Result<()> {
     const USERNAME: &[u8] = b"adira.tal";
     const PASSWORD: &[u8] = b"4d1rA_aND-Gr4Y_aRe_tH3-b3sT <3";
 
+    // get system random number generator
+    let mut rng = OsRng.unwrap_err();
+
     // register the user in the database
-    let mut base_server = Server::new(OsRng);
-    let mut base_client = Client::new(OsRng);
+    let mut base_server = Server::new(rng);
+    let mut base_client = Client::new(rng);
     let mut database: SingleUserDatabase<100> = Default::default();
 
     let start = Instant::now();
@@ -111,7 +115,7 @@ fn main() -> Result<()> {
     // server receives the username then looks up
     client_message = recv!(client_buf);
     let (server, message) = if let ClientMessage::Username(username) = client_message {
-        server.generate_client_info(username, &database, OsRng)
+        server.generate_client_info(username, &database, rng)
     } else {
         panic!("Received invalid client message {:?}", client_message);
     };
@@ -137,7 +141,7 @@ fn main() -> Result<()> {
             let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
             let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
 
-            Params::new(log_n, r, p, scrypt::Params::RECOMMENDED_LEN).unwrap()
+            Params::new(log_n, r, p).unwrap()
         };
         client.generate_cpace::<&SaltString, 100>(x_pub, &salt, params, Scrypt)?
     } else {
@@ -156,7 +160,7 @@ fn main() -> Result<()> {
     );
 
     // now generate the client's public key and send it
-    let (client, message) = client.generate_public_key(CI, &mut OsRng);
+    let (client, message) = client.generate_public_key(CI, &mut rng);
     let bytes_sent = send!(client_buf, message);
     client_bytes_sent += bytes_sent;
     println!(
@@ -223,7 +227,7 @@ fn main() -> Result<()> {
     // assert that both threads arrived at the same key
     assert_eq!(client_key, server_key);
     println!(
-        "Negotiation finished, both parties arrived at a key of: {:X}",
+        "Negotiation finished, both parties arrived at a key of: {:?}",
         client_key
     );
 

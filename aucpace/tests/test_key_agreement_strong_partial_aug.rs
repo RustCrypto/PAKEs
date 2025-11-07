@@ -1,11 +1,12 @@
-use aucpace::client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey};
-use aucpace::server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey};
 use aucpace::{
-    Client, ClientMessage, Error, PartialAugDatabase, Result, Server, ServerMessage, StrongDatabase,
+    Client, ClientMessage, Error, OsRng, PartialAugDatabase, Result, Server, ServerMessage,
+    StrongDatabase,
+    client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},
+    rand_core::TryRngCore,
+    server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
 };
 use curve25519_dalek::{RistrettoPoint, Scalar};
 use password_hash::ParamsString;
-use rand_core::OsRng;
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
 
@@ -264,9 +265,11 @@ fn test_key_agreement_prestablished_ssid_implicit_auth() -> Result<()> {
 
 /// Perform the initialisation step for all tests
 fn init() -> Result<(Client, Server, SingleUserDatabase)> {
+    let rng = OsRng.unwrap_err();
+
     // Create the client, server and database
-    let mut base_server = Server::new(OsRng);
-    let mut base_client = Client::new(OsRng);
+    let mut base_server = Server::new(rng);
+    let mut base_client = Client::new(rng);
     let mut database: SingleUserDatabase = Default::default();
 
     // register a user in the database
@@ -298,14 +301,16 @@ fn test_core(
     ClientMessage<'_, K1>,
     ServerMessage<'_, K1>,
 )> {
+    let mut rng = OsRng.unwrap_err();
+
     // ===== Augmentation Layer =====
     // client initiates the augmentation phase
-    let (client, client_message) = client.start_augmentation_strong(USERNAME, PASSWORD, &mut OsRng);
+    let (client, client_message) = client.start_augmentation_strong(USERNAME, PASSWORD, &mut rng);
 
     // server generates augmentation info from client's username
     let (server, server_message) =
         if let ClientMessage::StrongUsername { username, blinded } = client_message {
-            server.generate_client_info_partial_strong(username, blinded, database, OsRng)?
+            server.generate_client_info_partial_strong(username, blinded, database, rng)?
         } else {
             panic!("Received invalid client message {:?}", client_message);
         };
@@ -324,7 +329,7 @@ fn test_core(
             let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
             let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
 
-            Params::new(log_n, r, p, Params::RECOMMENDED_LEN).unwrap()
+            Params::new(log_n, r, p).unwrap()
         };
         client.generate_cpace_alloc(x_pub, blinded_salt, params, Scrypt)?
     } else {
@@ -333,7 +338,7 @@ fn test_core(
 
     // ===== CPace substep =====
     let (server, server_message) = server.generate_public_key(CI);
-    let (client, client_message) = client.generate_public_key(CI, &mut OsRng);
+    let (client, client_message) = client.generate_public_key(CI, &mut rng);
 
     Ok((client, server, client_message, server_message))
 }

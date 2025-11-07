@@ -83,7 +83,7 @@ pub trait PartialAugDatabase {
     /// # Return:
     /// - Ok(()): success - the keypair was stored correctly
     /// - Err([`Error::UserNotRegistered`](crate::Error::UserNotRegistered)): failure -
-    ///    `username` is not registered and thus we cannot store a keypair for them
+    ///   `username` is not registered and thus we cannot store a keypair for them
     ///
     fn store_long_term_keypair(
         &mut self,
@@ -125,12 +125,12 @@ pub trait StrongDatabase {
     /// # Arguments:
     /// - `username`: The name of the user who is storing a verifier
     /// - `uad`: Optional - User Attached Data - "represents application data associated with
-    ///          this specific user account, e.g. specifying the granted authorization level
-    ///          on the server."
+    ///   this specific user account, e.g. specifying the granted authorization level
+    ///   on the server."
     /// - `verifier`: The password verifier for the given user
     /// - `secret exponent`: the value of `q` stored for the given user
     /// - `params`: The parameters used when hashing the password into the verifier -
-    ///             It is called sigma in the protocol definition
+    ///   It is called sigma in the protocol definition
     fn store_verifier_strong(
         &mut self,
         username: &[u8],
