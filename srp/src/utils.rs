@@ -27,6 +27,18 @@ pub fn compute_k<D: Digest>(params: &SrpGroup) -> BigUint {
     BigUint::from_bytes_be(d.finalize().as_slice())
 }
 
+// k = H(N | g)
+#[must_use]
+pub fn compute_k_nopad<D: Digest>(params: &SrpGroup) -> BigUint {
+    let n = params.n.to_bytes_be();
+    let g_bytes = params.g.to_bytes_be();
+
+    let mut d = D::new();
+    d.update(&n);
+    d.update(&g_bytes);
+    BigUint::from_bytes_be(d.finalize().as_slice())
+}
+
 // H(N) XOR H(PAD(g))
 #[must_use]
 pub fn compute_hash_n_xor_hash_g<D: Digest>(params: &SrpGroup) -> Vec<u8> {
@@ -38,6 +50,21 @@ pub fn compute_hash_n_xor_hash_g<D: Digest>(params: &SrpGroup) -> Vec<u8> {
 
     let h_n = compute_hash::<D>(&n).to_vec();
     let h_g = compute_hash::<D>(&buf).to_vec();
+
+    h_n.iter()
+        .zip(h_g.iter())
+        .map(|(&x1, &x2)| x1 ^ x2)
+        .collect()
+}
+
+// H(N) XOR H(g)
+#[must_use]
+pub fn compute_hash_n_xor_hash_g_nopad<D: Digest>(params: &SrpGroup) -> Vec<u8> {
+    let n = params.n.to_bytes_be();
+    let g_bytes = params.g.to_bytes_be();
+
+    let h_n = compute_hash::<D>(&n).to_vec();
+    let h_g = compute_hash::<D>(&g_bytes).to_vec();
 
     h_n.iter()
         .zip(h_g.iter())
@@ -74,6 +101,26 @@ pub fn compute_m1_rfc5054<D: Digest>(
 ) -> Output<D> {
     let mut d = D::new();
     d.update(compute_hash_n_xor_hash_g::<D>(params));
+    d.update(compute_hash::<D>(username));
+    d.update(salt);
+    d.update(a_pub);
+    d.update(b_pub);
+    d.update(key);
+    d.finalize()
+}
+
+// M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K) following CSRP legacy mode
+#[must_use]
+pub fn compute_m1_csrp<D: Digest>(
+    params: &SrpGroup,
+    username: &[u8],
+    salt: &[u8],
+    a_pub: &[u8],
+    b_pub: &[u8],
+    key: &[u8],
+) -> Output<D> {
+    let mut d = D::new();
+    d.update(compute_hash_n_xor_hash_g_nopad::<D>(params));
     d.update(compute_hash::<D>(username));
     d.update(salt);
     d.update(a_pub);
