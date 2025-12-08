@@ -16,7 +16,7 @@ rust-version = "1.85"
 
 [dependencies]
 curve25519-dalek = { version = "5.0.0-pre.1", default-features = false, features = ["digest", "rand_core"] }
-password-hash = { version = "0.6.0-rc.2", default-features = false, features = ["rand_core"] }
+password-hash = { version = "0.6.0-rc.3", default-features = false, features = ["rand_core"] }
 rand_core = { version = "0.10.0-rc.2", default-features = false }
 subtle = { version = "2.4", default-features = false }
 
@@ -30,7 +30,7 @@ sha2 = { version = "0.11.0-rc.3", default-features = false, optional = true }
 [dev-dependencies]
 bincode = "1"
 curve25519-dalek = { version = "5.0.0-pre.1", features = ["digest", "rand_core"] }
-password-hash = { version = "0.6.0-rc.2", features = ["rand_core"] }
+password-hash = { version = "0.6.0-rc.3", features = ["rand_core"] }
 postcard = "1"
 scrypt = { version = "0.12.0-rc.3", features = ["simple"] }
 sha2 = "0.11.0-rc.3"
