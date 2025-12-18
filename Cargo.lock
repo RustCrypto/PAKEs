@@ -351,23 +351,33 @@ dependencies = [
 
 [[package]]
 name = "password-hash"
-version = "0.6.0-rc.2"
+version = "0.6.0-rc.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7d47a2d1aee5a339aa6c740d9128211a8a3d2bdf06a13e01b3f8a0b5c49b9db"
+checksum = "383d290055c99f2dd7dece082088d89494dff6d79277fbac4a7da21c1bf2ab6b"
 dependencies = [
- "base64ct",
+ "phc",
  "rand_core",
- "subtle",
 ]
 
 [[package]]
 name = "pbkdf2"
-version = "0.13.0-rc.2"
+version = "0.13.0-rc.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f4c07efb9394d8d0057793c35483868c2b8102e287e9d2d4328da0da36bcb4d"
+checksum = "c015873c38594dfb7724f90b2ed912a606697393bda2d39fd83c2394301f808a"
 dependencies = [
  "digest",
  "hmac",
+]
+
+[[package]]
+name = "phc"
+version = "0.6.0-rc.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c61f960577aaac5c259bc0866d685ba315c0ed30793c602d7287f54980913863"
+dependencies = [
+ "base64ct",
+ "rand_core",
+ "subtle",
 ]
 
 [[package]]
@@ -471,12 +481,13 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scrypt"
-version = "0.12.0-rc.3"
+version = "0.12.0-rc.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "506c46bd50cae340ff3f2cfe8f08ee378a24e230a1221cbf9d570afe6b697212"
+checksum = "100d8d21023375752ba3e1452a9600c5110581f24a556ff31ff1b18a17c01437"
 dependencies = [
  "password-hash",
  "pbkdf2",
+ "phc",
  "rayon",
  "salsa20",
  "sha2",
