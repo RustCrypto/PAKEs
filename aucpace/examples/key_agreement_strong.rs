@@ -17,7 +17,7 @@ use std::time::Instant;
 /// function like macro to wrap sending data over a tcp stream, returns the number of bytes sent
 macro_rules! send {
     ($stream:ident, $msg:ident) => {{
-        let serialised = bincode::serialize(&$msg).unwrap();
+        let serialised = postcard::to_stdvec(&$msg).unwrap();
         $stream.write_all(&serialised).unwrap();
         serialised.len()
     }};
@@ -28,7 +28,7 @@ macro_rules! recv {
     ($stream:ident, $buf:ident) => {{
         let bytes_received = $stream.read(&mut $buf).unwrap();
         let received = &$buf[..bytes_received];
-        bincode::deserialize(received).unwrap()
+        postcard::from_bytes(received).unwrap()
     }};
 }
 
