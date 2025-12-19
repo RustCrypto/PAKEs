@@ -1,19 +1,19 @@
-use crate::Database;
-use crate::constants::MIN_SSID_LEN;
-use crate::utils::{
-    H0, compute_authenticator_messages, compute_first_session_key, compute_session_key,
-    compute_ssid, generate_keypair, generate_nonce, generate_server_keypair,
+use crate::{
+    Database, Error, Result,
+    constants::MIN_SSID_LEN,
+    utils::{
+        H0, compute_authenticator_messages, compute_first_session_key, compute_session_key,
+        compute_ssid, generate_keypair, generate_nonce, generate_server_keypair,
+    },
 };
-use crate::{Error, Result};
 use core::marker::PhantomData;
-use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{
-    digest::consts::U64,
-    digest::{Digest, Output},
+    digest::{Digest, Output, consts::U64},
     ristretto::RistrettoPoint,
     scalar::Scalar,
+    traits::IsIdentity,
 };
-use password_hash::{ParamsString, SaltString};
+use password_hash::phc::{ParamsString, Salt, SaltString};
 use rand_core::CryptoRng;
 use subtle::ConstantTimeEq;
 
@@ -459,13 +459,12 @@ where
         // It is okay to expect here because SaltString has a buffer of 64 bytes by requirement
         // from the PHC spec. 48 bytes of data when encoded as base64 transform to 64 bytes.
         // This gives us the most entropy possible from the hash in the SaltString.
-        let salt = SaltString::encode_b64(&hash_bytes[..48])
-            .expect("SaltString maximum length invariant broken");
+        let salt = Salt::new(&hash_bytes[..48]).expect("Salt maximum length invariant broken");
 
         let message = ServerMessage::AugmentationInfo {
             group: "ristretto255",
             x_pub,
-            salt,
+            salt: salt.into(),
             pbkdf_params: ParamsString::default(),
         };
 

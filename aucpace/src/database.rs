@@ -1,6 +1,7 @@
+use password_hash::phc::{ParamsString, SaltString};
+
 #[cfg(feature = "partial_augmentation")]
 use crate::Result;
-use password_hash::{ParamsString, SaltString};
 
 /// trait for `AuCPace` to use to abstract over the storage and retrieval of verifiers
 pub trait Database {

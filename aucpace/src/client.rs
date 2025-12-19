@@ -1,22 +1,24 @@
 use crate::{
+    constants::MIN_SSID_LEN,
     errors::{Error, Result},
     utils::{
         H0, compute_authenticator_messages, compute_first_session_key, compute_session_key,
         compute_ssid, generate_keypair, generate_nonce, scalar_from_hash,
     },
 };
-
-use crate::constants::MIN_SSID_LEN;
 use core::marker::PhantomData;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT,
     digest::consts::U64,
     digest::{Digest, Output},
     ristretto::RistrettoPoint,
     scalar::Scalar,
+    traits::IsIdentity,
 };
-use password_hash::{ParamsString, PasswordHash, PasswordHasher, Salt, SaltString};
+use password_hash::{
+    CustomizedPasswordHasher,
+    phc::{ParamsString, PasswordHash, Salt, SaltString},
+};
 use rand_core::CryptoRng;
 use subtle::ConstantTimeEq;
 
@@ -36,7 +38,7 @@ use serde::{Deserialize, Serialize};
 pub struct AuCPaceClient<D, H, CSPRNG, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
     CSPRNG: CryptoRng,
 {
     rng: CSPRNG,
@@ -47,7 +49,7 @@ where
 impl<D, H, CSPRNG, const K1: usize> AuCPaceClient<D, H, CSPRNG, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
     CSPRNG: CryptoRng,
 {
     /// Create new server
@@ -126,6 +128,10 @@ where
     ) -> Result<ClientMessage<'a, K1>>
     where
         P: AsRef<[u8]>,
+        ParamsString: TryFrom<
+                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
+                Error = password_hash::Error,
+            >,
     {
         let salt_string = SaltString::from_rng(&mut self.rng);
 
@@ -181,6 +187,10 @@ where
     ) -> Result<ClientMessage<'a, K1>>
     where
         P: AsRef<[u8]>,
+        ParamsString: TryFrom<
+                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
+                Error = password_hash::Error,
+            >,
     {
         // generate a secret exponent and salt
         let (q, salt_string) =
@@ -234,6 +244,10 @@ where
     ) -> Result<ClientMessage<'a, K1>>
     where
         P: AsRef<[u8]>,
+        ParamsString: TryFrom<
+                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
+                Error = password_hash::Error,
+            >,
     {
         let salt_string = SaltString::from_rng(&mut self.rng);
 
@@ -285,19 +299,18 @@ where
     ) -> Result<ClientMessage<'a, K1>>
     where
         P: AsRef<[u8]>,
+        ParamsString: TryFrom<
+                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
+                Error = password_hash::Error,
+            >,
     {
         // generate a secret exponent and salt
         let (q, salt_string) =
             Self::generate_salt_strong(username, password.as_ref(), &mut self.rng)?;
 
         // compute the verifier W
-        let pw_hash = hash_password_alloc(
-            username,
-            password,
-            salt_string.as_salt(),
-            params.clone(),
-            &hasher,
-        )?;
+        let pw_hash =
+            hash_password_alloc(username, password, salt_string, params.clone(), &hasher)?;
         let cofactor = Scalar::ONE;
         let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
@@ -332,10 +345,10 @@ where
         // compute the salt value
         let cofactor = Scalar::ONE;
         let salt_point = z * (q * cofactor);
-        let salt = salt_point.compress().to_bytes();
-        let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
+        let salt = Salt::new(&salt_point.compress().to_bytes())
+            .map_err(|e| Error::PasswordHashing(e.into()))?;
 
-        Ok((q, salt_string))
+        Ok((q, salt.into()))
     }
 }
 
@@ -343,7 +356,7 @@ where
 pub struct AuCPaceClientSsidEstablish<D, H, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     nonce: [u8; K1],
     d: PhantomData<D>,
@@ -353,7 +366,7 @@ where
 impl<D, H, const K1: usize> AuCPaceClientSsidEstablish<D, H, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     fn new<CSPRNG>(rng: &mut CSPRNG) -> Self
     where
@@ -385,7 +398,7 @@ where
 pub struct AuCPaceClientPreAug<D, H, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     ssid: Output<D>,
     h: PhantomData<H>,
@@ -394,7 +407,7 @@ where
 impl<D, H, const K1: usize> AuCPaceClientPreAug<D, H, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     const fn new(ssid: Output<D>) -> Self {
         Self {
@@ -476,7 +489,7 @@ where
 pub struct AuCPaceClientAugLayer<'a, D, H, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     ssid: Output<D>,
     username: &'a [u8],
@@ -487,7 +500,7 @@ where
 impl<'a, D, H, const K1: usize> AuCPaceClientAugLayer<'a, D, H, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     const fn new(ssid: Output<D>, username: &'a [u8], password: &'a [u8]) -> Self {
         Self {
@@ -520,7 +533,7 @@ where
     /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
     ///   one of the three error variants that can result from the password hashing process
     ///
-    pub fn generate_cpace<'salt, S, const BUFSIZ: usize>(
+    pub fn generate_cpace<S, const BUFSIZ: usize>(
         self,
         x_pub: RistrettoPoint,
         salt: S,
@@ -528,7 +541,7 @@ where
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>>
     where
-        S: Into<Salt<'salt>>,
+        S: Into<Salt>,
     {
         // check for the identity point
         if x_pub.is_identity() {
@@ -568,7 +581,7 @@ where
     ///   one of the three error variants that can result from the password hashing process
     ///
     #[cfg(feature = "alloc")]
-    pub fn generate_cpace_alloc<'salt, S>(
+    pub fn generate_cpace_alloc<S>(
         self,
         x_pub: RistrettoPoint,
         salt: S,
@@ -576,7 +589,7 @@ where
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>>
     where
-        S: Into<Salt<'a>>,
+        S: Into<Salt>,
     {
         // check for the identity point
         if x_pub.is_identity() {
@@ -598,7 +611,7 @@ where
 pub struct StrongAuCPaceClientAugLayer<'a, D, H, const K1: usize>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     ssid: Output<D>,
     username: &'a [u8],
@@ -611,7 +624,7 @@ where
 impl<'a, D, H, const K1: usize> StrongAuCPaceClientAugLayer<'a, D, H, K1>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
 {
     const fn new(
         ssid: Output<D>,
@@ -669,14 +682,14 @@ where
         // I have interpreted this as the multiplicative inverse of (r * cj^2)
         // then multiplied by cj again.
         let exponent = (self.blinding_value * cofactor * cofactor).invert() * cofactor;
-        let salt = (blinded_salt * exponent).compress().to_bytes();
-        let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
+        let salt = Salt::new(&(blinded_salt * exponent).compress().to_bytes())
+            .map_err(|e| Error::PasswordHashing(e.into()))?;
 
         // compute the PRS
         let pw_hash = hash_password::<&[u8], &[u8], &SaltString, H, BUFSIZ>(
             self.username,
             self.password,
-            &salt_string,
+            &salt.into(),
             params,
             &hasher,
         )?;
@@ -730,17 +743,11 @@ where
         if salt_point.is_identity() {
             return Err(Error::IllegalPointError);
         }
-        let salt = salt_point.compress().to_bytes();
-        let salt_string = SaltString::encode_b64(&salt).map_err(Error::PasswordHashing)?;
+        let salt = Salt::new(&salt_point.compress().to_bytes())
+            .map_err(|e| Error::PasswordHashing(e.into()))?;
 
         // compute the PRS
-        let pw_hash = hash_password_alloc(
-            self.username,
-            self.password,
-            salt_string.as_salt(),
-            params,
-            &hasher,
-        )?;
+        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, &hasher)?;
         let w = scalar_from_hash(&pw_hash)?;
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
@@ -916,18 +923,18 @@ where
 }
 
 /// Hash a username and password with the given password hasher
-fn hash_password<'a, U, P, S, H, const BUFSIZ: usize>(
+fn hash_password<U, P, S, H, const BUFSIZ: usize>(
     username: U,
     password: P,
     salt: S,
     params: H::Params,
     hasher: &H,
-) -> Result<PasswordHash<'a>>
+) -> Result<PasswordHash>
 where
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
     U: AsRef<[u8]>,
     P: AsRef<[u8]>,
-    S: Into<Salt<'a>>,
+    S: Into<Salt>,
 {
     let user = username.as_ref();
     let pass = password.as_ref();
@@ -944,24 +951,24 @@ where
     buf[(u + 1)..=(u + p)].copy_from_slice(pass);
 
     hasher
-        .hash_password_customized(&buf[0..=(u + p)], None, None, params, salt)
+        .hash_password_customized(&buf[0..=(u + p)], &salt.into(), None, None, params)
         .map_err(Error::PasswordHashing)
 }
 
 /// Hash a username and password with the given password hasher
 #[cfg(feature = "alloc")]
-fn hash_password_alloc<'a, U, P, S, H>(
+fn hash_password_alloc<U, P, S, H>(
     username: U,
     password: P,
     salt: S,
     params: H::Params,
     hasher: &H,
-) -> Result<PasswordHash<'a>>
+) -> Result<PasswordHash>
 where
-    H: PasswordHasher,
+    H: CustomizedPasswordHasher<PasswordHash>,
     U: AsRef<[u8]>,
     P: AsRef<[u8]>,
-    S: Into<Salt<'a>>,
+    S: Into<Salt>,
 {
     let user = username.as_ref();
     let pass = password.as_ref();
@@ -973,7 +980,7 @@ where
     v.extend_from_slice(pass);
 
     hasher
-        .hash_password_customized(v.as_slice(), None, None, params, salt)
+        .hash_password_customized(v.as_slice(), &salt.into(), None, None, params)
         .map_err(Error::PasswordHashing)
 }
 
@@ -1057,16 +1064,20 @@ mod tests {
         let password = "data_x_worf_4ever_<3";
         let mut bytes = [0u8; Salt::RECOMMENDED_LENGTH];
         OsRng.try_fill_bytes(&mut bytes).unwrap();
-        let salt = SaltString::encode_b64(&bytes).expect("Salt length invariant broken.");
+        let salt = Salt::new(&bytes).expect("Salt length invariant broken.");
         // These are weak parameters, do not use them
         // they are used here to make the test run faster
         let params: Params = Default::default();
 
         let no_std_res = hash_password::<&str, &str, &SaltString, Scrypt, 100>(
-            username, password, &salt, params, &Scrypt,
+            username,
+            password,
+            &salt.into(),
+            params,
+            &Scrypt,
         )
         .unwrap();
-        let alloc_res = hash_password_alloc(username, password, &salt, params, &Scrypt).unwrap();
+        let alloc_res = hash_password_alloc(username, password, salt, params, &Scrypt).unwrap();
 
         assert_eq!(alloc_res, no_std_res);
     }
@@ -1093,10 +1104,10 @@ mod tests {
                 b"bob",
                 b"bob's very secure password that nobody knows about, honest",
             );
-        let res = aug_client.generate_cpace::<'_, &SaltString, 100>(
+        let res = aug_client.generate_cpace::<&SaltString, 100>(
             RistrettoPoint::identity(),
-            &SaltString::encode_b64(b"saltyboi").unwrap(),
-            scrypt::Params::recommended(),
+            &Salt::new(b"saltyboi").unwrap().into(),
+            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt,
         );
 
@@ -1121,8 +1132,8 @@ mod tests {
             );
         let res = aug_client.generate_cpace_alloc(
             RistrettoPoint::identity(),
-            &SaltString::encode_b64(b"saltyboi").unwrap(),
-            scrypt::Params::recommended(),
+            &Salt::new(b"saltyboi").unwrap().into(),
+            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt,
         );
 
@@ -1151,7 +1162,7 @@ mod tests {
         let res = aug_client.generate_cpace::<100>(
             RistrettoPoint::identity(),
             RISTRETTO_BASEPOINT_POINT,
-            scrypt::Params::recommended(),
+            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt,
         );
 
@@ -1185,7 +1196,7 @@ mod tests {
         let res = aug_client.generate_cpace_alloc(
             RistrettoPoint::identity(),
             RISTRETTO_BASEPOINT_POINT,
-            scrypt::Params::recommended(),
+            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt,
         );
 
@@ -1253,7 +1264,7 @@ mod tests {
         let res = aug_client.generate_cpace_alloc(
             RISTRETTO_BASEPOINT_POINT,
             RistrettoPoint::identity(),
-            scrypt::Params::recommended(),
+            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt,
         );
 

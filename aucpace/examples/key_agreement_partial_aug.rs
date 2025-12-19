@@ -3,17 +3,17 @@ use aucpace::{
     Client, ClientMessage, Database, Error, OsRng, PartialAugDatabase, Result, Server,
     ServerMessage,
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
-use curve25519_dalek::scalar::Scalar;
-use password_hash::{ParamsString, SaltString};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use password_hash::phc::{ParamsString, SaltString};
 use scrypt::{Params, Scrypt};
-use sha2::Sha512;
-use sha2::digest::Output;
-use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::thread;
-use std::time::Instant;
+use sha2::{Sha512, digest::Output};
+use std::{
+    io::{Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
+    time::Instant,
+};
 
 /// function like macro to wrap sending data over a tcp stream, returns the number of bytes sent
 macro_rules! send {
@@ -49,7 +49,7 @@ fn main() -> Result<()> {
     let mut base_server = Server::new(rng);
     let mut database: SingleUserDatabase = Default::default();
 
-    let params = Params::recommended();
+    let params = Params::RECOMMENDED;
     let registration = base_client.register_alloc(USERNAME, PASSWORD, params, Scrypt)?;
     if let ClientMessage::Registration {
         username,

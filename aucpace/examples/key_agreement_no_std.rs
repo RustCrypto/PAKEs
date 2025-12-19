@@ -2,14 +2,14 @@
 
 // use println and Instant only from std
 extern crate std;
-use std::{println, time::Instant};
 
 use aucpace::{
     Client, ClientMessage, Database, OsRng, Result, Server, ServerMessage, rand_core::TryRngCore,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
-use password_hash::{ParamsString, SaltString};
+use password_hash::phc::{ParamsString, SaltString};
 use scrypt::{Params, Scrypt};
+use std::{println, time::Instant};
 
 /// function like macro to wrap sending data over a tcp stream, returns the number of bytes sent
 macro_rules! send {
@@ -39,7 +39,7 @@ fn main() -> Result<()> {
     let mut database: SingleUserDatabase<100> = Default::default();
 
     let start = Instant::now();
-    let params = Params::recommended();
+    let params = Params::RECOMMENDED;
     let registration = base_client.register::<&[u8], 100>(USERNAME, PASSWORD, params, Scrypt)?;
     if let ClientMessage::Registration {
         username,

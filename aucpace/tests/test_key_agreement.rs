@@ -7,7 +7,7 @@ use aucpace::{
     server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
 };
 use curve25519_dalek::RistrettoPoint;
-use password_hash::{ParamsString, SaltString};
+use password_hash::phc::{ParamsString, SaltString};
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
 
@@ -242,7 +242,7 @@ fn init() -> Result<(Client, Server, SingleUserDatabase)> {
     let mut database: SingleUserDatabase = Default::default();
 
     // register a user in the database
-    let params = Params::recommended();
+    let params = Params::RECOMMENDED;
     let registration = base_client.register_alloc(USERNAME, PASSWORD, params, Scrypt)?;
     if let ClientMessage::Registration {
         username,
