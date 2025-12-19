@@ -1,12 +1,12 @@
 use crate::{Error, Result};
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT,
     digest::consts::U64,
     digest::{Digest, Output},
     ristretto::RistrettoPoint,
     scalar::Scalar,
 };
-use password_hash::PasswordHash;
+use password_hash::phc::PasswordHash;
 use rand_core::CryptoRng;
 
 #[allow(non_snake_case)]
@@ -130,7 +130,7 @@ where
 
 /// Compute a scalar from a password hash
 #[inline]
-pub fn scalar_from_hash(pw_hash: &PasswordHash<'_>) -> Result<Scalar> {
+pub fn scalar_from_hash(pw_hash: &PasswordHash) -> Result<Scalar> {
     let hash = pw_hash.hash.ok_or(Error::HashEmpty)?;
     let hash_bytes = hash.as_bytes();
 
@@ -171,15 +171,17 @@ where
 #[cfg(feature = "serde")]
 pub mod serde_saltstring {
     use core::fmt;
-    use password_hash::SaltString;
-    use serde::de::{Error, Visitor};
-    use serde::{Deserializer, Serializer};
+    use password_hash::phc::SaltString;
+    use serde::{
+        Deserializer, Serializer,
+        de::{Error, Visitor},
+    };
 
     pub fn serialize<S>(data: &SaltString, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(data.as_str())
+        serializer.serialize_str(data.as_ref())
     }
 
     struct SaltStringVisitor {}
@@ -210,9 +212,11 @@ pub mod serde_saltstring {
 #[cfg(feature = "serde")]
 pub mod serde_paramsstring {
     use core::fmt;
-    use password_hash::ParamsString;
-    use serde::de::{Error, Visitor};
-    use serde::{Deserializer, Serializer};
+    use password_hash::phc::ParamsString;
+    use serde::{
+        Deserializer, Serializer,
+        de::{Error, Visitor},
+    };
 
     pub fn serialize<S>(data: &ParamsString, serializer: S) -> Result<S::Ok, S::Error>
     where
