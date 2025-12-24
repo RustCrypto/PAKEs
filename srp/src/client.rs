@@ -114,6 +114,7 @@ use crate::utils::{
 /// SRP client state before handshake with the server.
 pub struct SrpClient<'a, D: Digest> {
     params: &'a SrpGroup,
+    no_user_in_x: bool,
     d: PhantomData<D>,
 }
 
@@ -138,6 +139,19 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     pub const fn new(params: &'a SrpGroup) -> Self {
         Self {
             params,
+            no_user_in_x: false,
+            d: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub const fn new_with_options(
+        params: &'a SrpGroup,
+        no_user_in_x: bool,
+    ) -> Self {
+        Self {
+            params,
+            no_user_in_x,
             d: PhantomData,
         }
     }
@@ -197,7 +211,8 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     /// Get password verifier (v in RFC5054) for user registration on the server.
     #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
-        let identity_hash = Self::compute_identity_hash(username, password);
+        let identity_username = if self.no_user_in_x { &[] } else { username };
+        let identity_hash = Self::compute_identity_hash(identity_username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
         self.compute_v(&x).to_bytes_be()
     }
@@ -232,7 +247,8 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
         let k = compute_k::<D>(self.params);
-        let identity_hash = Self::compute_identity_hash(username, password);
+        let identity_username = if self.no_user_in_x { &[] } else { username };
+        let identity_hash = Self::compute_identity_hash(identity_username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
@@ -275,7 +291,8 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
         let k = compute_k::<D>(self.params);
-        let identity_hash = Self::compute_identity_hash(username, password);
+        let identity_username = if self.no_user_in_x { &[] } else { username };
+        let identity_hash = Self::compute_identity_hash(identity_username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let premaster_secret = self
