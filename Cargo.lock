@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "srp"
-version = "0.7.0-pre"
+version = "0.7.0-pre.0"
 dependencies = [
  "digest",
  "hex-literal",
