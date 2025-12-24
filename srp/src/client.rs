@@ -145,10 +145,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     #[must_use]
-    pub const fn new_with_options(
-        params: &'a SrpGroup,
-        no_user_in_x: bool,
-    ) -> Self {
+    pub const fn new_with_options(params: &'a SrpGroup, no_user_in_x: bool) -> Self {
         Self {
             params,
             no_user_in_x,
