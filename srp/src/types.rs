@@ -1,6 +1,8 @@
 //! Additional SRP types.
+
+use alloc::string::String;
+use core::fmt;
 use num_bigint::BigUint;
-use std::fmt;
 
 /// SRP authentication error.
 #[derive(Debug, Clone, Eq, PartialEq)]

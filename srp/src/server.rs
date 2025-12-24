@@ -77,7 +77,8 @@
 //! send_proof(verifier.proof());
 //! ```
 //!
-use std::marker::PhantomData;
+use alloc::{borrow::ToOwned, vec::Vec};
+use core::marker::PhantomData;
 
 use digest::{Digest, Output};
 use num_bigint::BigUint;

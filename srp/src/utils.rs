@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use digest::{Digest, Output};
 use num_bigint::BigUint;
 
