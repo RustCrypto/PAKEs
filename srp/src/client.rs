@@ -100,15 +100,16 @@
 //! ```
 //!
 
-use std::marker::PhantomData;
+use alloc::{borrow::ToOwned, vec::Vec};
+use core::marker::PhantomData;
 
 use digest::{Digest, Output};
 use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
-use crate::types::{SrpAuthError, SrpGroup};
-use crate::utils::{
-    compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u,
+use crate::{
+    types::{SrpAuthError, SrpGroup},
+    utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
 /// SRP client state before handshake with the server.

@@ -1,6 +1,10 @@
-#![allow(clippy::many_single_char_names)]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo_small.png")]
+#![no_std]
 #![doc = include_str!("../README.md")]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg",
+    html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"
+)]
+#![allow(clippy::many_single_char_names)]
 
 //! # Usage
 //! Add `srp` dependency to your `Cargo.toml`:
@@ -35,7 +39,7 @@
 //! - `I` — user identity (username)
 //! - `P` — user password
 //! - `H` — one-way hash function
-//! - `PH` — password hashing algroithm, in the RFC 5054 described as
+//! - `PH` — password hashing algorithm, in the RFC 5054 described as
 //! `H(s ‖ H(I ‖ ":" ‖ P))`
 //! - `^` — (modular) exponentiation
 //! - `‖` — concatenation
@@ -49,6 +53,9 @@
 //!
 //! [1]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 //! [2]: https://tools.ietf.org/html/rfc5054
+
+#[macro_use]
+extern crate alloc;
 
 pub mod client;
 pub mod groups;
