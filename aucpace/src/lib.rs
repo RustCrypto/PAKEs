@@ -111,16 +111,16 @@ pub use self::database::PartialAugDatabase;
 pub use self::database::StrongDatabase;
 
 #[cfg(feature = "rand")]
-pub use rand::rngs::OsRng;
+pub use rand::rngs::SysRng;
 
-/// Infallible version of `OsRng` which panics on error
+/// Infallible version of `SysRng` which panics on error
 #[cfg(feature = "rand")]
-pub type UnwrapOsRng = rand_core::UnwrapErr<OsRng>;
+pub type UnwrapSysRng = rand_core::UnwrapErr<SysRng>;
 
-/// Default Server instantiation with `SHA512`, `OsRng` and a nonce size of 16 bytes
+/// Default Server instantiation with `SHA512`, `SysRng` and a nonce size of 16 bytes
 #[cfg(all(feature = "sha2", feature = "rand"))]
-pub type Server = AuCPaceServer<sha2::Sha512, UnwrapOsRng, 16>;
+pub type Server = AuCPaceServer<sha2::Sha512, UnwrapSysRng, 16>;
 
-/// Default Client instantiation with `SHA512`, `Scrypt`, `OsRng` and a nonce size of 16 bytes
+/// Default Client instantiation with `SHA512`, `Scrypt`, `SysRng` and a nonce size of 16 bytes
 #[cfg(all(feature = "scrypt", feature = "sha2", feature = "rand"))]
-pub type Client = AuCPaceClient<sha2::Sha512, scrypt::Scrypt, UnwrapOsRng, 16>;
+pub type Client = AuCPaceClient<sha2::Sha512, scrypt::Scrypt, UnwrapSysRng, 16>;

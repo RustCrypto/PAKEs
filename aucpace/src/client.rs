@@ -1053,7 +1053,7 @@ mod tests {
     use super::*;
 
     #[cfg(all(feature = "rand", feature = "sha2"))]
-    use crate::{OsRng, rand_core::TryRngCore};
+    use crate::{SysRng, rand_core::TryRngCore};
 
     #[test]
     #[cfg(all(feature = "alloc", feature = "rand", feature = "scrypt"))]
@@ -1063,7 +1063,7 @@ mod tests {
         let username = "worf@starship.enterprise";
         let password = "data_x_worf_4ever_<3";
         let mut bytes = [0u8; Salt::RECOMMENDED_LENGTH];
-        OsRng.try_fill_bytes(&mut bytes).unwrap();
+        SysRng.try_fill_bytes(&mut bytes).unwrap();
         let salt = Salt::new(&bytes).expect("Salt length invariant broken.");
         // These are weak parameters, do not use them
         // they are used here to make the test run faster
@@ -1087,7 +1087,7 @@ mod tests {
     fn test_client_doesnt_accept_insecure_ssid() {
         use crate::Client;
 
-        let mut client = Client::new(OsRng.unwrap_err());
+        let mut client = Client::new(SysRng.unwrap_err());
         let res = client.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
     }

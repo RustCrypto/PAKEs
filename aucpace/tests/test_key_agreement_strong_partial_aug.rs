@@ -6,8 +6,8 @@
 ))]
 
 use aucpace::{
-    Client, ClientMessage, Error, OsRng, PartialAugDatabase, Result, Server, ServerMessage,
-    StrongDatabase,
+    Client, ClientMessage, Error, PartialAugDatabase, Result, Server, ServerMessage,
+    StrongDatabase, SysRng,
     client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},
     rand_core::TryRngCore,
     server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
@@ -272,7 +272,7 @@ fn test_key_agreement_prestablished_ssid_implicit_auth() -> Result<()> {
 
 /// Perform the initialisation step for all tests
 fn init() -> Result<(Client, Server, SingleUserDatabase)> {
-    let rng = OsRng.unwrap_err();
+    let rng = SysRng.unwrap_err();
 
     // Create the client, server and database
     let mut base_server = Server::new(rng);
@@ -308,7 +308,7 @@ fn test_core(
     ClientMessage<'_, K1>,
     ServerMessage<'_, K1>,
 )> {
-    let mut rng = OsRng.unwrap_err();
+    let mut rng = SysRng.unwrap_err();
 
     // ===== Augmentation Layer =====
     // client initiates the augmentation phase

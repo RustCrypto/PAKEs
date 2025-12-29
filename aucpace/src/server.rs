@@ -734,13 +734,13 @@ mod tests {
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 
     #[cfg(all(feature = "sha2", feature = "rand"))]
-    use crate::{OsRng, rand_core::TryRngCore};
+    use crate::{SysRng, rand_core::TryRngCore};
 
     #[test]
     #[cfg(all(feature = "sha2", feature = "rand"))]
     fn test_server_doesnt_accept_insecure_ssid() {
         use crate::Server;
-        let mut server = Server::new(OsRng.unwrap_err());
+        let mut server = Server::new(SysRng.unwrap_err());
         let res = server.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
     }
@@ -849,7 +849,7 @@ mod tests {
             b"bobbyyyy",
             RistrettoPoint::identity(),
             &FakeDatabase(),
-            OsRng.unwrap_err(),
+            SysRng.unwrap_err(),
         );
 
         if let Err(e) = res {
@@ -877,7 +877,7 @@ mod tests {
             b"bobbyyyy",
             RistrettoPoint::identity(),
             &FakeDatabase(),
-            OsRng.unwrap_err(),
+            SysRng.unwrap_err(),
         );
 
         if let Err(e) = res {
