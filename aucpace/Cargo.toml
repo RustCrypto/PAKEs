@@ -17,7 +17,7 @@ rust-version = "1.85"
 [dependencies]
 curve25519-dalek = { version = "5.0.0-pre.3", default-features = false, features = ["digest", "rand_core"] }
 password-hash = { version = "0.6.0-rc.6", default-features = false, features = ["phc", "rand_core"] }
-rand_core = { version = "0.10.0-rc-2", default-features = false }
+rand_core = { version = "0.10.0-rc-3", default-features = false }
 subtle = { version = "2.4", default-features = false }
 
 # optional dependencies

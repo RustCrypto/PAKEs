@@ -4,7 +4,7 @@
 extern crate std;
 
 use aucpace::{
-    Client, ClientMessage, Database, OsRng, Result, Server, ServerMessage, rand_core::TryRngCore,
+    Client, ClientMessage, Database, Result, Server, ServerMessage, SysRng, rand_core::TryRngCore,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use password_hash::phc::{ParamsString, SaltString};
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
     const PASSWORD: &[u8] = b"4d1rA_aND-Gr4Y_aRe_tH3-b3sT <3";
 
     // get system random number generator
-    let mut rng = OsRng.unwrap_err();
+    let mut rng = SysRng.unwrap_err();
 
     // register the user in the database
     let mut base_server = Server::new(rng);

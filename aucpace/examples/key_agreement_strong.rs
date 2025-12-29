@@ -1,5 +1,5 @@
 use aucpace::{
-    Client, ClientMessage, OsRng, Result, Server, ServerMessage, StrongDatabase,
+    Client, ClientMessage, Result, Server, ServerMessage, StrongDatabase, SysRng,
     rand_core::TryRngCore,
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     let server_socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 25519);
 
     // random number generator from OS
-    let mut rng = OsRng.unwrap_err();
+    let mut rng = SysRng.unwrap_err();
 
     // register the user in the database
     let mut base_client = Client::new(rng);
