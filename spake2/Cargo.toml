@@ -21,7 +21,7 @@ sha2 = { version = "0.11.0-rc.3", default-features = false }
 hkdf = { version = "0.13.0-rc.3", default-features = false }
 
 # optional dependencies
-rand = { version = "0.10.0-rc.5", optional = true }
+rand = { version = "0.10.0-rc.6", optional = true }
 
 [dev-dependencies]
 bencher = "0.1"
