@@ -24,7 +24,7 @@ impl fmt::Display for SrpAuthError {
     }
 }
 
-impl std::error::Error for SrpAuthError {}
+impl error::Error for SrpAuthError {}
 
 /// Group used for SRP computations
 #[derive(Debug, Clone, Eq, PartialEq)]
