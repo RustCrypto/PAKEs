@@ -1,7 +1,7 @@
 //! Additional SRP types.
 
 use alloc::string::String;
-use core::fmt;
+use core::{error, fmt};
 use num_bigint::BigUint;
 
 /// SRP authentication error.
