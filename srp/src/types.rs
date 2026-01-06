@@ -1,7 +1,7 @@
 //! Additional SRP types.
 
 use alloc::string::String;
-use core::fmt;
+use core::{error, fmt};
 use num_bigint::BigUint;
 
 /// SRP authentication error.
@@ -23,6 +23,8 @@ impl fmt::Display for SrpAuthError {
         }
     }
 }
+
+impl error::Error for SrpAuthError {}
 
 /// Group used for SRP computations
 #[derive(Debug, Clone, Eq, PartialEq)]
