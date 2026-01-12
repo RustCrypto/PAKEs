@@ -1,4 +1,4 @@
-#![cfg(all(feature = "alloc", feature = "rand", feature = "strong_aucpace"))]
+#![cfg(all(feature = "alloc", feature = "getrandom", feature = "strong_aucpace"))]
 
 use aucpace::{
     Client, ClientMessage, Result, Server, ServerMessage, StrongDatabase, SysRng,

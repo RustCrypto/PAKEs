@@ -1,12 +1,12 @@
-use rand::RngCore;
+use getrandom::{
+    SysRng,
+    rand_core::{RngCore, TryRngCore},
+};
 use sha2::Sha256;
-use srp::client::SrpClient;
-
-use srp::groups::G_2048;
-use srp::server::SrpServer;
+use srp::{client::SrpClient, groups::G_2048, server::SrpServer};
 
 fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = rand::rng();
+    let mut rng = SysRng.unwrap_err();
     let username = b"alice";
 
     // Client instance creation
@@ -69,7 +69,7 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
 }
 
 fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = rand::rng();
+    let mut rng = SysRng.unwrap_err();
     let username = b"alice";
 
     // Client instance creation

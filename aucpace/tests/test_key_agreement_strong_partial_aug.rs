@@ -1,7 +1,7 @@
 #![cfg(all(
     feature = "alloc",
     feature = "partial_augmentation",
-    feature = "rand",
+    feature = "getrandom",
     feature = "strong_aucpace"
 ))]
 

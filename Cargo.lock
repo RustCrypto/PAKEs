@@ -16,9 +16,9 @@ name = "aucpace"
 version = "0.2.0-pre"
 dependencies = [
  "curve25519-dalek",
+ "getrandom",
  "password-hash",
  "postcard",
- "rand",
  "rand_core",
  "scrypt",
  "serde",
@@ -65,17 +65,6 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
-
-[[package]]
-name = "chacha20"
-version = "0.10.0-rc.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f895fb33c1ad22da4bc79d37c0bddff8aee2ba4575705345eb73b8ffbc386074"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "rand_core",
-]
 
 [[package]]
 name = "cipher"
@@ -388,17 +377,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
-name = "rand"
-version = "0.10.0-rc.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bccc05ac8fad6ee391f3cc6725171817eed960345e2fb42ad229d486c1ca2d98"
-dependencies = [
- "chacha20",
- "getrandom",
- "rand_core",
-]
-
-[[package]]
 name = "rand_core"
 version = "0.10.0-rc-3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -515,10 +493,10 @@ version = "0.5.0-pre"
 dependencies = [
  "bencher",
  "curve25519-dalek",
+ "getrandom",
  "hex",
  "hkdf",
  "num-bigint",
- "rand",
  "rand_core",
  "sha2",
 ]
@@ -537,11 +515,11 @@ name = "srp"
 version = "0.7.0-pre.0"
 dependencies = [
  "digest",
+ "getrandom",
  "hex-literal",
  "lazy_static",
  "num-bigint",
  "num-traits",
- "rand",
  "sha1",
  "sha2",
  "subtle",

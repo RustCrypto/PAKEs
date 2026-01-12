@@ -1,4 +1,8 @@
-#![cfg(all(feature = "alloc", feature = "partial_augmentation", feature = "rand"))]
+#![cfg(all(
+    feature = "alloc",
+    feature = "partial_augmentation",
+    feature = "getrandom"
+))]
 
 use aucpace::{
     Client, ClientMessage, Database, Error, PartialAugDatabase, Result, Server, ServerMessage,
