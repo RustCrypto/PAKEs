@@ -80,13 +80,13 @@
 use alloc::{borrow::ToOwned, vec::Vec};
 use core::marker::PhantomData;
 
+use crypto_bigint::{BoxedUint, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
-use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
-use crate::types::{SrpAuthError, SrpGroup};
-use crate::utils::{
-    compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u,
+use crate::{
+    types::{SrpAuthError, SrpGroup},
+    utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
 /// SRP server state
@@ -122,34 +122,50 @@ impl<'a, D: Digest> SrpServer<'a, D> {
 
     //  k*v + g^b % N
     #[must_use]
-    pub fn compute_b_pub(&self, b: &BigUint, k: &BigUint, v: &BigUint) -> BigUint {
-        let inter = (k * v) % &self.params.n;
-        (inter + self.params.g.modpow(b, &self.params.n)) % &self.params.n
+    pub fn compute_b_pub(&self, b: &BoxedUint, k: &BoxedUint, v: &BoxedUint) -> BoxedUint {
+        let k = BoxedMontyForm::new(
+            k.resize(self.params.n.modulus().bits_precision()),
+            &self.params.n,
+        );
+        let v = BoxedMontyForm::new(
+            v.resize(self.params.n.modulus().bits_precision()),
+            &self.params.n,
+        );
+        (k * v + self.params.g.pow(b)).retrieve()
     }
 
     // <premaster secret> = (A * v^u) ^ b % N
     #[must_use]
     pub fn compute_premaster_secret(
         &self,
-        a_pub: &BigUint,
-        v: &BigUint,
-        u: &BigUint,
-        b: &BigUint,
-    ) -> BigUint {
+        a_pub: &BoxedUint,
+        v: &BoxedUint,
+        u: &BoxedUint,
+        b: &BoxedUint,
+    ) -> BoxedUint {
+        let a_pub = BoxedMontyForm::new(
+            a_pub.resize(self.params.n.modulus().bits_precision()),
+            &self.params.n,
+        );
+        let v = BoxedMontyForm::new(
+            v.resize(self.params.n.modulus().bits_precision()),
+            &self.params.n,
+        );
+
         // (A * v^u)
-        let base = (a_pub * v.modpow(u, &self.params.n)) % &self.params.n;
-        base.modpow(b, &self.params.n)
+        (a_pub * v.pow(u)).pow(b).retrieve()
     }
 
     /// Get public ephemeral value for sending to the client.
     #[must_use]
     pub fn compute_public_ephemeral(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
         self.compute_b_pub(
-            &BigUint::from_bytes_be(b),
+            &BoxedUint::from_be_slice_vartime(b),
             &compute_k::<D>(self.params),
-            &BigUint::from_bytes_be(v),
+            &BoxedUint::from_be_slice_vartime(v),
         )
-        .to_bytes_be()
+        .to_be_bytes_trimmed_vartime()
+        .into()
     }
 
     /// Process client reply to the handshake.
@@ -161,34 +177,39 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         v: &[u8],
         a_pub: &[u8],
     ) -> Result<SrpServerVerifier<D>, SrpAuthError> {
-        let b = BigUint::from_bytes_be(b);
-        let v = BigUint::from_bytes_be(v);
-        let a_pub = BigUint::from_bytes_be(a_pub);
+        let b = BoxedUint::from_be_slice_vartime(b);
+        let v = BoxedUint::from_be_slice_vartime(v);
+        let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
 
         let k = compute_k::<D>(self.params);
         let b_pub = self.compute_b_pub(&b, &k, &v);
 
         // Safeguard against malicious A
-        if &a_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
-        }
+        self.validate_a_pub(&a_pub)?;
 
-        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let u = compute_u::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+        );
 
         let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
 
         let m1 = compute_m1::<D>(
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
-            &key.to_bytes_be(),
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+            &key.to_be_bytes_trimmed_vartime(),
         );
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+        let m2 = compute_m2::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &m1,
+            &key.to_be_bytes_trimmed_vartime(),
+        );
 
         Ok(SrpServerVerifier {
             m1,
             m2,
-            key: key.to_bytes_be(),
+            key: key.to_be_bytes_trimmed_vartime().into(),
         })
     }
 
@@ -203,23 +224,24 @@ impl<'a, D: Digest> SrpServer<'a, D> {
         v: &[u8],
         a_pub: &[u8],
     ) -> Result<SrpServerVerifierRfc5054<D>, SrpAuthError> {
-        let b = BigUint::from_bytes_be(b);
-        let v = BigUint::from_bytes_be(v);
-        let a_pub = BigUint::from_bytes_be(a_pub);
+        let b = BoxedUint::from_be_slice_vartime(b);
+        let v = BoxedUint::from_be_slice_vartime(v);
+        let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
 
         let k = compute_k::<D>(self.params);
         let b_pub = self.compute_b_pub(&b, &k, &v);
 
         // Safeguard against malicious A
-        if &a_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
-        }
+        self.validate_a_pub(&a_pub)?;
 
-        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let u = compute_u::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+        );
 
         let premaster_secret = self
             .compute_premaster_secret(&a_pub, &v, &u, &b)
-            .to_bytes_be();
+            .to_be_bytes_trimmed_vartime();
 
         let session_key = compute_hash::<D>(&premaster_secret);
 
@@ -227,19 +249,34 @@ impl<'a, D: Digest> SrpServer<'a, D> {
             self.params,
             username,
             salt,
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
             session_key.as_slice(),
         );
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, session_key.as_slice());
+        let m2 = compute_m2::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &m1,
+            session_key.as_slice(),
+        );
 
         Ok(SrpServerVerifierRfc5054 {
             m1,
             m2,
-            key: premaster_secret,
+            key: premaster_secret.into(),
             session_key: session_key.to_vec(),
         })
+    }
+
+    /// Ensure `a_pub` is non-zero and therefore not maliciously crafted.
+    fn validate_a_pub(&self, a_pub: &BoxedUint) -> Result<(), SrpAuthError> {
+        let n = self.params.n.modulus().as_nz_ref();
+
+        if (a_pub.resize(n.bits_precision()) % n).is_zero().into() {
+            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
+        }
+
+        Ok(())
     }
 }
 

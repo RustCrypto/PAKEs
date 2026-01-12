@@ -102,9 +102,8 @@
 
 use alloc::{borrow::ToOwned, vec::Vec};
 use core::marker::PhantomData;
-
+use crypto_bigint::{BoxedUint, ConcatenatingMul, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
-use num_bigint::BigUint;
 use subtle::ConstantTimeEq;
 
 use crate::{
@@ -154,9 +153,10 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         }
     }
 
+    // v = g^x % N
     #[must_use]
-    pub fn compute_a_pub(&self, a: &BigUint) -> BigUint {
-        self.params.g.modpow(a, &self.params.n)
+    pub fn compute_g_x(&self, x: &BoxedUint) -> BoxedUint {
+        self.params.g.pow(x).retrieve()
     }
 
     //  H(<username> | ":" | <raw password>)
@@ -171,39 +171,40 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
     // x = H(<salt> | H(<username> | ":" | <raw password>))
     #[must_use]
-    pub fn compute_x(identity_hash: &[u8], salt: &[u8]) -> BigUint {
+    pub fn compute_x(identity_hash: &[u8], salt: &[u8]) -> BoxedUint {
         let mut x = D::new();
         x.update(salt);
         x.update(identity_hash);
-        BigUint::from_bytes_be(&x.finalize())
+        BoxedUint::from_be_slice_vartime(&x.finalize())
     }
 
     // (B - (k * g^x)) ^ (a + (u * x)) % N
     #[must_use]
     pub fn compute_premaster_secret(
         &self,
-        b_pub: &BigUint,
-        k: &BigUint,
-        x: &BigUint,
-        a: &BigUint,
-        u: &BigUint,
-    ) -> BigUint {
-        // (k * g^x)
-        let base = (k * (self.params.g.modpow(x, &self.params.n))) % &self.params.n;
-        // Because we do operation in modulo N we can get: b_pub > base. That's not good. So we add N to b_pub to make sure.
+        b_pub: &BoxedUint,
+        k: &BoxedUint,
+        x: &BoxedUint,
+        a: &BoxedUint,
+        u: &BoxedUint,
+    ) -> BoxedUint {
+        let b_pub = BoxedMontyForm::new(
+            b_pub.resize(self.params.n.modulus().bits_precision()),
+            &self.params.n,
+        );
+        let k = BoxedMontyForm::new(
+            k.resize(self.params.n.modulus().bits_precision()),
+            &self.params.n,
+        );
+
         // B - kg^x
-        let base = ((&self.params.n + b_pub) - &base) % &self.params.n;
-        let exp = (u * x) + a;
+        let base = b_pub - k * self.params.g.pow(x);
+
         // S = (B - kg^x) ^ (a + ux)
         // or
         // S = base ^ exp
-        base.modpow(&exp, &self.params.n)
-    }
-
-    // v = g^x % N
-    #[must_use]
-    pub fn compute_v(&self, x: &BigUint) -> BigUint {
-        self.params.g.modpow(x, &self.params.n)
+        let exp = a.concatenating_add(&u.concatenating_mul(x));
+        base.pow(&exp).retrieve()
     }
 
     /// Get password verifier (v in RFC5054) for user registration on the server.
@@ -212,14 +213,16 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         let identity_username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(identity_username, password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
-        self.compute_v(&x).to_bytes_be()
+        self.compute_g_x(&x).to_be_bytes_trimmed_vartime().into()
     }
 
     /// Get public ephemeral value for handshaking with the server.
     /// g^a % N
     #[must_use]
     pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
-        self.compute_a_pub(&BigUint::from_bytes_be(a)).to_bytes_be()
+        self.compute_g_x(&BoxedUint::from_be_slice_vartime(a))
+            .to_be_bytes_trimmed_vartime()
+            .into()
     }
 
     /// Process server reply to the handshake.
@@ -234,16 +237,17 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         salt: &[u8],
         b_pub: &[u8],
     ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
-        let a = BigUint::from_bytes_be(a);
-        let a_pub = self.compute_a_pub(&a);
-        let b_pub = BigUint::from_bytes_be(b_pub);
+        let a = BoxedUint::from_be_slice_vartime(a);
+        let a_pub = self.compute_g_x(&a);
+        let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
 
         // Safeguard against malicious B
-        if &b_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
-        }
+        self.validate_b_pub(&b_pub)?;
 
-        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let u = compute_u::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+        );
         let k = compute_k::<D>(self.params);
         let identity_username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(identity_username, password);
@@ -252,17 +256,21 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
 
         let m1 = compute_m1::<D>(
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
-            &key.to_bytes_be(),
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+            &key.to_be_bytes_trimmed_vartime(),
         );
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, &key.to_bytes_be());
+        let m2 = compute_m2::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &m1,
+            &key.to_be_bytes_trimmed_vartime(),
+        );
 
         Ok(SrpClientVerifier {
             m1,
             m2,
-            key: key.to_bytes_be(),
+            key: key.to_be_bytes_trimmed_vartime().to_vec(),
         })
     }
 
@@ -278,16 +286,17 @@ impl<'a, D: Digest> SrpClient<'a, D> {
         salt: &[u8],
         b_pub: &[u8],
     ) -> Result<SrpClientVerifierRfc5054<D>, SrpAuthError> {
-        let a = BigUint::from_bytes_be(a);
-        let a_pub = self.compute_a_pub(&a);
-        let b_pub = BigUint::from_bytes_be(b_pub);
+        let a = BoxedUint::from_be_slice_vartime(a);
+        let a_pub = self.compute_g_x(&a);
+        let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
 
         // Safeguard against malicious B
-        if &b_pub % &self.params.n == BigUint::default() {
-            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
-        }
+        self.validate_b_pub(&b_pub)?;
 
-        let u = compute_u::<D>(&a_pub.to_bytes_be(), &b_pub.to_bytes_be());
+        let u = compute_u::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+        );
         let k = compute_k::<D>(self.params);
         let identity_username = if self.no_user_in_x { &[] } else { username };
         let identity_hash = Self::compute_identity_hash(identity_username, password);
@@ -295,7 +304,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
 
         let premaster_secret = self
             .compute_premaster_secret(&b_pub, &k, &x, &a, &u)
-            .to_bytes_be();
+            .to_be_bytes_trimmed_vartime();
 
         let session_key = compute_hash::<D>(&premaster_secret);
 
@@ -303,19 +312,34 @@ impl<'a, D: Digest> SrpClient<'a, D> {
             self.params,
             username,
             salt,
-            &a_pub.to_bytes_be(),
-            &b_pub.to_bytes_be(),
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
             session_key.as_slice(),
         );
 
-        let m2 = compute_m2::<D>(&a_pub.to_bytes_be(), &m1, session_key.as_slice());
+        let m2 = compute_m2::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &m1,
+            session_key.as_slice(),
+        );
 
         Ok(SrpClientVerifierRfc5054 {
             m1,
             m2,
-            key: premaster_secret,
+            key: premaster_secret.to_vec(),
             session_key: session_key.to_vec(),
         })
+    }
+
+    /// Ensure `b_pub` is non-zero and therefore not maliciously crafted.
+    fn validate_b_pub(&self, b_pub: &BoxedUint) -> Result<(), SrpAuthError> {
+        let n = self.params.n.modulus().as_nz_ref();
+
+        if (b_pub.resize(n.bits_precision()) % n).is_zero().into() {
+            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
+        }
+
+        Ok(())
     }
 }
 

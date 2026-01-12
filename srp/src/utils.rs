@@ -1,23 +1,23 @@
 use alloc::vec::Vec;
+use crypto_bigint::BoxedUint;
 use digest::{Digest, Output};
-use num_bigint::BigUint;
 
 use crate::types::SrpGroup;
 
 // u = H(PAD(A) | PAD(B))
 #[must_use]
-pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BigUint {
+pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
     let mut u = D::new();
     u.update(a_pub);
     u.update(b_pub);
-    BigUint::from_bytes_be(&u.finalize())
+    BoxedUint::from_be_slice_vartime(&u.finalize())
 }
 
 // k = H(N | PAD(g))
 #[must_use]
-pub fn compute_k<D: Digest>(params: &SrpGroup) -> BigUint {
-    let n = params.n.to_bytes_be();
-    let g_bytes = params.g.to_bytes_be();
+pub fn compute_k<D: Digest>(params: &SrpGroup) -> BoxedUint {
+    let n = params.n.modulus().to_be_bytes();
+    let g_bytes = params.g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
     let l = n.len() - g_bytes.len();
     buf[l..].copy_from_slice(&g_bytes);
@@ -25,14 +25,14 @@ pub fn compute_k<D: Digest>(params: &SrpGroup) -> BigUint {
     let mut d = D::new();
     d.update(&n);
     d.update(&buf);
-    BigUint::from_bytes_be(d.finalize().as_slice())
+    BoxedUint::from_be_slice_vartime(d.finalize().as_slice())
 }
 
 // H(N) XOR H(PAD(g))
 #[must_use]
 pub fn compute_hash_n_xor_hash_g<D: Digest>(params: &SrpGroup) -> Vec<u8> {
-    let n = params.n.to_bytes_be();
-    let g_bytes = params.g.to_bytes_be();
+    let n = params.n.modulus().to_be_bytes();
+    let g_bytes = params.g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
     let l = n.len() - g_bytes.len();
     buf[l..].copy_from_slice(&g_bytes);
