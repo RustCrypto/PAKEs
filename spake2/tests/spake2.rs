@@ -1,4 +1,4 @@
-#![cfg(feature = "rand")]
+#![cfg(feature = "getrandom")]
 
 use spake2::{Ed25519Group, Error, Identity, Password, Spake2};
 

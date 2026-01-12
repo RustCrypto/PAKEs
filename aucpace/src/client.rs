@@ -1052,11 +1052,11 @@ mod tests {
     #[allow(unused)]
     use super::*;
 
-    #[cfg(all(feature = "rand", feature = "sha2"))]
+    #[cfg(all(feature = "getrandom", feature = "sha2"))]
     use crate::{SysRng, rand_core::TryRngCore};
 
     #[test]
-    #[cfg(all(feature = "alloc", feature = "rand", feature = "scrypt"))]
+    #[cfg(all(feature = "alloc", feature = "getrandom", feature = "scrypt"))]
     fn test_hash_password_no_std_and_alloc_agree() {
         use scrypt::{Params, Scrypt};
 
@@ -1083,7 +1083,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rand", feature = "sha2"))]
+    #[cfg(all(feature = "getrandom", feature = "sha2"))]
     fn test_client_doesnt_accept_insecure_ssid() {
         use crate::Client;
 

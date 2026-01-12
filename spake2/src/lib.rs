@@ -40,8 +40,8 @@
 //!
 //! Thus a client-side program start with:
 //!
-#![cfg_attr(feature = "rand", doc = "```")]
-#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
+#![cfg_attr(feature = "getrandom", doc = "```")]
+#![cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! # fn send(msg: &[u8]) {}
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_a(
@@ -57,8 +57,8 @@
 //!
 //! while the server-side might do:
 //!
-#![cfg_attr(feature = "rand", doc = "```")]
-#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
+#![cfg_attr(feature = "getrandom", doc = "```")]
+#![cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
 //! # fn send(msg: &[u8]) {}
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_b(
@@ -102,8 +102,8 @@
 //!
 //! Carol does:
 //!
-#![cfg_attr(feature = "rand", doc = "```")]
-#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
+#![cfg_attr(feature = "getrandom", doc = "```")]
+#![cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
 //! # fn send(msg: &[u8]) {}
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_symmetric(
@@ -118,8 +118,8 @@
 //!
 //! Dave does exactly the same:
 //!
-#![cfg_attr(feature = "rand", doc = "```")]
-#![cfg_attr(not(feature = "rand"), doc = "```ignore")]
+#![cfg_attr(feature = "getrandom", doc = "```")]
+#![cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
 //! # fn send(msg: &[u8]) {}
 //! use spake2::{Ed25519Group, Identity, Password, Spake2};
 //! let (s1, outbound_msg) = Spake2::<Ed25519Group>::start_symmetric(
@@ -250,11 +250,11 @@ use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::CryptoRng;
 
-#[cfg(feature = "rand")]
-pub use rand::rngs::SysRng;
+#[cfg(feature = "getrandom")]
+pub use getrandom::SysRng;
 
-#[cfg(feature = "rand")]
-use rand::TryRngCore;
+#[cfg(feature = "getrandom")]
+use rand_core::TryRngCore;
 
 /// Password type.
 // TODO(tarcieri): avoid allocation?
@@ -320,7 +320,7 @@ impl<G: Group> Spake2<G> {
     /// Start with identity `idA`.
     ///
     /// Uses the system RNG.
-    #[cfg(feature = "rand")]
+    #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
         Self::start_a_with_rng(password, id_a, id_b, SysRng.unwrap_mut())
@@ -329,7 +329,7 @@ impl<G: Group> Spake2<G> {
     /// Start with identity `idB`.
     ///
     /// Uses the system RNG.
-    #[cfg(feature = "rand")]
+    #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
         Self::start_b_with_rng(password, id_a, id_b, SysRng.unwrap_mut())
@@ -338,7 +338,7 @@ impl<G: Group> Spake2<G> {
     /// Start with symmetric identity.
     ///
     /// Uses the system RNG.
-    #[cfg(feature = "rand")]
+    #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Self, Vec<u8>) {
         Self::start_symmetric_with_rng(password, id_s, SysRng.unwrap_mut())

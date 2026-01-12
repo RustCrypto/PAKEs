@@ -733,11 +733,11 @@ mod tests {
     #[allow(unused)]
     use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 
-    #[cfg(all(feature = "sha2", feature = "rand"))]
+    #[cfg(all(feature = "sha2", feature = "getrandom"))]
     use crate::{SysRng, rand_core::TryRngCore};
 
     #[test]
-    #[cfg(all(feature = "sha2", feature = "rand"))]
+    #[cfg(all(feature = "sha2", feature = "getrandom"))]
     fn test_server_doesnt_accept_insecure_ssid() {
         use crate::Server;
         let mut server = Server::new(SysRng.unwrap_err());
@@ -837,7 +837,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "sha2", feature = "rand", feature = "strong_aucpace"))]
+    #[cfg(all(feature = "sha2", feature = "getrandom", feature = "strong_aucpace"))]
     fn test_server_doesnt_accept_invalid_uq() {
         use crate::utils::H0;
         use curve25519_dalek::traits::Identity;
@@ -863,7 +863,7 @@ mod tests {
     #[cfg(all(
         feature = "partial_augmentation",
         feature = "sha2",
-        feature = "rand",
+        feature = "getrandom",
         feature = "strong_aucpace"
     ))]
     fn test_server_doesnt_accept_invalid_uq_partial() {

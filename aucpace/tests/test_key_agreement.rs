@@ -1,4 +1,4 @@
-#![cfg(all(feature = "alloc", feature = "rand"))]
+#![cfg(all(feature = "alloc", feature = "getrandom"))]
 
 use aucpace::{
     Client, ClientMessage, Database, Result, Server, ServerMessage, SysRng,
