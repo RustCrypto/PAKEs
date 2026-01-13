@@ -112,8 +112,8 @@ use crate::{
 };
 
 /// SRP client state before handshake with the server.
-pub struct SrpClient<'a, D: Digest> {
-    params: &'a SrpGroup,
+pub struct SrpClient<D: Digest> {
+    params: &'static SrpGroup,
     no_user_in_x: bool,
     d: PhantomData<D>,
 }
@@ -133,10 +133,10 @@ pub struct SrpClientVerifierRfc5054<D: Digest> {
     session_key: Vec<u8>,
 }
 
-impl<'a, D: Digest> SrpClient<'a, D> {
+impl<D: Digest> SrpClient<D> {
     /// Create new SRP client instance.
     #[must_use]
-    pub const fn new(params: &'a SrpGroup) -> Self {
+    pub const fn new(params: &'static SrpGroup) -> Self {
         Self {
             params,
             no_user_in_x: false,
@@ -145,7 +145,7 @@ impl<'a, D: Digest> SrpClient<'a, D> {
     }
 
     #[must_use]
-    pub const fn new_with_options(params: &'a SrpGroup, no_user_in_x: bool) -> Self {
+    pub const fn new_with_options(params: &'static SrpGroup, no_user_in_x: bool) -> Self {
         Self {
             params,
             no_user_in_x,
