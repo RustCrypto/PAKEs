@@ -2,7 +2,7 @@ use crypto_bigint::BoxedUint;
 use hex_literal::hex;
 use sha1::Sha1;
 use srp::utils::{compute_k, compute_u};
-use srp::{Client, G1024, Group, Server};
+use srp::{Client, Group, Server, groups::G1024};
 
 #[test]
 #[allow(clippy::many_single_char_names)]
