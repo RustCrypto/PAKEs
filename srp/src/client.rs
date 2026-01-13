@@ -203,17 +203,17 @@ impl<G: Group, D: Digest> Client<G, D> {
     /// Process server reply to the handshake according to RFC 5054.
     ///
     /// # Params
-    /// `a` is a random value,
-    /// `username`, `password` is supplied by the user
-    /// `salt` and `b_pub` come from the server
-    pub fn process_reply_rfc5054(
+    /// - `a` is a random value,
+    /// - `username`, `password` is supplied by the user
+    /// - `salt` and `b_pub` come from the server
+    pub fn process_reply(
         &self,
         a: &[u8],
         username: &[u8],
         password: &[u8],
         salt: &[u8],
         b_pub: &[u8],
-    ) -> Result<ClientVerifierRfc5054<D>, AuthError> {
+    ) -> Result<ClientVerifier<D>, AuthError> {
         let a = BoxedUint::from_be_slice_vartime(a);
         let a_pub = self.compute_g_x(&a);
         let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
@@ -250,7 +250,7 @@ impl<G: Group, D: Digest> Client<G, D> {
             session_key.as_slice(),
         );
 
-        Ok(ClientVerifierRfc5054 {
+        Ok(ClientVerifier {
             m1,
             m2,
             key: premaster_secret.to_vec(),
@@ -351,14 +351,14 @@ impl<G: Group, D: Digest> Default for Client<G, D> {
 }
 
 /// RFC 5054 SRP client state after handshake with the server.
-pub struct ClientVerifierRfc5054<D: Digest> {
+pub struct ClientVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
     session_key: Vec<u8>,
 }
 
-impl<D: Digest> ClientVerifierRfc5054<D> {
+impl<D: Digest> ClientVerifier<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
