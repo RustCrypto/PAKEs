@@ -6,8 +6,12 @@ use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
 /// SRP client configured with a standard 1024-bit group.
+#[deprecated(since = "0.7.0", note = "too small to be secure; use a larger group")]
+#[allow(deprecated)]
 pub type ClientG1024<D> = Client<G1024, D>;
 /// SRP client configured with a standard 1536-bit group.
+#[deprecated(since = "0.7.0", note = "too small to be secure; use a larger group")]
+#[allow(deprecated)]
 pub type ClientG1536<D> = Client<G1536, D>;
 /// SRP client configured with a standard 2048-bit group.
 pub type ClientG2048<D> = Client<G2048, D>;

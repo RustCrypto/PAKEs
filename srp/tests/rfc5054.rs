@@ -2,11 +2,13 @@ use crypto_bigint::BoxedUint;
 use hex_literal::hex;
 use sha1::Sha1;
 use srp::utils::{compute_k, compute_u};
-use srp::{Client, Group, Server, groups::G1024};
+use srp::{Client, Group, Server};
 
 #[test]
-#[allow(clippy::many_single_char_names)]
+#[allow(clippy::many_single_char_names, deprecated)]
 fn rfc5054() {
+    use srp::groups::G1024;
+
     let i = b"alice";
     let p = b"password123";
     let s = hex!("BEB25379 D1A8581E B5A72767 3A2441EE");
