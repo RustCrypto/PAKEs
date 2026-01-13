@@ -77,7 +77,7 @@
 //! send_proof(verifier.proof());
 //! ```
 //!
-use alloc::{borrow::ToOwned, vec::Vec};
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 
 use crypto_bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
@@ -258,7 +258,7 @@ impl<G: Group, D: Digest> Server<G, D> {
         let n = self.n().as_nz_ref();
 
         if (a_pub.resize(n.bits_precision()) % n).is_zero().into() {
-            return Err(AuthError::IllegalParameter("a_pub".to_owned()));
+            return Err(AuthError::IllegalParameter { name: "a_pub" });
         }
 
         Ok(())
@@ -296,7 +296,7 @@ impl<D: Digest> ServerVerifier<D> {
         if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
         } else {
-            Err(AuthError::BadRecordMac("client".to_owned()))
+            Err(AuthError::BadRecordMac { peer: "client" })
         }
     }
 }
@@ -327,7 +327,7 @@ impl<D: Digest> ServerVerifierRfc5054<D> {
         if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
         } else {
-            Err(AuthError::BadRecordMac("client".to_owned()))
+            Err(AuthError::BadRecordMac { peer: "client" })
         }
     }
 }
