@@ -1,4 +1,4 @@
-//#![no_std]
+#![no_std]
 #![doc = include_str!("../README.md")]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg",
@@ -63,4 +63,6 @@ pub mod groups;
 pub mod server;
 pub mod utils;
 
-pub use groups::Group;
+pub use client::Client;
+pub use groups::*;
+pub use server::Server;

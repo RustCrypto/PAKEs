@@ -3,14 +3,14 @@ use getrandom::{
     rand_core::{RngCore, TryRngCore},
 };
 use sha2::Sha256;
-use srp::{client::Client, groups::G_2048, server::Server};
+use srp::{client::Client, groups::G2048, server::Server};
 
 fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     let mut rng = SysRng.unwrap_err();
     let username = b"alice";
 
     // Client instance creation
-    let client = Client::<Sha256>::new(&G_2048);
+    let client = Client::<G2048, Sha256>::new();
 
     // Begin Registration
 
@@ -27,7 +27,7 @@ fn auth_test(true_pwd: &[u8], auth_pwd: &[u8]) {
     // User sends username
 
     // Server instance creation
-    let server = Server::<Sha256>::new(&G_2048);
+    let server = Server::<G2048, Sha256>::new();
 
     // Server retrieves verifier, salt and computes a public B value
     let mut b = [0u8; 64];
@@ -73,7 +73,7 @@ fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
     let username = b"alice";
 
     // Client instance creation
-    let client = Client::<Sha256>::new(&G_2048);
+    let client = Client::<G2048, Sha256>::new();
 
     // Begin Registration
 
@@ -90,7 +90,7 @@ fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
     // User sends username
 
     // Server instance creation
-    let server = Server::<Sha256>::new(&G_2048);
+    let server = Server::<G2048, Sha256>::new();
 
     // Server retrieves verifier, salt and computes a public B value
     let mut b = [0u8; 64];

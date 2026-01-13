@@ -1,8 +1,6 @@
 use alloc::vec::Vec;
-use crypto_bigint::BoxedUint;
+use crypto_bigint::{BoxedUint, modular::BoxedMontyForm};
 use digest::{Digest, Output};
-
-use crate::groups::Group;
 
 // u = H(PAD(A) | PAD(B))
 #[must_use]
@@ -15,9 +13,9 @@ pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
 
 // k = H(N | PAD(g))
 #[must_use]
-pub fn compute_k<D: Digest>(params: &Group) -> BoxedUint {
-    let n = params.n.modulus().to_be_bytes();
-    let g_bytes = params.g.retrieve().to_be_bytes();
+pub fn compute_k<D: Digest>(g: &BoxedMontyForm) -> BoxedUint {
+    let n = g.params().modulus().to_be_bytes();
+    let g_bytes = g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
     let l = n.len() - g_bytes.len();
     buf[l..].copy_from_slice(&g_bytes);
@@ -30,9 +28,9 @@ pub fn compute_k<D: Digest>(params: &Group) -> BoxedUint {
 
 // H(N) XOR H(PAD(g))
 #[must_use]
-pub fn compute_hash_n_xor_hash_g<D: Digest>(params: &Group) -> Vec<u8> {
-    let n = params.n.modulus().to_be_bytes();
-    let g_bytes = params.g.retrieve().to_be_bytes();
+pub fn compute_hash_n_xor_hash_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
+    let n = g.params().modulus().to_be_bytes();
+    let g_bytes = g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
     let l = n.len() - g_bytes.len();
     buf[l..].copy_from_slice(&g_bytes);
@@ -66,7 +64,7 @@ pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
 // M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K) following RFC5054
 #[must_use]
 pub fn compute_m1_rfc5054<D: Digest>(
-    params: &Group,
+    g: &BoxedMontyForm,
     username: &[u8],
     salt: &[u8],
     a_pub: &[u8],
@@ -74,7 +72,7 @@ pub fn compute_m1_rfc5054<D: Digest>(
     key: &[u8],
 ) -> Output<D> {
     let mut d = D::new();
-    d.update(compute_hash_n_xor_hash_g::<D>(params));
+    d.update(compute_hash_n_xor_hash_g::<D>(g));
     d.update(compute_hash::<D>(username));
     d.update(salt);
     d.update(a_pub);

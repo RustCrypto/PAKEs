@@ -6,13 +6,13 @@
 //!
 //!
 //! ```rust
-//! use crate::srp::groups::G_2048;
+//! use crate::srp::groups::G2048;
 //! use sha2::Sha256; // Note: You should probably use a proper password KDF
 //! # use crate::srp::server::Server;
 //! # fn get_client_request()-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
 //! # fn get_user(_: &[u8])-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
 //!
-//! let server = Server::<Sha256>::new(&G_2048);
+//! let server = Server::<G2048, Sha256>::new();
 //! let (username, a_pub) = get_client_request();
 //! let (salt, v) = get_user(&username);
 //! let mut b = [0u8; 64];
@@ -25,7 +25,7 @@
 //! Next process the user response:
 //!
 //! ```rust
-//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
 //! # fn get_client_response() -> Vec<u8> { vec![1] }
 //! # let b = [0u8; 64];
 //! # let v = b"";
@@ -39,7 +39,7 @@
 //! reply:
 //!
 //! ```rust
-//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
 //! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
 //! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
 //! # fn send_proof(_: &[u8]) { };
@@ -53,7 +53,7 @@
 //! `key` contains shared secret key between user and the server. You can extract shared secret
 //! key using `key()` method.
 //! ```rust
-//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
 //! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
@@ -66,8 +66,8 @@
 //! and M2 differently and also the `verify_client` method will return a shared session
 //! key in case of correct server data.
 //!
-//! ```rust
-//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! ```ident
+//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
 //! # let verifier = server.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
 //! # fn get_client_proof()-> Vec<u8> { vec![53, 91, 252, 129, 223, 201, 97, 145, 208, 243, 229, 232, 20, 118, 108, 126, 244, 68, 237, 38, 121, 24, 181, 53, 155, 103, 134, 44, 107, 204, 56, 50] };
 //! # fn send_proof(_: &[u8]) { };
@@ -80,7 +80,7 @@
 use alloc::{borrow::ToOwned, vec::Vec};
 use core::marker::PhantomData;
 
-use crypto_bigint::{BoxedUint, Resize, modular::BoxedMontyForm};
+use crypto_bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
@@ -91,32 +91,17 @@ use crate::{
 };
 
 /// SRP server state
-pub struct Server<D: Digest> {
-    params: &'static Group,
-    d: PhantomData<D>,
+pub struct Server<G: Group, D: Digest> {
+    g: BoxedMontyForm,
+    d: PhantomData<(G, D)>,
 }
 
-/// SRP server state after handshake with the client.
-pub struct ServerVerifier<D: Digest> {
-    m1: Output<D>,
-    m2: Output<D>,
-    key: Vec<u8>,
-}
-
-/// RFC 5054 SRP server state after handshake with the client.
-pub struct ServerVerifierRfc5054<D: Digest> {
-    m1: Output<D>,
-    m2: Output<D>,
-    key: Vec<u8>,
-    session_key: Vec<u8>,
-}
-
-impl<D: Digest> Server<D> {
+impl<G: Group, D: Digest> Server<G, D> {
     /// Create new server state.
     #[must_use]
-    pub const fn new(params: &'static Group) -> Self {
+    pub fn new() -> Self {
         Self {
-            params,
+            g: G::generator(),
             d: PhantomData,
         }
     }
@@ -124,15 +109,9 @@ impl<D: Digest> Server<D> {
     //  k*v + g^b % N
     #[must_use]
     pub fn compute_b_pub(&self, b: &BoxedUint, k: &BoxedUint, v: &BoxedUint) -> BoxedUint {
-        let k = BoxedMontyForm::new(
-            k.resize(self.params.n.modulus().bits_precision()),
-            &self.params.n,
-        );
-        let v = BoxedMontyForm::new(
-            v.resize(self.params.n.modulus().bits_precision()),
-            &self.params.n,
-        );
-        (k * v + self.params.g.pow(b)).retrieve()
+        let k = self.monty_form(k);
+        let v = self.monty_form(v);
+        (k * v + self.g.pow(b)).retrieve()
     }
 
     // <premaster secret> = (A * v^u) ^ b % N
@@ -144,14 +123,8 @@ impl<D: Digest> Server<D> {
         u: &BoxedUint,
         b: &BoxedUint,
     ) -> BoxedUint {
-        let a_pub = BoxedMontyForm::new(
-            a_pub.resize(self.params.n.modulus().bits_precision()),
-            &self.params.n,
-        );
-        let v = BoxedMontyForm::new(
-            v.resize(self.params.n.modulus().bits_precision()),
-            &self.params.n,
-        );
+        let a_pub = self.monty_form(a_pub);
+        let v = self.monty_form(v);
 
         // (A * v^u)
         (a_pub * v.pow(u)).pow(b).retrieve()
@@ -162,7 +135,7 @@ impl<D: Digest> Server<D> {
     pub fn compute_public_ephemeral(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
         self.compute_b_pub(
             &BoxedUint::from_be_slice_vartime(b),
-            &compute_k::<D>(self.params),
+            &compute_k::<D>(&self.g),
             &BoxedUint::from_be_slice_vartime(v),
         )
         .to_be_bytes_trimmed_vartime()
@@ -182,7 +155,7 @@ impl<D: Digest> Server<D> {
         let v = BoxedUint::from_be_slice_vartime(v);
         let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
 
-        let k = compute_k::<D>(self.params);
+        let k = compute_k::<D>(&self.g);
         let b_pub = self.compute_b_pub(&b, &k, &v);
 
         // Safeguard against malicious A
@@ -229,7 +202,7 @@ impl<D: Digest> Server<D> {
         let v = BoxedUint::from_be_slice_vartime(v);
         let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
 
-        let k = compute_k::<D>(self.params);
+        let k = compute_k::<D>(&self.g);
         let b_pub = self.compute_b_pub(&b, &k, &v);
 
         // Safeguard against malicious A
@@ -247,7 +220,7 @@ impl<D: Digest> Server<D> {
         let session_key = compute_hash::<D>(&premaster_secret);
 
         let m1 = compute_m1_rfc5054::<D>(
-            self.params,
+            &self.g,
             username,
             salt,
             &a_pub.to_be_bytes_trimmed_vartime(),
@@ -269,9 +242,20 @@ impl<D: Digest> Server<D> {
         })
     }
 
+    /// Convert an integer into the Montgomery domain, returning a [`BoxedMontyForm`] modulo `N`.
+    fn monty_form(&self, x: &BoxedUint) -> BoxedMontyForm {
+        let precision = self.n().bits_precision();
+        BoxedMontyForm::new(x.resize(precision), self.g.params())
+    }
+
+    /// Get the modulus `N`.
+    fn n(&self) -> &Odd<BoxedUint> {
+        self.g.params().modulus()
+    }
+
     /// Ensure `a_pub` is non-zero and therefore not maliciously crafted.
     fn validate_a_pub(&self, a_pub: &BoxedUint) -> Result<(), AuthError> {
-        let n = self.params.n.modulus().as_nz_ref();
+        let n = self.n().as_nz_ref();
 
         if (a_pub.resize(n.bits_precision()) % n).is_zero().into() {
             return Err(AuthError::IllegalParameter("a_pub".to_owned()));
@@ -279,6 +263,19 @@ impl<D: Digest> Server<D> {
 
         Ok(())
     }
+}
+
+impl<G: Group, D: Digest> Default for Server<G, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// SRP server state after handshake with the client.
+pub struct ServerVerifier<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
 }
 
 impl<D: Digest> ServerVerifier<D> {
@@ -302,6 +299,14 @@ impl<D: Digest> ServerVerifier<D> {
             Err(AuthError::BadRecordMac("client".to_owned()))
         }
     }
+}
+
+/// RFC 5054 SRP server state after handshake with the client.
+pub struct ServerVerifierRfc5054<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
+    session_key: Vec<u8>,
 }
 
 impl<D: Digest> ServerVerifierRfc5054<D> {
