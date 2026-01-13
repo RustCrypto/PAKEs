@@ -85,7 +85,8 @@ use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
 use crate::{
-    types::{SrpAuthError, SrpGroup},
+    SrpGroup,
+    errors::SrpAuthError,
     utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
