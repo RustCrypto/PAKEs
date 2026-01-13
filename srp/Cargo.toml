@@ -13,7 +13,7 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-crypto-bigint = { version = "0.7.0-rc.16", features = ["alloc"] }
+crypto-bigint = { version = "0.7.0-rc.17", features = ["alloc"] }
 digest = "0.11.0-rc.5"
 once_cell = "1"
 subtle = "2.4"
