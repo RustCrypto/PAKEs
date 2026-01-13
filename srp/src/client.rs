@@ -114,7 +114,7 @@ use crate::{
 /// SRP client state before handshake with the server.
 pub struct SrpClient<D: Digest> {
     params: &'static SrpGroup,
-    no_user_in_x: bool,
+    username_in_x: bool,
     d: PhantomData<D>,
 }
 
@@ -139,16 +139,16 @@ impl<D: Digest> SrpClient<D> {
     pub const fn new(params: &'static SrpGroup) -> Self {
         Self {
             params,
-            no_user_in_x: false,
+            username_in_x: true,
             d: PhantomData,
         }
     }
 
     #[must_use]
-    pub const fn new_with_options(params: &'static SrpGroup, no_user_in_x: bool) -> Self {
+    pub const fn new_with_options(params: &'static SrpGroup, username_in_x: bool) -> Self {
         Self {
             params,
-            no_user_in_x,
+            username_in_x,
             d: PhantomData,
         }
     }
@@ -210,8 +210,7 @@ impl<D: Digest> SrpClient<D> {
     /// Get password verifier (v in RFC5054) for user registration on the server.
     #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
-        let identity_username = if self.no_user_in_x { &[] } else { username };
-        let identity_hash = Self::compute_identity_hash(identity_username, password);
+        let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
         self.compute_g_x(&x).to_be_bytes_trimmed_vartime().into()
     }
@@ -249,8 +248,7 @@ impl<D: Digest> SrpClient<D> {
             &b_pub.to_be_bytes_trimmed_vartime(),
         );
         let k = compute_k::<D>(self.params);
-        let identity_username = if self.no_user_in_x { &[] } else { username };
-        let identity_hash = Self::compute_identity_hash(identity_username, password);
+        let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
@@ -298,8 +296,7 @@ impl<D: Digest> SrpClient<D> {
             &b_pub.to_be_bytes_trimmed_vartime(),
         );
         let k = compute_k::<D>(self.params);
-        let identity_username = if self.no_user_in_x { &[] } else { username };
-        let identity_hash = Self::compute_identity_hash(identity_username, password);
+        let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
         let premaster_secret = self
@@ -340,6 +337,11 @@ impl<D: Digest> SrpClient<D> {
         }
 
         Ok(())
+    }
+
+    /// Conditionally include username in the computation of `x`.
+    fn identity_username<'a>(&self, username: &'a [u8]) -> &'a [u8] {
+        if self.username_in_x { username } else { &[] }
     }
 }
 
