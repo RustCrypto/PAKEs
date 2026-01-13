@@ -6,7 +6,24 @@
 )]
 #![allow(clippy::many_single_char_names)]
 #![forbid(unsafe_code)]
-#![warn(missing_docs, rust_2018_idioms, unused_qualifications)]
+#![warn(
+    clippy::checked_conversions,
+    clippy::integer_division_remainder_used,
+    clippy::mod_module_files,
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::std_instead_of_alloc,
+    clippy::std_instead_of_core,
+    clippy::unwrap_used,
+    missing_copy_implementations,
+    missing_debug_implementations,
+    missing_docs,
+    rust_2018_idioms,
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_lifetimes,
+    unused_qualifications
+)]
 
 //! # Usage
 //! See [`Client`] and [`Server`] types for usage information.

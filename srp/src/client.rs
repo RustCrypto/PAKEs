@@ -1,9 +1,3 @@
-use alloc::vec::Vec;
-use core::marker::PhantomData;
-use crypto_bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
-use digest::{Digest, Output};
-use subtle::ConstantTimeEq;
-
 use crate::{
     Group,
     errors::AuthError,
@@ -12,6 +6,11 @@ use crate::{
         monty_form,
     },
 };
+use alloc::vec::Vec;
+use core::marker::PhantomData;
+use crypto_bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
+use digest::{Digest, Output};
+use subtle::ConstantTimeEq;
 
 /// SRP client implementation.
 ///
@@ -112,6 +111,7 @@ use crate::{
 /// let pwd_verifier = client.compute_verifier(username, password, salt);
 /// send_registration_data(username, salt, &pwd_verifier);
 /// ```
+#[derive(Debug)]
 pub struct Client<G: Group, D: Digest> {
     g: BoxedMontyForm,
     username_in_x: bool,
@@ -331,6 +331,7 @@ impl<G: Group, D: Digest> Default for Client<G, D> {
 /// [RFC5054]-compatible SRP client state after handshake with the server.
 ///
 /// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
+#[derive(Debug)]
 pub struct ClientVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
@@ -363,6 +364,7 @@ impl<D: Digest> ClientVerifier<D> {
 
 /// Legacy SRP client state after handshake with the server, compatible with `srp` v0.6 and earlier.
 #[deprecated(since = "0.7.0", note = "please switch to `ClientVerifierRfc5054`")]
+#[derive(Debug)]
 pub struct LegacyClientVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,

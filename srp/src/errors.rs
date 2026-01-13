@@ -3,7 +3,7 @@
 use core::{error, fmt};
 
 /// SRP authentication error.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthError {
     /// Parameter with the given `name` is illegal.
     IllegalParameter {

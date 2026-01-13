@@ -4,6 +4,10 @@
 //! groups. Additionally, it is not recommended to use `G1024` and `G_1536`,
 //! they are provided only for compatibility with the legacy software.
 
+use core::{
+    any,
+    fmt::{self, Debug},
+};
 use crypto_bigint::{
     BoxedUint, Odd, Resize,
     modular::{BoxedMontyForm, BoxedMontyParams},
@@ -29,11 +33,31 @@ pub trait Group {
 macro_rules! define_group {
     ($name:ident, $g:expr, $n:expr, $doc:expr) => {
         #[doc = $doc]
+        #[derive(Clone, Copy)]
         pub struct $name;
 
         impl Group for $name {
             const G: u64 = $g;
             const N: &'static [u8] = include_bytes!("groups/1024.bin");
+        }
+
+        impl Debug for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let name = any::type_name::<$name>();
+                let name = name.split("::").last().unwrap_or(name);
+
+                write!(f, "{} {{ G: {}, N: 0x", name, Self::G)?;
+                for byte in Self::N {
+                    write!(f, "{byte:02X}")?;
+                }
+                write!(f, " }}")
+            }
+        }
+
+        impl<Rhs: Group> PartialEq<Rhs> for $name {
+            fn eq(&self, _other: &Rhs) -> bool {
+                Self::G == Rhs::G && Self::N == Rhs::N
+            }
         }
     };
 }
