@@ -1,16 +1,20 @@
-use crate::{
-    Group,
-    errors::AuthError,
-    utils::{
-        compute_hash, compute_k, compute_m1_legacy, compute_m1_rfc5054, compute_m2, compute_u,
-        monty_form,
-    },
-};
+use crate::{errors::AuthError, groups::*, utils::*};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use crypto_bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
+
+/// SRP client configured with a standard 1024-bit group.
+pub type ClientG1024<D> = Client<G1024, D>;
+/// SRP client configured with a standard 1536-bit group.
+pub type ClientG1536<D> = Client<G1536, D>;
+/// SRP client configured with a standard 2048-bit group.
+pub type ClientG2048<D> = Client<G2048, D>;
+/// SRP client configured with a standard 3072-bit group.
+pub type ClientG3072<D> = Client<G3072, D>;
+/// SRP client configured with a standard 4096-bit group.
+pub type ClientG4096<D> = Client<G4096, D>;
 
 /// SRP client implementation.
 ///
@@ -22,17 +26,16 @@ use subtle::ConstantTimeEq;
 /// password hashing algorithm instead (e.g. PBKDF2, argon2 or scrypt).
 ///
 /// ```rust
-/// use srp::{G2048, Client};
 /// use sha2::Sha256;
 ///
-/// let client = Client::<G2048, Sha256>::new();
+/// let client = srp::ClientG2048::<Sha256>::new();
 /// ```
 ///
 /// Next send handshake data (username and `a_pub`) to the server and receive
 /// `salt` and `b_pub`:
 ///
 /// ```rust
-/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # fn server_response()-> (Vec<u8>, Vec<u8>) { (vec![], vec![]) }
 ///
 /// let mut a = [0u8; 64];
@@ -45,7 +48,7 @@ use subtle::ConstantTimeEq;
 /// `process_reply` can return error in case of malicious `b_pub`.
 ///
 /// ```rust
-/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # let a = [0u8; 64];
 /// # let username = b"username";
 /// # let password = b"password";
@@ -61,7 +64,7 @@ use subtle::ConstantTimeEq;
 /// `verify_server` method will return error in case of incorrect server reply.
 ///
 /// ```ignore
-/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 /// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
 ///
@@ -73,7 +76,7 @@ use subtle::ConstantTimeEq;
 /// `key` contains shared secret key between user and the server. You can extract shared secret
 /// key using `key()` method.
 /// ```rust
-/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # let verifier = client.process_reply_legacy(b"", b"", b"", b"", b"1").unwrap();
 ///
 /// verifier.key();
@@ -86,7 +89,7 @@ use subtle::ConstantTimeEq;
 /// key in case of correct server data.
 ///
 /// ```ignore
-/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
 /// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
 ///
@@ -102,7 +105,7 @@ use subtle::ConstantTimeEq;
 /// Man-in-the-middle (MITM) attack for registration.
 ///
 /// ```rust
-/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # let username = b"username";
 /// # let password = b"password";
 /// # let salt = b"salt";

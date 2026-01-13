@@ -1,7 +1,7 @@
-//! Groups from [RFC 5054](https://tools.ietf.org/html/rfc5054)
+//! Groups from [RFC5054](https://tools.ietf.org/html/rfc5054)
 //!
 //! It is strongly recommended to use them instead of custom generated
-//! groups. Additionally, it is not recommended to use `G1024` and `G_1536`,
+//! groups. Additionally, it is not recommended to use `G1024` and `G1536`,
 //! they are provided only for compatibility with the legacy software.
 
 use core::{

@@ -34,7 +34,8 @@
 //! (`N = 2q + 1`, where `q` is prime).
 //!
 //! Additionally, `g` MUST be a generator modulo `N`. It's STRONGLY recommended to use SRP
-//! parameters provided by this crate as [`G1024`], [`G1536`], [`G2048`], [`G3072`] and [`G4096`].
+//! parameters provided by this crate under the [`groups`] module, and available as various
+//! type aliases e.g. [`ClientG2048`] and [`ServerG2048`].
 //!
 //! |       Client           |   Data transfer   |      Server                     |
 //! |------------------------|-------------------|---------------------------------|
@@ -69,17 +70,22 @@
 #[macro_use]
 extern crate alloc;
 
-mod client;
-mod errors;
-mod groups;
-mod server;
+pub mod groups;
 #[doc(hidden)]
 pub mod utils;
 
-pub use client::{Client, ClientVerifier};
+mod client;
+mod errors;
+mod server;
+
+pub use client::{
+    Client, ClientG1024, ClientG1536, ClientG2048, ClientG3072, ClientG4096, ClientVerifier,
+};
 pub use errors::AuthError;
-pub use groups::*;
-pub use server::{Server, ServerVerifier};
+pub use groups::Group;
+pub use server::{
+    Server, ServerG1024, ServerG1536, ServerG2048, ServerG3072, ServerG4096, ServerVerifier,
+};
 
 #[allow(deprecated)]
 pub use {client::LegacyClientVerifier, server::LegacyServerVerifier};

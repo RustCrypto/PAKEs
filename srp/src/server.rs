@@ -1,16 +1,20 @@
-use crate::{
-    Group,
-    errors::AuthError,
-    utils::{
-        compute_hash, compute_k, compute_m1_legacy, compute_m1_rfc5054, compute_m2, compute_u,
-        monty_form,
-    },
-};
+use crate::{errors::AuthError, groups::*, utils::*};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use crypto_bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
+
+/// SRP server configured with a standard [`G1024`] group.
+pub type ServerG1024<D> = Server<G1024, D>;
+/// SRP server configured with a standard [`G1536`] group.
+pub type ServerG1536<D> = Server<G1536, D>;
+/// SRP server configured with a standard [`G2048`] group.
+pub type ServerG2048<D> = Server<G2048, D>;
+/// SRP server configured with a standard [`G3072`] group.
+pub type ServerG3072<D> = Server<G3072, D>;
+/// SRP server configured with a standard [`G4096`] group.
+pub type ServerG4096<D> = Server<G4096, D>;
 
 /// SRP server implementation.
 ///
@@ -20,12 +24,11 @@ use subtle::ConstantTimeEq;
 ///
 ///
 /// ```rust
-/// use srp::{G2048, Server};
 /// use sha2::Sha256;
 /// # fn get_client_request()-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
 /// # fn get_user(_: &[u8])-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
 ///
-/// let server = Server::<G2048, Sha256>::new();
+/// let server = srp::ServerG2048::<Sha256>::new();
 /// let (username, a_pub) = get_client_request();
 /// let (salt, v) = get_user(&username);
 /// let mut b = [0u8; 64];
@@ -38,7 +41,7 @@ use subtle::ConstantTimeEq;
 /// Next process the user response:
 ///
 /// ```rust
-/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let server = srp::ServerG2048::<sha2::Sha256>::new();
 /// # fn get_client_response() -> Vec<u8> { vec![1] }
 /// # let b = [0u8; 64];
 /// # let v = b"";
@@ -52,7 +55,7 @@ use subtle::ConstantTimeEq;
 /// reply:
 ///
 /// ```rust
-/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let server = srp::ServerG2048::<sha2::Sha256>::new();
 /// # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
 /// # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
 /// # fn send_proof(_: &[u8]) { };
@@ -66,7 +69,7 @@ use subtle::ConstantTimeEq;
 /// `key` contains shared secret key between user and the server. You can extract shared secret
 /// key using `key()` method.
 /// ```rust
-/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let server = srp::ServerG2048::<sha2::Sha256>::new();
 /// # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
 ///
 /// verifier.key();
@@ -80,7 +83,7 @@ use subtle::ConstantTimeEq;
 /// key in case of correct server data.
 ///
 /// ```ident
-/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let server = srp::ServerG2048::<sha2::Sha256>::new();
 /// # let verifier = server.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
 /// # fn get_client_proof()-> Vec<u8> { vec![53, 91, 252, 129, 223, 201, 97, 145, 208, 243, 229, 232, 20, 118, 108, 126, 244, 68, 237, 38, 121, 24, 181, 53, 155, 103, 134, 44, 107, 204, 56, 50] };
 /// # fn send_proof(_: &[u8]) { };
