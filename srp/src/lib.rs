@@ -63,4 +63,4 @@ pub mod groups;
 pub mod server;
 pub mod utils;
 
-pub use groups::SrpGroup;
+pub use groups::Group;

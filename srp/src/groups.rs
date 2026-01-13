@@ -12,14 +12,14 @@ use once_cell::sync::Lazy;
 
 /// Group used for SRP computations
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SrpGroup {
+pub struct Group {
     /// A large safe prime (N = 2q+1, where q is prime)
     pub n: BoxedMontyParams,
     /// A generator modulo N
     pub g: BoxedMontyForm,
 }
 
-impl SrpGroup {
+impl Group {
     /// Initialize a new group from the given boxed integers.
     pub fn new(n: BoxedUint, g: BoxedUint) -> Self {
         let n = BoxedMontyParams::new(Odd::new(n).expect("n should be odd"));
@@ -28,36 +28,36 @@ impl SrpGroup {
     }
 }
 
-pub static G_1024: Lazy<SrpGroup> = Lazy::new(|| {
-    SrpGroup::new(
+pub static G_1024: Lazy<Group> = Lazy::new(|| {
+    Group::new(
         BoxedUint::from_be_slice_vartime(include_bytes!("groups/1024.bin")),
         BoxedUint::from_be_slice_vartime(&[2]),
     )
 });
 
-pub static G_1536: Lazy<SrpGroup> = Lazy::new(|| {
-    SrpGroup::new(
+pub static G_1536: Lazy<Group> = Lazy::new(|| {
+    Group::new(
         BoxedUint::from_be_slice_vartime(include_bytes!("groups/1536.bin")),
         BoxedUint::from_be_slice_vartime(&[2]),
     )
 });
 
-pub static G_2048: Lazy<SrpGroup> = Lazy::new(|| {
-    SrpGroup::new(
+pub static G_2048: Lazy<Group> = Lazy::new(|| {
+    Group::new(
         BoxedUint::from_be_slice_vartime(include_bytes!("groups/2048.bin")),
         BoxedUint::from_be_slice_vartime(&[2]),
     )
 });
 
-pub static G_3072: Lazy<SrpGroup> = Lazy::new(|| {
-    SrpGroup::new(
+pub static G_3072: Lazy<Group> = Lazy::new(|| {
+    Group::new(
         BoxedUint::from_be_slice_vartime(include_bytes!("groups/3072.bin")),
         BoxedUint::from_be_slice_vartime(&[5]),
     )
 });
 
-pub static G_4096: Lazy<SrpGroup> = Lazy::new(|| {
-    SrpGroup::new(
+pub static G_4096: Lazy<Group> = Lazy::new(|| {
+    Group::new(
         BoxedUint::from_be_slice_vartime(include_bytes!("groups/4096.bin")),
         BoxedUint::from_be_slice_vartime(&[5]),
     )

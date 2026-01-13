@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use crypto_bigint::BoxedUint;
 use digest::{Digest, Output};
 
-use crate::groups::SrpGroup;
+use crate::groups::Group;
 
 // u = H(PAD(A) | PAD(B))
 #[must_use]
@@ -15,7 +15,7 @@ pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
 
 // k = H(N | PAD(g))
 #[must_use]
-pub fn compute_k<D: Digest>(params: &SrpGroup) -> BoxedUint {
+pub fn compute_k<D: Digest>(params: &Group) -> BoxedUint {
     let n = params.n.modulus().to_be_bytes();
     let g_bytes = params.g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
@@ -30,7 +30,7 @@ pub fn compute_k<D: Digest>(params: &SrpGroup) -> BoxedUint {
 
 // H(N) XOR H(PAD(g))
 #[must_use]
-pub fn compute_hash_n_xor_hash_g<D: Digest>(params: &SrpGroup) -> Vec<u8> {
+pub fn compute_hash_n_xor_hash_g<D: Digest>(params: &Group) -> Vec<u8> {
     let n = params.n.modulus().to_be_bytes();
     let g_bytes = params.g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
@@ -66,7 +66,7 @@ pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
 // M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K) following RFC5054
 #[must_use]
 pub fn compute_m1_rfc5054<D: Digest>(
-    params: &SrpGroup,
+    params: &Group,
     username: &[u8],
     salt: &[u8],
     a_pub: &[u8],
