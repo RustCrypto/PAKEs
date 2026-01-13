@@ -147,14 +147,14 @@ impl<G: Group, D: Digest> Server<G, D> {
     /// # Params
     /// - `b` is a random value,
     /// - `v` is the provided during initial user registration
-    pub fn process_reply_rfc5054(
+    pub fn process_reply(
         &self,
         username: &[u8],
         salt: &[u8],
         b: &[u8],
         v: &[u8],
         a_pub: &[u8],
-    ) -> Result<ServerVerifierRfc5054<D>, AuthError> {
+    ) -> Result<ServerVerifier<D>, AuthError> {
         let b = BoxedUint::from_be_slice_vartime(b);
         let v = BoxedUint::from_be_slice_vartime(v);
         let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
@@ -191,7 +191,7 @@ impl<G: Group, D: Digest> Server<G, D> {
             session_key.as_slice(),
         );
 
-        Ok(ServerVerifierRfc5054 {
+        Ok(ServerVerifier {
             m1,
             m2,
             key: premaster_secret.into(),
@@ -284,14 +284,14 @@ impl<G: Group, D: Digest> Default for Server<G, D> {
 }
 
 /// RFC 5054 SRP server state after handshake with the client.
-pub struct ServerVerifierRfc5054<D: Digest> {
+pub struct ServerVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
     session_key: Vec<u8>,
 }
 
-impl<D: Digest> ServerVerifierRfc5054<D> {
+impl<D: Digest> ServerVerifier<D> {
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
     pub fn key(&self) -> &[u8] {

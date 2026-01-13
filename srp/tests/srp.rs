@@ -40,7 +40,7 @@ fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
     let mut a = [0u8; 64];
     rng.fill_bytes(&mut a);
     let client_verifier = client
-        .process_reply_rfc5054(&a, username, auth_pwd, salt, &b_pub)
+        .process_reply(&a, username, auth_pwd, salt, &b_pub)
         .unwrap();
     let a_pub = client.compute_public_ephemeral(&a);
     let client_proof = client_verifier.proof();
@@ -49,7 +49,7 @@ fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
 
     // Server processes verification data
     let server_verifier = server
-        .process_reply_rfc5054(username, salt, &b, &verifier, &a_pub)
+        .process_reply(username, salt, &b, &verifier, &a_pub)
         .unwrap();
     println!("Client verification on server");
     let server_session_key = server_verifier.verify_client(client_proof).unwrap();

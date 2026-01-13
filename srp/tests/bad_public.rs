@@ -9,7 +9,7 @@ use srp::server::Server;
 fn bad_a_pub() {
     let server = Server::<G1024, Sha1>::new();
     server
-        .process_reply_rfc5054(b"", b"", b"", b"", &BoxedUint::zero().to_be_bytes())
+        .process_reply(b"", b"", b"", b"", &BoxedUint::zero().to_be_bytes())
         .unwrap();
 }
 
@@ -18,6 +18,6 @@ fn bad_a_pub() {
 fn bad_b_pub() {
     let client = Client::<G1024, Sha1>::new();
     client
-        .process_reply_rfc5054(b"", b"", b"", b"", &BoxedUint::zero().to_be_bytes())
+        .process_reply(b"", b"", b"", b"", &BoxedUint::zero().to_be_bytes())
         .unwrap();
 }
