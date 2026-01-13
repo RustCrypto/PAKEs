@@ -1,13 +1,17 @@
 [package]
 name = "srp"
-version = "0.7.0-pre.0"
+version = "0.7.0-pre.1"
 authors = ["RustCrypto Developers"]
 license = "MIT OR Apache-2.0"
-description = "Secure Remote Password (SRP) protocol implementation"
+description = """
+Pure Rust implementation of the Secure Remote Password (SRP) password-authenticated key exchange
+(PAKE) algorithm as described in RFC5054. Built on `crypto-bigint`, a mathematical library
+designed with constant-time algorithms.
+"""
 documentation = "https://docs.rs/srp"
 repository = "https://github.com/RustCrypto/PAKEs"
 keywords = ["crypto", "pake", "authentication"]
-categories = ["cryptography", "authentication"]
+categories = ["authentication", "cryptography", "no-std"]
 readme = "README.md"
 edition = "2024"
 rust-version = "1.85"

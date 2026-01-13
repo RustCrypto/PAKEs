@@ -549,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "srp"
-version = "0.7.0-pre.0"
+version = "0.7.0-pre.1"
 dependencies = [
  "crypto-bigint",
  "digest",
