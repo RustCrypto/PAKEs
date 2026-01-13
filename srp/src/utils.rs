@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use crypto_bigint::BoxedUint;
 use digest::{Digest, Output};
 
-use crate::types::SrpGroup;
+use crate::groups::SrpGroup;
 
 // u = H(PAD(A) | PAD(B))
 #[must_use]
