@@ -78,14 +78,13 @@ mod client;
 mod errors;
 mod server;
 
-pub use client::{
-    Client, ClientG1024, ClientG1536, ClientG2048, ClientG3072, ClientG4096, ClientVerifier,
-};
+pub use client::{Client, ClientG2048, ClientG3072, ClientG4096, ClientVerifier};
 pub use errors::AuthError;
 pub use groups::Group;
-pub use server::{
-    Server, ServerG1024, ServerG1536, ServerG2048, ServerG3072, ServerG4096, ServerVerifier,
-};
+pub use server::{Server, ServerG2048, ServerG3072, ServerG4096, ServerVerifier};
 
 #[allow(deprecated)]
-pub use {client::LegacyClientVerifier, server::LegacyServerVerifier};
+pub use {
+    client::{ClientG1024, ClientG1536, LegacyClientVerifier},
+    server::{LegacyServerVerifier, ServerG1024, ServerG1536},
+};

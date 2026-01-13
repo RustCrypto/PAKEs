@@ -6,8 +6,12 @@ use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
 /// SRP server configured with a standard [`G1024`] group.
+#[deprecated(since = "0.7.0", note = "too small to be secure; use a larger group")]
+#[allow(deprecated)]
 pub type ServerG1024<D> = Server<G1024, D>;
 /// SRP server configured with a standard [`G1536`] group.
+#[deprecated(since = "0.7.0", note = "too small to be secure; use a larger group")]
+#[allow(deprecated)]
 pub type ServerG1536<D> = Server<G1536, D>;
 /// SRP server configured with a standard [`G2048`] group.
 pub type ServerG2048<D> = Server<G2048, D>;
