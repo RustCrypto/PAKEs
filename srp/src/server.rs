@@ -7,7 +7,10 @@ use subtle::ConstantTimeEq;
 use crate::{
     Group,
     errors::AuthError,
-    utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
+    utils::{
+        compute_hash, compute_k, compute_m1_legacy, compute_m1_rfc5054, compute_m2, compute_u,
+        monty_form,
+    },
 };
 
 /// SRP server implementation.
@@ -105,8 +108,8 @@ impl<G: Group, D: Digest> Server<G, D> {
     /// Compute the server's public ephemeral: `k*v + g^b % N`.
     #[must_use]
     pub fn compute_b_pub(&self, b: &BoxedUint, k: &BoxedUint, v: &BoxedUint) -> BoxedUint {
-        let k = self.monty_form(k);
-        let v = self.monty_form(v);
+        let k = monty_form(k, self.g.params());
+        let v = monty_form(v, self.g.params());
         (k * v + self.g.pow(b)).retrieve()
     }
 
@@ -119,8 +122,8 @@ impl<G: Group, D: Digest> Server<G, D> {
         u: &BoxedUint,
         b: &BoxedUint,
     ) -> BoxedUint {
-        let a_pub = self.monty_form(a_pub);
-        let v = self.monty_form(v);
+        let a_pub = monty_form(a_pub, self.g.params());
+        let v = monty_form(v, self.g.params());
 
         // (A * v^u)
         (a_pub * v.pow(u)).pow(b).retrieve()
@@ -223,7 +226,7 @@ impl<G: Group, D: Digest> Server<G, D> {
 
         let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
 
-        let m1 = compute_m1::<D>(
+        let m1 = compute_m1_legacy::<D>(
             a_pub_bytes,
             &b_pub_bytes,
             &key.to_be_bytes_trimmed_vartime(),
@@ -236,12 +239,6 @@ impl<G: Group, D: Digest> Server<G, D> {
             m2,
             key: key.to_be_bytes_trimmed_vartime().into(),
         })
-    }
-
-    /// Convert an integer into the Montgomery domain, returning a [`BoxedMontyForm`] modulo `N`.
-    fn monty_form(&self, x: &BoxedUint) -> BoxedMontyForm {
-        let precision = self.n().bits_precision();
-        BoxedMontyForm::new(x.resize(precision), self.g.params())
     }
 
     /// Get the modulus `N`.
