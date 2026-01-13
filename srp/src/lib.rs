@@ -5,6 +5,8 @@
     html_favicon_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg"
 )]
 #![allow(clippy::many_single_char_names)]
+#![forbid(unsafe_code)]
+#![warn(missing_docs, rust_2018_idioms, unused_qualifications)]
 
 //! # Usage
 //! See [`Client`] and [`Server`] types for usage information.
