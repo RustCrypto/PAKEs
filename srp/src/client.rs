@@ -212,19 +212,16 @@ impl<G: Group, D: Digest> Client<G, D> {
         username: &[u8],
         password: &[u8],
         salt: &[u8],
-        b_pub: &[u8],
+        b_pub_bytes: &[u8],
     ) -> Result<ClientVerifier<D>, AuthError> {
         let a = BoxedUint::from_be_slice_vartime(a);
-        let a_pub = self.compute_g_x(&a);
-        let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
+        let a_pub_bytes = self.compute_g_x(&a).to_be_bytes_trimmed_vartime();
+        let b_pub = BoxedUint::from_be_slice_vartime(b_pub_bytes);
 
         // Safeguard against malicious B
         self.validate_b_pub(&b_pub)?;
 
-        let u = compute_u::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-        );
+        let u = compute_u::<D>(&a_pub_bytes, b_pub_bytes);
         let k = compute_k::<D>(&self.g);
         let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
@@ -239,16 +236,12 @@ impl<G: Group, D: Digest> Client<G, D> {
             &self.g,
             username,
             salt,
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
+            &a_pub_bytes,
+            b_pub_bytes,
             session_key.as_slice(),
         );
 
-        let m2 = compute_m2::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &m1,
-            session_key.as_slice(),
-        );
+        let m2 = compute_m2::<D>(&a_pub_bytes, &m1, session_key.as_slice());
 
         Ok(ClientVerifier {
             m1,
@@ -278,42 +271,28 @@ impl<G: Group, D: Digest> Client<G, D> {
         username: &[u8],
         password: &[u8],
         salt: &[u8],
-        b_pub: &[u8],
+        b_pub_bytes: &[u8],
     ) -> Result<LegacyClientVerifier<D>, AuthError> {
         let a = BoxedUint::from_be_slice_vartime(a);
-        let a_pub = self.compute_g_x(&a);
-        let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
+        let a_pub_bytes = self.compute_g_x(&a).to_be_bytes_trimmed_vartime();
+        let b_pub = BoxedUint::from_be_slice_vartime(b_pub_bytes);
 
         // Safeguard against malicious B
         self.validate_b_pub(&b_pub)?;
 
-        let u = compute_u::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-        );
+        let u = compute_u::<D>(&a_pub_bytes, b_pub_bytes);
         let k = compute_k::<D>(&self.g);
         let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
 
-        let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
+        let key = self
+            .compute_premaster_secret(&b_pub, &k, &x, &a, &u)
+            .to_be_bytes_trimmed_vartime()
+            .to_vec();
 
-        let m1 = compute_m1::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-            &key.to_be_bytes_trimmed_vartime(),
-        );
-
-        let m2 = compute_m2::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &m1,
-            &key.to_be_bytes_trimmed_vartime(),
-        );
-
-        Ok(LegacyClientVerifier {
-            m1,
-            m2,
-            key: key.to_be_bytes_trimmed_vartime().to_vec(),
-        })
+        let m1 = compute_m1::<D>(&a_pub_bytes, b_pub_bytes, &key);
+        let m2 = compute_m2::<D>(&a_pub_bytes, &m1, &key);
+        Ok(LegacyClientVerifier { m1, m2, key })
     }
 
     /// Conditionally include username in the computation of `x`.
