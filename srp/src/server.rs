@@ -8,11 +8,11 @@
 //! ```rust
 //! use crate::srp::groups::G_2048;
 //! use sha2::Sha256; // Note: You should probably use a proper password KDF
-//! # use crate::srp::server::SrpServer;
+//! # use crate::srp::server::Server;
 //! # fn get_client_request()-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
 //! # fn get_user(_: &[u8])-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
 //!
-//! let server = SrpServer::<Sha256>::new(&G_2048);
+//! let server = Server::<Sha256>::new(&G_2048);
 //! let (username, a_pub) = get_client_request();
 //! let (salt, v) = get_user(&username);
 //! let mut b = [0u8; 64];
@@ -25,7 +25,7 @@
 //! Next process the user response:
 //!
 //! ```rust
-//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # fn get_client_response() -> Vec<u8> { vec![1] }
 //! # let b = [0u8; 64];
 //! # let v = b"";
@@ -39,7 +39,7 @@
 //! reply:
 //!
 //! ```rust
-//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
 //! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
 //! # fn send_proof(_: &[u8]) { };
@@ -53,7 +53,7 @@
 //! `key` contains shared secret key between user and the server. You can extract shared secret
 //! key using `key()` method.
 //! ```rust
-//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
@@ -67,7 +67,7 @@
 //! key in case of correct server data.
 //!
 //! ```rust
-//! # let server = crate::srp::server::SrpServer::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let server = crate::srp::server::Server::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = server.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
 //! # fn get_client_proof()-> Vec<u8> { vec![53, 91, 252, 129, 223, 201, 97, 145, 208, 243, 229, 232, 20, 118, 108, 126, 244, 68, 237, 38, 121, 24, 181, 53, 155, 103, 134, 44, 107, 204, 56, 50] };
 //! # fn send_proof(_: &[u8]) { };
@@ -85,36 +85,36 @@ use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
 use crate::{
-    SrpGroup,
-    errors::SrpAuthError,
+    Group,
+    errors::AuthError,
     utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
 /// SRP server state
-pub struct SrpServer<D: Digest> {
-    params: &'static SrpGroup,
+pub struct Server<D: Digest> {
+    params: &'static Group,
     d: PhantomData<D>,
 }
 
 /// SRP server state after handshake with the client.
-pub struct SrpServerVerifier<D: Digest> {
+pub struct ServerVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
 }
 
 /// RFC 5054 SRP server state after handshake with the client.
-pub struct SrpServerVerifierRfc5054<D: Digest> {
+pub struct ServerVerifierRfc5054<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
     session_key: Vec<u8>,
 }
 
-impl<D: Digest> SrpServer<D> {
+impl<D: Digest> Server<D> {
     /// Create new server state.
     #[must_use]
-    pub const fn new(params: &'static SrpGroup) -> Self {
+    pub const fn new(params: &'static Group) -> Self {
         Self {
             params,
             d: PhantomData,
@@ -177,7 +177,7 @@ impl<D: Digest> SrpServer<D> {
         b: &[u8],
         v: &[u8],
         a_pub: &[u8],
-    ) -> Result<SrpServerVerifier<D>, SrpAuthError> {
+    ) -> Result<ServerVerifier<D>, AuthError> {
         let b = BoxedUint::from_be_slice_vartime(b);
         let v = BoxedUint::from_be_slice_vartime(v);
         let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
@@ -207,7 +207,7 @@ impl<D: Digest> SrpServer<D> {
             &key.to_be_bytes_trimmed_vartime(),
         );
 
-        Ok(SrpServerVerifier {
+        Ok(ServerVerifier {
             m1,
             m2,
             key: key.to_be_bytes_trimmed_vartime().into(),
@@ -224,7 +224,7 @@ impl<D: Digest> SrpServer<D> {
         b: &[u8],
         v: &[u8],
         a_pub: &[u8],
-    ) -> Result<SrpServerVerifierRfc5054<D>, SrpAuthError> {
+    ) -> Result<ServerVerifierRfc5054<D>, AuthError> {
         let b = BoxedUint::from_be_slice_vartime(b);
         let v = BoxedUint::from_be_slice_vartime(v);
         let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
@@ -261,7 +261,7 @@ impl<D: Digest> SrpServer<D> {
             session_key.as_slice(),
         );
 
-        Ok(SrpServerVerifierRfc5054 {
+        Ok(ServerVerifierRfc5054 {
             m1,
             m2,
             key: premaster_secret.into(),
@@ -270,18 +270,18 @@ impl<D: Digest> SrpServer<D> {
     }
 
     /// Ensure `a_pub` is non-zero and therefore not maliciously crafted.
-    fn validate_a_pub(&self, a_pub: &BoxedUint) -> Result<(), SrpAuthError> {
+    fn validate_a_pub(&self, a_pub: &BoxedUint) -> Result<(), AuthError> {
         let n = self.params.n.modulus().as_nz_ref();
 
         if (a_pub.resize(n.bits_precision()) % n).is_zero().into() {
-            return Err(SrpAuthError::IllegalParameter("a_pub".to_owned()));
+            return Err(AuthError::IllegalParameter("a_pub".to_owned()));
         }
 
         Ok(())
     }
 }
 
-impl<D: Digest> SrpServerVerifier<D> {
+impl<D: Digest> ServerVerifier<D> {
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
     pub fn key(&self) -> &[u8] {
@@ -295,16 +295,16 @@ impl<D: Digest> SrpServerVerifier<D> {
     }
 
     /// Process user proof of having the same shared secret.
-    pub fn verify_client(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
+    pub fn verify_client(&self, reply: &[u8]) -> Result<(), AuthError> {
         if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
         } else {
-            Err(SrpAuthError::BadRecordMac("client".to_owned()))
+            Err(AuthError::BadRecordMac("client".to_owned()))
         }
     }
 }
 
-impl<D: Digest> SrpServerVerifierRfc5054<D> {
+impl<D: Digest> ServerVerifierRfc5054<D> {
     /// Get shared secret between user and the server. (do not forget to verify
     /// that keys are the same!)
     pub fn key(&self) -> &[u8] {
@@ -318,11 +318,11 @@ impl<D: Digest> SrpServerVerifierRfc5054<D> {
     }
 
     /// Process user proof of having the same shared secret and return shared session key.
-    pub fn verify_client(&self, reply: &[u8]) -> Result<&[u8], SrpAuthError> {
+    pub fn verify_client(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
         if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
         } else {
-            Err(SrpAuthError::BadRecordMac("client".to_owned()))
+            Err(AuthError::BadRecordMac("client".to_owned()))
         }
     }
 }

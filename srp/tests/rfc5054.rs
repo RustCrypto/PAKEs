@@ -1,9 +1,9 @@
 use crypto_bigint::BoxedUint;
 use hex_literal::hex;
 use sha1::Sha1;
-use srp::client::SrpClient;
+use srp::client::Client;
 use srp::groups::G_1024;
-use srp::server::SrpServer;
+use srp::server::Server;
 use srp::utils::{compute_k, compute_u};
 
 #[test]
@@ -22,8 +22,8 @@ fn rfc5054() {
         "bad k value"
     );
 
-    let identity_hash = SrpClient::<Sha1>::compute_identity_hash(i, p);
-    let x = SrpClient::<Sha1>::compute_x(identity_hash.as_slice(), &s);
+    let identity_hash = Client::<Sha1>::compute_identity_hash(i, p);
+    let x = Client::<Sha1>::compute_x(identity_hash.as_slice(), &s);
 
     assert_eq!(
         &*x.to_be_bytes_trimmed_vartime(),
@@ -31,7 +31,7 @@ fn rfc5054() {
         "bad x value"
     );
 
-    let client = SrpClient::<Sha1>::new(group);
+    let client = Client::<Sha1>::new(group);
     let v = client.compute_g_x(&x);
 
     assert_eq!(
@@ -70,7 +70,7 @@ fn rfc5054() {
         "bad a_pub value"
     );
 
-    let server = SrpServer::<Sha1>::new(group);
+    let server = Server::<Sha1>::new(group);
     let b_pub = server.compute_b_pub(&b, &k, &v);
 
     assert_eq!(

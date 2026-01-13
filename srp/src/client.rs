@@ -10,16 +10,16 @@
 //! ```rust
 //! use crate::srp::groups::G_2048;
 //! use sha2::Sha256; // Note: You should probably use a proper password KDF
-//! # use crate::srp::client::SrpClient;
+//! # use crate::srp::client::Client;
 //!
-//! let client = SrpClient::<Sha256>::new(&G_2048);
+//! let client = Client::<Sha256>::new(&G_2048);
 //! ```
 //!
 //! Next send handshake data (username and `a_pub`) to the server and receive
 //! `salt` and `b_pub`:
 //!
 //! ```rust
-//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let client = crate::srp::client::Client::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # fn server_response()-> (Vec<u8>, Vec<u8>) { (vec![], vec![]) }
 //!
 //! let mut a = [0u8; 64];
@@ -32,7 +32,7 @@
 //! `process_reply` can return error in case of malicious `b_pub`.
 //!
 //! ```rust
-//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let client = crate::srp::client::Client::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let a = [0u8; 64];
 //! # let username = b"username";
 //! # let password = b"password";
@@ -48,7 +48,7 @@
 //! `verify_server` method will return error in case of incorrect server reply.
 //!
 //! ```rust
-//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let client = crate::srp::client::Client::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 //! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
 //!
@@ -60,7 +60,7 @@
 //! `key` contains shared secret key between user and the server. You can extract shared secret
 //! key using `key()` method.
 //! ```rust
-//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let client = crate::srp::client::Client::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
@@ -73,7 +73,7 @@
 //! key in case of correct server data.
 //!
 //! ```rust
-//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let client = crate::srp::client::Client::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
 //! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
 //!
@@ -89,7 +89,7 @@
 //! Man-in-the-middle (MITM) attack for registration.
 //!
 //! ```rust
-//! # let client = crate::srp::client::SrpClient::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
+//! # let client = crate::srp::client::Client::<sha2::Sha256>::new(&crate::srp::groups::G_2048);
 //! # let username = b"username";
 //! # let password = b"password";
 //! # let salt = b"salt";
@@ -107,37 +107,37 @@ use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
 use crate::{
-    SrpGroup,
-    errors::SrpAuthError,
+    Group,
+    errors::AuthError,
     utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
 /// SRP client state before handshake with the server.
-pub struct SrpClient<D: Digest> {
-    params: &'static SrpGroup,
+pub struct Client<D: Digest> {
+    params: &'static Group,
     username_in_x: bool,
     d: PhantomData<D>,
 }
 
 /// SRP client state after handshake with the server.
-pub struct SrpClientVerifier<D: Digest> {
+pub struct ClientVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
 }
 
 /// RFC 5054 SRP client state after handshake with the server.
-pub struct SrpClientVerifierRfc5054<D: Digest> {
+pub struct ClientVerifierRfc5054<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
     key: Vec<u8>,
     session_key: Vec<u8>,
 }
 
-impl<D: Digest> SrpClient<D> {
+impl<D: Digest> Client<D> {
     /// Create new SRP client instance.
     #[must_use]
-    pub const fn new(params: &'static SrpGroup) -> Self {
+    pub const fn new(params: &'static Group) -> Self {
         Self {
             params,
             username_in_x: true,
@@ -146,7 +146,7 @@ impl<D: Digest> SrpClient<D> {
     }
 
     #[must_use]
-    pub const fn new_with_options(params: &'static SrpGroup, username_in_x: bool) -> Self {
+    pub const fn new_with_options(params: &'static Group, username_in_x: bool) -> Self {
         Self {
             params,
             username_in_x,
@@ -236,7 +236,7 @@ impl<D: Digest> SrpClient<D> {
         password: &[u8],
         salt: &[u8],
         b_pub: &[u8],
-    ) -> Result<SrpClientVerifier<D>, SrpAuthError> {
+    ) -> Result<ClientVerifier<D>, AuthError> {
         let a = BoxedUint::from_be_slice_vartime(a);
         let a_pub = self.compute_g_x(&a);
         let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
@@ -266,7 +266,7 @@ impl<D: Digest> SrpClient<D> {
             &key.to_be_bytes_trimmed_vartime(),
         );
 
-        Ok(SrpClientVerifier {
+        Ok(ClientVerifier {
             m1,
             m2,
             key: key.to_be_bytes_trimmed_vartime().to_vec(),
@@ -284,7 +284,7 @@ impl<D: Digest> SrpClient<D> {
         password: &[u8],
         salt: &[u8],
         b_pub: &[u8],
-    ) -> Result<SrpClientVerifierRfc5054<D>, SrpAuthError> {
+    ) -> Result<ClientVerifierRfc5054<D>, AuthError> {
         let a = BoxedUint::from_be_slice_vartime(a);
         let a_pub = self.compute_g_x(&a);
         let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
@@ -321,7 +321,7 @@ impl<D: Digest> SrpClient<D> {
             session_key.as_slice(),
         );
 
-        Ok(SrpClientVerifierRfc5054 {
+        Ok(ClientVerifierRfc5054 {
             m1,
             m2,
             key: premaster_secret.to_vec(),
@@ -330,11 +330,11 @@ impl<D: Digest> SrpClient<D> {
     }
 
     /// Ensure `b_pub` is non-zero and therefore not maliciously crafted.
-    fn validate_b_pub(&self, b_pub: &BoxedUint) -> Result<(), SrpAuthError> {
+    fn validate_b_pub(&self, b_pub: &BoxedUint) -> Result<(), AuthError> {
         let n = self.params.n.modulus().as_nz_ref();
 
         if (b_pub.resize(n.bits_precision()) % n).is_zero().into() {
-            return Err(SrpAuthError::IllegalParameter("b_pub".to_owned()));
+            return Err(AuthError::IllegalParameter("b_pub".to_owned()));
         }
 
         Ok(())
@@ -346,7 +346,7 @@ impl<D: Digest> SrpClient<D> {
     }
 }
 
-impl<D: Digest> SrpClientVerifier<D> {
+impl<D: Digest> ClientVerifier<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
@@ -360,16 +360,16 @@ impl<D: Digest> SrpClientVerifier<D> {
     }
 
     /// Verify server reply to verification data.
-    pub fn verify_server(&self, reply: &[u8]) -> Result<(), SrpAuthError> {
+    pub fn verify_server(&self, reply: &[u8]) -> Result<(), AuthError> {
         if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
         } else {
-            Err(SrpAuthError::BadRecordMac("server".to_owned()))
+            Err(AuthError::BadRecordMac("server".to_owned()))
         }
     }
 }
 
-impl<D: Digest> SrpClientVerifierRfc5054<D> {
+impl<D: Digest> ClientVerifierRfc5054<D> {
     /// Get shared secret key without authenticating server, e.g. for using with
     /// authenticated encryption modes. DO NOT USE this method without
     /// some kind of secure authentication
@@ -383,11 +383,11 @@ impl<D: Digest> SrpClientVerifierRfc5054<D> {
     }
 
     /// Verify server reply to verification data and return shared session key.
-    pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], SrpAuthError> {
+    pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
         if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
         } else {
-            Err(SrpAuthError::BadRecordMac("server".to_owned()))
+            Err(AuthError::BadRecordMac("server".to_owned()))
         }
     }
 }

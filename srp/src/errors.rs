@@ -5,12 +5,12 @@ use core::{error, fmt};
 
 /// SRP authentication error.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum SrpAuthError {
+pub enum AuthError {
     IllegalParameter(String),
     BadRecordMac(String),
 }
 
-impl fmt::Display for SrpAuthError {
+impl fmt::Display for AuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IllegalParameter(param) => {
@@ -23,4 +23,4 @@ impl fmt::Display for SrpAuthError {
     }
 }
 
-impl error::Error for SrpAuthError {}
+impl error::Error for AuthError {}
