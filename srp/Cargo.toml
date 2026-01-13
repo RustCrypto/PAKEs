@@ -17,7 +17,7 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-bigint = { package = "crypto-bigint", version = "0.7.0-rc.17", features = ["alloc"] }
+bigint = { package = "crypto-bigint", version = "0.7.0-rc.18", features = ["alloc"] }
 common = { package = "crypto-common", version = "0.2.0-rc.9" }
 digest = "0.11.0-rc.5"
 subtle = { version = "2.4", default-features = false }
