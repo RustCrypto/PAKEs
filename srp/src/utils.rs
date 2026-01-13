@@ -1,8 +1,11 @@
 use alloc::vec::Vec;
-use crypto_bigint::{BoxedUint, modular::BoxedMontyForm};
+use crypto_bigint::{
+    BoxedUint, Resize,
+    modular::{BoxedMontyForm, BoxedMontyParams},
+};
 use digest::{Digest, Output};
 
-// u = H(PAD(A) | PAD(B))
+/// `u = H(PAD(A) | PAD(B))`
 #[must_use]
 pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
     let mut u = D::new();
@@ -11,7 +14,7 @@ pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
     BoxedUint::from_be_slice_vartime(&u.finalize())
 }
 
-// k = H(N | PAD(g))
+/// `k = H(N | PAD(g))`
 #[must_use]
 pub fn compute_k<D: Digest>(g: &BoxedMontyForm) -> BoxedUint {
     let n = g.params().modulus().to_be_bytes();
@@ -26,7 +29,7 @@ pub fn compute_k<D: Digest>(g: &BoxedMontyForm) -> BoxedUint {
     BoxedUint::from_be_slice_vartime(d.finalize().as_slice())
 }
 
-// H(N) XOR H(PAD(g))
+/// `H(N) XOR H(PAD(g))`
 #[must_use]
 pub fn compute_hash_n_xor_hash_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
     let n = g.params().modulus().to_be_bytes();
@@ -44,16 +47,6 @@ pub fn compute_hash_n_xor_hash_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
         .collect()
 }
 
-// M1 = H(A, B, K) this doesn't follow the spec but apparently no one does for M1
-#[must_use]
-pub fn compute_m1<D: Digest>(a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> Output<D> {
-    let mut d = D::new();
-    d.update(a_pub);
-    d.update(b_pub);
-    d.update(key);
-    d.finalize()
-}
-
 #[must_use]
 pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
     let mut d = D::new();
@@ -61,7 +54,7 @@ pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
     d.finalize()
 }
 
-// M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K) following RFC5054
+/// `M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K)` following RFC5054
 #[must_use]
 pub fn compute_m1_rfc5054<D: Digest>(
     g: &BoxedMontyForm,
@@ -81,7 +74,17 @@ pub fn compute_m1_rfc5054<D: Digest>(
     d.finalize()
 }
 
-// M2 = H(A, M1, K)
+/// `M1 = H(A, B, K)`
+#[must_use]
+pub fn compute_m1_legacy<D: Digest>(a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> Output<D> {
+    let mut d = D::new();
+    d.update(a_pub);
+    d.update(b_pub);
+    d.update(key);
+    d.finalize()
+}
+
+/// `M2 = H(A, M1, K)`
 #[must_use]
 pub fn compute_m2<D: Digest>(a_pub: &[u8], m1: &Output<D>, key: &[u8]) -> Output<D> {
     let mut d = D::new();
@@ -89,4 +92,11 @@ pub fn compute_m2<D: Digest>(a_pub: &[u8], m1: &Output<D>, key: &[u8]) -> Output
     d.update(m1);
     d.update(key);
     d.finalize()
+}
+
+/// Convert the given value into Montgomery form, resizing it in the process.
+/// Convert an integer into the Montgomery domain, returning a [`BoxedMontyForm`] modulo `N`.
+pub(crate) fn monty_form(x: &BoxedUint, n: &BoxedMontyParams) -> BoxedMontyForm {
+    let precision = n.modulus().bits_precision();
+    BoxedMontyForm::new(x.resize(precision), n)
 }

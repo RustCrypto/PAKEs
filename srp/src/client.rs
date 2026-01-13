@@ -7,7 +7,10 @@ use subtle::ConstantTimeEq;
 use crate::{
     Group,
     errors::AuthError,
-    utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
+    utils::{
+        compute_hash, compute_k, compute_m1_legacy, compute_m1_rfc5054, compute_m2, compute_u,
+        monty_form,
+    },
 };
 
 /// SRP client implementation.
@@ -179,8 +182,8 @@ impl<G: Group, D: Digest> Client<G, D> {
         a: &BoxedUint,
         u: &BoxedUint,
     ) -> BoxedUint {
-        let b_pub = self.monty_form(b_pub);
-        let k = self.monty_form(k);
+        let b_pub = monty_form(b_pub, self.g.params());
+        let k = monty_form(k, self.g.params());
 
         // B - kg^x
         let base = b_pub - k * self.g.pow(x);
@@ -292,7 +295,7 @@ impl<G: Group, D: Digest> Client<G, D> {
             .to_be_bytes_trimmed_vartime()
             .to_vec();
 
-        let m1 = compute_m1::<D>(&a_pub_bytes, b_pub_bytes, &key);
+        let m1 = compute_m1_legacy::<D>(&a_pub_bytes, b_pub_bytes, &key);
         let m2 = compute_m2::<D>(&a_pub_bytes, &m1, &key);
         Ok(LegacyClientVerifier { m1, m2, key })
     }
@@ -300,12 +303,6 @@ impl<G: Group, D: Digest> Client<G, D> {
     /// Conditionally include username in the computation of `x`.
     fn identity_username<'a>(&self, username: &'a [u8]) -> &'a [u8] {
         if self.username_in_x { username } else { &[] }
-    }
-
-    /// Convert an integer into the Montgomery domain, returning a [`BoxedMontyForm`] modulo `N`.
-    fn monty_form(&self, x: &BoxedUint) -> BoxedMontyForm {
-        let precision = self.n().bits_precision();
-        BoxedMontyForm::new(x.resize(precision), self.g.params())
     }
 
     /// Get the modulus `N`.
