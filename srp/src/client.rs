@@ -1,105 +1,3 @@
-//! SRP client implementation.
-//!
-//! # Usage
-//! First create SRP client struct by passing to it SRP parameters (shared
-//! between client and server).
-//!
-//! You can use SHA1 from SRP-6a, but it's highly recommended to use specialized
-//! password hashing algorithm instead (e.g. PBKDF2, argon2 or scrypt).
-//!
-//! ```rust
-//! use srp::groups::G2048;
-//! use sha2::Sha256; // Note: You should probably use a proper password KDF
-//! # use srp::client::Client;
-//!
-//! let client = Client::<G2048, Sha256>::new();
-//! ```
-//!
-//! Next send handshake data (username and `a_pub`) to the server and receive
-//! `salt` and `b_pub`:
-//!
-//! ```rust
-//! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # fn server_response()-> (Vec<u8>, Vec<u8>) { (vec![], vec![]) }
-//!
-//! let mut a = [0u8; 64];
-//! // rng.fill_bytes(&mut a);
-//! let a_pub = client.compute_public_ephemeral(&a);
-//! let (salt, b_pub) = server_response();
-//! ```
-//!
-//! Process the server response and create verifier instance.
-//! `process_reply` can return error in case of malicious `b_pub`.
-//!
-//! ```rust
-//! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # let a = [0u8; 64];
-//! # let username = b"username";
-//! # let password = b"password";
-//! # let salt = b"salt";
-//! # let b_pub = b"b_pub";
-//!
-//! let private_key = (username, password, salt);
-//! let verifier = client.process_reply_legacy(&a, username, password, salt, b_pub);
-//! ```
-//!
-//! Finally verify the server: first generate user proof,
-//! send it to the server and verify server proof in the reply. Note that
-//! `verify_server` method will return error in case of incorrect server reply.
-//!
-//! ```ignore
-//! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
-//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
-//!
-//! let client_proof = verifier.proof();
-//! let server_proof = send_proof(client_proof);
-//! verifier.verify_server(&server_proof).unwrap();
-//! ```
-//!
-//! `key` contains shared secret key between user and the server. You can extract shared secret
-//! key using `key()` method.
-//! ```rust
-//! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = client.process_reply_legacy(b"", b"", b"", b"", b"1").unwrap();
-//!
-//! verifier.key();
-//! ```
-//!
-//!
-//! Alternatively, you can use `process_reply_rfc5054` method to process parameters
-//! according to RFC 5054 if the server is using it. This way, it generates M1 and
-//! M2 differently and also the `verify_server` method will return a shared session
-//! key in case of correct server data.
-//!
-//! ```ignore
-//! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
-//! # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
-//!
-//! let client_proof = verifier.proof();
-//! let server_proof = send_proof(client_proof);
-//! let session_key = verifier.verify_server(&server_proof).unwrap();
-//! ```
-//!
-//!
-//! For user registration on the server first generate salt (e.g. 32 bytes long)
-//! and get password verifier which depends on private key. Send username, salt
-//! and password verifier over protected channel to protect against
-//! Man-in-the-middle (MITM) attack for registration.
-//!
-//! ```rust
-//! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # let username = b"username";
-//! # let password = b"password";
-//! # let salt = b"salt";
-//! # fn send_registration_data(_: &[u8], _: &[u8], _: &[u8]) {}
-//!
-//! let pwd_verifier = client.compute_verifier(username, password, salt);
-//! send_registration_data(username, salt, &pwd_verifier);
-//! ```
-//!
-
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use crypto_bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
@@ -112,7 +10,105 @@ use crate::{
     utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
-/// SRP client state before handshake with the server.
+/// SRP client implementation.
+///
+/// # Usage
+/// First create SRP client struct by passing to it SRP parameters (shared
+/// between client and server).
+///
+/// You can use SHA1 from SRP-6a, but it's highly recommended to use specialized
+/// password hashing algorithm instead (e.g. PBKDF2, argon2 or scrypt).
+///
+/// ```rust
+/// use srp::{G2048, Client};
+/// use sha2::Sha256;
+///
+/// let client = Client::<G2048, Sha256>::new();
+/// ```
+///
+/// Next send handshake data (username and `a_pub`) to the server and receive
+/// `salt` and `b_pub`:
+///
+/// ```rust
+/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # fn server_response()-> (Vec<u8>, Vec<u8>) { (vec![], vec![]) }
+///
+/// let mut a = [0u8; 64];
+/// // rng.fill_bytes(&mut a);
+/// let a_pub = client.compute_public_ephemeral(&a);
+/// let (salt, b_pub) = server_response();
+/// ```
+///
+/// Process the server response and create verifier instance.
+/// `process_reply` can return error in case of malicious `b_pub`.
+///
+/// ```rust
+/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let a = [0u8; 64];
+/// # let username = b"username";
+/// # let password = b"password";
+/// # let salt = b"salt";
+/// # let b_pub = b"b_pub";
+///
+/// let private_key = (username, password, salt);
+/// let verifier = client.process_reply_legacy(&a, username, password, salt, b_pub);
+/// ```
+///
+/// Finally verify the server: first generate user proof,
+/// send it to the server and verify server proof in the reply. Note that
+/// `verify_server` method will return error in case of incorrect server reply.
+///
+/// ```ignore
+/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
+/// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
+///
+/// let client_proof = verifier.proof();
+/// let server_proof = send_proof(client_proof);
+/// verifier.verify_server(&server_proof).unwrap();
+/// ```
+///
+/// `key` contains shared secret key between user and the server. You can extract shared secret
+/// key using `key()` method.
+/// ```rust
+/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let verifier = client.process_reply_legacy(b"", b"", b"", b"", b"1").unwrap();
+///
+/// verifier.key();
+/// ```
+///
+///
+/// Alternatively, you can use `process_reply_rfc5054` method to process parameters
+/// according to RFC 5054 if the server is using it. This way, it generates M1 and
+/// M2 differently and also the `verify_server` method will return a shared session
+/// key in case of correct server data.
+///
+/// ```ignore
+/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
+/// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
+///
+/// let client_proof = verifier.proof();
+/// let server_proof = send_proof(client_proof);
+/// let session_key = verifier.verify_server(&server_proof).unwrap();
+/// ```
+///
+///
+/// For user registration on the server first generate salt (e.g. 32 bytes long)
+/// and get password verifier which depends on private key. Send username, salt
+/// and password verifier over protected channel to protect against
+/// Man-in-the-middle (MITM) attack for registration.
+///
+/// ```rust
+/// # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
+/// # let username = b"username";
+/// # let password = b"password";
+/// # let salt = b"salt";
+/// # fn send_registration_data(_: &[u8], _: &[u8], _: &[u8]) {}
+///
+/// let pwd_verifier = client.compute_verifier(username, password, salt);
+/// send_registration_data(username, salt, &pwd_verifier);
+/// ```
 pub struct Client<G: Group, D: Digest> {
     g: BoxedMontyForm,
     username_in_x: bool,

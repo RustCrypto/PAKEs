@@ -1,85 +1,5 @@
-//! SRP server implementation
-//!
-//! # Usage
-//! First receive user's username and public value `a_pub`, retrieve from a
-//! database the salt and verifier for a given username. Generate `b` and public value `b_pub`.
-//!
-//!
-//! ```rust
-//! use crate::srp::groups::G2048;
-//! use sha2::Sha256; // Note: You should probably use a proper password KDF
-//! # use crate::srp::server::Server;
-//! # fn get_client_request()-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
-//! # fn get_user(_: &[u8])-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
-//!
-//! let server = Server::<G2048, Sha256>::new();
-//! let (username, a_pub) = get_client_request();
-//! let (salt, v) = get_user(&username);
-//! let mut b = [0u8; 64];
-//! // rng.fill_bytes(&mut b);
-//! let b_pub = server.compute_public_ephemeral(&b, &v);
-//! ```
-//!
-//! Next send to user `b_pub` and `salt` from user record
-//!
-//! Next process the user response:
-//!
-//! ```rust
-//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
-//! # fn get_client_response() -> Vec<u8> { vec![1] }
-//! # let b = [0u8; 64];
-//! # let v = b"";
-//!
-//! let a_pub = get_client_response();
-//! let verifier = server.process_reply_legacy(&b, v, &a_pub).unwrap();
-//! ```
-//!
-//!
-//! And finally receive user proof, verify it and send server proof in the
-//! reply:
-//!
-//! ```rust
-//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
-//! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
-//! # fn send_proof(_: &[u8]) { };
-//!
-//! let client_proof = get_client_proof();
-//! verifier.verify_client(&client_proof).unwrap();
-//! send_proof(verifier.proof());
-//! ```
-//!
-//!
-//! `key` contains shared secret key between user and the server. You can extract shared secret
-//! key using `key()` method.
-//! ```rust
-//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
-//!
-//! verifier.key();
-//! ```
-//!
-//!
-//! Alternatively, you can use `process_reply_rfc5054` method to process parameters
-//! according to RFC 5054 if the client is using it. You need to pass `username` and
-//! `salt` in addition to other parameters to this method. This way, it generates M1
-//! and M2 differently and also the `verify_client` method will return a shared session
-//! key in case of correct server data.
-//!
-//! ```ident
-//! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = server.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
-//! # fn get_client_proof()-> Vec<u8> { vec![53, 91, 252, 129, 223, 201, 97, 145, 208, 243, 229, 232, 20, 118, 108, 126, 244, 68, 237, 38, 121, 24, 181, 53, 155, 103, 134, 44, 107, 204, 56, 50] };
-//! # fn send_proof(_: &[u8]) { };
-//!
-//! let client_proof = get_client_proof();
-//! let session_key = verifier.verify_client(&client_proof).unwrap();
-//! send_proof(verifier.proof());
-//! ```
-//!
 use alloc::vec::Vec;
 use core::marker::PhantomData;
-
 use crypto_bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
@@ -90,7 +10,83 @@ use crate::{
     utils::{compute_hash, compute_k, compute_m1, compute_m1_rfc5054, compute_m2, compute_u},
 };
 
-/// SRP server state
+/// SRP server implementation.
+///
+/// # Usage
+/// First receive user's username and public value `a_pub`, retrieve from a
+/// database the salt and verifier for a given username. Generate `b` and public value `b_pub`.
+///
+///
+/// ```rust
+/// use srp::{G2048, Server};
+/// use sha2::Sha256;
+/// # fn get_client_request()-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
+/// # fn get_user(_: &[u8])-> (Vec<u8>, Vec<u8>) { (vec![], vec![])}
+///
+/// let server = Server::<G2048, Sha256>::new();
+/// let (username, a_pub) = get_client_request();
+/// let (salt, v) = get_user(&username);
+/// let mut b = [0u8; 64];
+/// // rng.fill_bytes(&mut b);
+/// let b_pub = server.compute_public_ephemeral(&b, &v);
+/// ```
+///
+/// Next send to user `b_pub` and `salt` from user record
+///
+/// Next process the user response:
+///
+/// ```rust
+/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # fn get_client_response() -> Vec<u8> { vec![1] }
+/// # let b = [0u8; 64];
+/// # let v = b"";
+///
+/// let a_pub = get_client_response();
+/// let verifier = server.process_reply_legacy(&b, v, &a_pub).unwrap();
+/// ```
+///
+///
+/// And finally receive user proof, verify it and send server proof in the
+/// reply:
+///
+/// ```rust
+/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
+/// # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
+/// # fn send_proof(_: &[u8]) { };
+///
+/// let client_proof = get_client_proof();
+/// verifier.verify_client(&client_proof).unwrap();
+/// send_proof(verifier.proof());
+/// ```
+///
+///
+/// `key` contains shared secret key between user and the server. You can extract shared secret
+/// key using `key()` method.
+/// ```rust
+/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
+///
+/// verifier.key();
+/// ```
+///
+///
+/// Alternatively, you can use `process_reply_rfc5054` method to process parameters
+/// according to RFC 5054 if the client is using it. You need to pass `username` and
+/// `salt` in addition to other parameters to this method. This way, it generates M1
+/// and M2 differently and also the `verify_client` method will return a shared session
+/// key in case of correct server data.
+///
+/// ```ident
+/// # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
+/// # let verifier = server.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
+/// # fn get_client_proof()-> Vec<u8> { vec![53, 91, 252, 129, 223, 201, 97, 145, 208, 243, 229, 232, 20, 118, 108, 126, 244, 68, 237, 38, 121, 24, 181, 53, 155, 103, 134, 44, 107, 204, 56, 50] };
+/// # fn send_proof(_: &[u8]) { };
+///
+/// let client_proof = get_client_proof();
+/// let session_key = verifier.verify_client(&client_proof).unwrap();
+/// send_proof(verifier.proof());
+/// ```
 pub struct Server<G: Group, D: Digest> {
     g: BoxedMontyForm,
     d: PhantomData<(G, D)>,

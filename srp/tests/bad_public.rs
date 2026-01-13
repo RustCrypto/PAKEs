@@ -1,8 +1,6 @@
 use crypto_bigint::BoxedUint;
 use sha1::Sha1;
-use srp::client::Client;
-use srp::groups::G1024;
-use srp::server::Server;
+use srp::{Client, G1024, Server};
 
 #[test]
 #[should_panic]
