@@ -31,7 +31,7 @@
 //! # let v = b"";
 //!
 //! let a_pub = get_client_response();
-//! let verifier = server.process_reply(&b, v, &a_pub).unwrap();
+//! let verifier = server.process_reply_legacy(&b, v, &a_pub).unwrap();
 //! ```
 //!
 //!
@@ -40,7 +40,7 @@
 //!
 //! ```rust
 //! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
+//! # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
 //! # fn get_client_proof()-> Vec<u8> { vec![26, 80, 8, 243, 111, 162, 238, 171, 208, 237, 207, 46, 46, 137, 44, 213, 105, 208, 84, 224, 244, 216, 103, 145, 14, 103, 182, 56, 242, 4, 179, 57] };
 //! # fn send_proof(_: &[u8]) { };
 //!
@@ -54,7 +54,7 @@
 //! key using `key()` method.
 //! ```rust
 //! # let server = srp::Server::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = server.process_reply(b"", b"", b"1").unwrap();
+//! # let verifier = server.process_reply_legacy(b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
 //! ```
@@ -142,54 +142,11 @@ impl<G: Group, D: Digest> Server<G, D> {
         .into()
     }
 
-    /// Process client reply to the handshake.
-    /// b is a random value,
-    /// v is the provided during initial user registration
-    pub fn process_reply(
-        &self,
-        b: &[u8],
-        v: &[u8],
-        a_pub: &[u8],
-    ) -> Result<ServerVerifier<D>, AuthError> {
-        let b = BoxedUint::from_be_slice_vartime(b);
-        let v = BoxedUint::from_be_slice_vartime(v);
-        let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
-
-        let k = compute_k::<D>(&self.g);
-        let b_pub = self.compute_b_pub(&b, &k, &v);
-
-        // Safeguard against malicious A
-        self.validate_a_pub(&a_pub)?;
-
-        let u = compute_u::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-        );
-
-        let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
-
-        let m1 = compute_m1::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-            &key.to_be_bytes_trimmed_vartime(),
-        );
-
-        let m2 = compute_m2::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &m1,
-            &key.to_be_bytes_trimmed_vartime(),
-        );
-
-        Ok(ServerVerifier {
-            m1,
-            m2,
-            key: key.to_be_bytes_trimmed_vartime().into(),
-        })
-    }
-
     /// Process client reply to the handshake according to RFC 5054.
-    /// b is a random value,
-    /// v is the provided during initial user registration
+    ///
+    /// # Params
+    /// - `b` is a random value,
+    /// - `v` is the provided during initial user registration
     pub fn process_reply_rfc5054(
         &self,
         username: &[u8],
@@ -242,6 +199,61 @@ impl<G: Group, D: Digest> Server<G, D> {
         })
     }
 
+    /// Process client reply to the handshake using the legacy implementation.
+    ///
+    /// This implementation is compatible with `srp` v0.6 and earlier. Note the default
+    /// implementation is now RFC5054 compatible.
+    ///
+    /// # Params
+    /// - `b` is a random value,
+    /// - `v` is the provided during initial user registration
+    #[deprecated(
+        since = "0.7.0",
+        note = "please switch to `Server::process_reply_rfc5054`"
+    )]
+    #[allow(deprecated)]
+    pub fn process_reply_legacy(
+        &self,
+        b: &[u8],
+        v: &[u8],
+        a_pub: &[u8],
+    ) -> Result<LegacyServerVerifier<D>, AuthError> {
+        let b = BoxedUint::from_be_slice_vartime(b);
+        let v = BoxedUint::from_be_slice_vartime(v);
+        let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
+
+        let k = compute_k::<D>(&self.g);
+        let b_pub = self.compute_b_pub(&b, &k, &v);
+
+        // Safeguard against malicious A
+        self.validate_a_pub(&a_pub)?;
+
+        let u = compute_u::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+        );
+
+        let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
+
+        let m1 = compute_m1::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+            &key.to_be_bytes_trimmed_vartime(),
+        );
+
+        let m2 = compute_m2::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &m1,
+            &key.to_be_bytes_trimmed_vartime(),
+        );
+
+        Ok(LegacyServerVerifier {
+            m1,
+            m2,
+            key: key.to_be_bytes_trimmed_vartime().into(),
+        })
+    }
+
     /// Convert an integer into the Montgomery domain, returning a [`BoxedMontyForm`] modulo `N`.
     fn monty_form(&self, x: &BoxedUint) -> BoxedMontyForm {
         let precision = self.n().bits_precision();
@@ -271,36 +283,6 @@ impl<G: Group, D: Digest> Default for Server<G, D> {
     }
 }
 
-/// SRP server state after handshake with the client.
-pub struct ServerVerifier<D: Digest> {
-    m1: Output<D>,
-    m2: Output<D>,
-    key: Vec<u8>,
-}
-
-impl<D: Digest> ServerVerifier<D> {
-    /// Get shared secret between user and the server. (do not forget to verify
-    /// that keys are the same!)
-    pub fn key(&self) -> &[u8] {
-        &self.key
-    }
-
-    /// Verification data for sending to the client.
-    pub fn proof(&self) -> &[u8] {
-        // TODO not Output
-        self.m2.as_slice()
-    }
-
-    /// Process user proof of having the same shared secret.
-    pub fn verify_client(&self, reply: &[u8]) -> Result<(), AuthError> {
-        if self.m1.ct_eq(reply).unwrap_u8() == 1 {
-            Ok(())
-        } else {
-            Err(AuthError::BadRecordMac { peer: "client" })
-        }
-    }
-}
-
 /// RFC 5054 SRP server state after handshake with the client.
 pub struct ServerVerifierRfc5054<D: Digest> {
     m1: Output<D>,
@@ -326,6 +308,38 @@ impl<D: Digest> ServerVerifierRfc5054<D> {
     pub fn verify_client(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
         if self.m1.ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
+        } else {
+            Err(AuthError::BadRecordMac { peer: "client" })
+        }
+    }
+}
+
+/// Legacy SRP server state after handshake with the client, compatible with `srp` v0.6 and earlier.
+#[deprecated(since = "0.7.0", note = "please switch to `ServerVerifierRfc5054`")]
+pub struct LegacyServerVerifier<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
+}
+
+#[allow(deprecated)]
+impl<D: Digest> LegacyServerVerifier<D> {
+    /// Get shared secret between user and the server. (do not forget to verify
+    /// that keys are the same!)
+    pub fn key(&self) -> &[u8] {
+        &self.key
+    }
+
+    /// Verification data for sending to the client.
+    pub fn proof(&self) -> &[u8] {
+        // TODO not Output
+        self.m2.as_slice()
+    }
+
+    /// Process user proof of having the same shared secret.
+    pub fn verify_client(&self, reply: &[u8]) -> Result<(), AuthError> {
+        if self.m1.ct_eq(reply).unwrap_u8() == 1 {
+            Ok(())
         } else {
             Err(AuthError::BadRecordMac { peer: "client" })
         }

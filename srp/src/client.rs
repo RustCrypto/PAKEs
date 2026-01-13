@@ -40,7 +40,7 @@
 //! # let b_pub = b"b_pub";
 //!
 //! let private_key = (username, password, salt);
-//! let verifier = client.process_reply(&a, username, password, salt, b_pub);
+//! let verifier = client.process_reply_legacy(&a, username, password, salt, b_pub);
 //! ```
 //!
 //! Finally verify the server: first generate user proof,
@@ -61,7 +61,7 @@
 //! key using `key()` method.
 //! ```rust
 //! # let client = srp::Client::<srp::G2048, sha2::Sha256>::new();
-//! # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
+//! # let verifier = client.process_reply_legacy(b"", b"", b"", b"", b"1").unwrap();
 //!
 //! verifier.key();
 //! ```
@@ -200,55 +200,9 @@ impl<G: Group, D: Digest> Client<G, D> {
             .into()
     }
 
-    /// Process server reply to the handshake.
-    /// `a` is a random value,
-    /// `username`, `password` is supplied by the user
-    /// `salt` and `b_pub` come from the server
-    pub fn process_reply(
-        &self,
-        a: &[u8],
-        username: &[u8],
-        password: &[u8],
-        salt: &[u8],
-        b_pub: &[u8],
-    ) -> Result<ClientVerifier<D>, AuthError> {
-        let a = BoxedUint::from_be_slice_vartime(a);
-        let a_pub = self.compute_g_x(&a);
-        let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
-
-        // Safeguard against malicious B
-        self.validate_b_pub(&b_pub)?;
-
-        let u = compute_u::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-        );
-        let k = compute_k::<D>(&self.g);
-        let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
-        let x = Self::compute_x(identity_hash.as_slice(), salt);
-
-        let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
-
-        let m1 = compute_m1::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-            &key.to_be_bytes_trimmed_vartime(),
-        );
-
-        let m2 = compute_m2::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &m1,
-            &key.to_be_bytes_trimmed_vartime(),
-        );
-
-        Ok(ClientVerifier {
-            m1,
-            m2,
-            key: key.to_be_bytes_trimmed_vartime().to_vec(),
-        })
-    }
-
     /// Process server reply to the handshake according to RFC 5054.
+    ///
+    /// # Params
     /// `a` is a random value,
     /// `username`, `password` is supplied by the user
     /// `salt` and `b_pub` come from the server
@@ -304,6 +258,64 @@ impl<G: Group, D: Digest> Client<G, D> {
         })
     }
 
+    /// Process server reply to the handshake using the legacy implementation.
+    ///
+    /// This implementation is compatible with `srp` v0.6 and earlier. Note the default
+    /// implementation is now RFC5054 compatible.
+    ///
+    /// # Params
+    /// - `a` is a random value,
+    /// - `username`, `password` is supplied by the user
+    /// - `salt` and `b_pub` come from the server
+    #[deprecated(
+        since = "0.7.0",
+        note = "please switch to `Client::process_reply_rfc5054`"
+    )]
+    #[allow(deprecated)]
+    pub fn process_reply_legacy(
+        &self,
+        a: &[u8],
+        username: &[u8],
+        password: &[u8],
+        salt: &[u8],
+        b_pub: &[u8],
+    ) -> Result<LegacyClientVerifier<D>, AuthError> {
+        let a = BoxedUint::from_be_slice_vartime(a);
+        let a_pub = self.compute_g_x(&a);
+        let b_pub = BoxedUint::from_be_slice_vartime(b_pub);
+
+        // Safeguard against malicious B
+        self.validate_b_pub(&b_pub)?;
+
+        let u = compute_u::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+        );
+        let k = compute_k::<D>(&self.g);
+        let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
+        let x = Self::compute_x(identity_hash.as_slice(), salt);
+
+        let key = self.compute_premaster_secret(&b_pub, &k, &x, &a, &u);
+
+        let m1 = compute_m1::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &b_pub.to_be_bytes_trimmed_vartime(),
+            &key.to_be_bytes_trimmed_vartime(),
+        );
+
+        let m2 = compute_m2::<D>(
+            &a_pub.to_be_bytes_trimmed_vartime(),
+            &m1,
+            &key.to_be_bytes_trimmed_vartime(),
+        );
+
+        Ok(LegacyClientVerifier {
+            m1,
+            m2,
+            key: key.to_be_bytes_trimmed_vartime().to_vec(),
+        })
+    }
+
     /// Conditionally include username in the computation of `x`.
     fn identity_username<'a>(&self, username: &'a [u8]) -> &'a [u8] {
         if self.username_in_x { username } else { &[] }
@@ -338,36 +350,6 @@ impl<G: Group, D: Digest> Default for Client<G, D> {
     }
 }
 
-/// SRP client state after handshake with the server.
-pub struct ClientVerifier<D: Digest> {
-    m1: Output<D>,
-    m2: Output<D>,
-    key: Vec<u8>,
-}
-
-impl<D: Digest> ClientVerifier<D> {
-    /// Get shared secret key without authenticating server, e.g. for using with
-    /// authenticated encryption modes. DO NOT USE this method without
-    /// some kind of secure authentication
-    pub fn key(&self) -> &[u8] {
-        &self.key
-    }
-
-    /// Verification data for sending to the server.
-    pub fn proof(&self) -> &[u8] {
-        self.m1.as_slice()
-    }
-
-    /// Verify server reply to verification data.
-    pub fn verify_server(&self, reply: &[u8]) -> Result<(), AuthError> {
-        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
-            Ok(())
-        } else {
-            Err(AuthError::BadRecordMac { peer: "server" })
-        }
-    }
-}
-
 /// RFC 5054 SRP client state after handshake with the server.
 pub struct ClientVerifierRfc5054<D: Digest> {
     m1: Output<D>,
@@ -393,6 +375,38 @@ impl<D: Digest> ClientVerifierRfc5054<D> {
     pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
         if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
+        } else {
+            Err(AuthError::BadRecordMac { peer: "server" })
+        }
+    }
+}
+
+/// Legacy SRP client state after handshake with the server, compatible with `srp` v0.6 and earlier.
+#[deprecated(since = "0.7.0", note = "please switch to `ClientVerifierRfc5054`")]
+pub struct LegacyClientVerifier<D: Digest> {
+    m1: Output<D>,
+    m2: Output<D>,
+    key: Vec<u8>,
+}
+
+#[allow(deprecated)]
+impl<D: Digest> LegacyClientVerifier<D> {
+    /// Get shared secret key without authenticating server, e.g. for using with
+    /// authenticated encryption modes. DO NOT USE this method without
+    /// some kind of secure authentication
+    pub fn key(&self) -> &[u8] {
+        &self.key
+    }
+
+    /// Verification data for sending to the server.
+    pub fn proof(&self) -> &[u8] {
+        self.m1.as_slice()
+    }
+
+    /// Verify server reply to verification data.
+    pub fn verify_server(&self, reply: &[u8]) -> Result<(), AuthError> {
+        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
+            Ok(())
         } else {
             Err(AuthError::BadRecordMac { peer: "server" })
         }
