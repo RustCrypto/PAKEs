@@ -1,23 +1,28 @@
 //! Error types.
 
-use alloc::string::String;
 use core::{error, fmt};
 
 /// SRP authentication error.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AuthError {
-    IllegalParameter(String),
-    BadRecordMac(String),
+    IllegalParameter {
+        /// Parameter name
+        name: &'static str,
+    },
+    BadRecordMac {
+        /// Which peer's proof is invalid
+        peer: &'static str,
+    },
 }
 
 impl fmt::Display for AuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IllegalParameter(param) => {
-                write!(f, "illegal_parameter: bad '{param}' value")
+            Self::IllegalParameter { name } => {
+                write!(f, "illegal_parameter: bad '{name}' value")
             }
-            Self::BadRecordMac(param) => {
-                write!(f, "bad_record_mac: incorrect '{param}'  proof")
+            Self::BadRecordMac { peer } => {
+                write!(f, "bad_record_mac: incorrect '{peer}' proof")
             }
         }
     }
