@@ -2,7 +2,7 @@ use crypto_bigint::BoxedUint;
 use hex_literal::hex;
 use sha1::Sha1;
 use srp::client::Client;
-use srp::groups::G_1024;
+use srp::groups::{G1024, Group};
 use srp::server::Server;
 use srp::utils::{compute_k, compute_u};
 
@@ -12,9 +12,7 @@ fn rfc5054() {
     let i = b"alice";
     let p = b"password123";
     let s = hex!("BEB25379 D1A8581E B5A72767 3A2441EE");
-    let group = &G_1024;
-
-    let k = compute_k::<Sha1>(group);
+    let k = compute_k::<Sha1>(&G1024::generator());
 
     assert_eq!(
         &*k.to_be_bytes_trimmed_vartime(),
@@ -22,8 +20,8 @@ fn rfc5054() {
         "bad k value"
     );
 
-    let identity_hash = Client::<Sha1>::compute_identity_hash(i, p);
-    let x = Client::<Sha1>::compute_x(identity_hash.as_slice(), &s);
+    let identity_hash = Client::<G1024, Sha1>::compute_identity_hash(i, p);
+    let x = Client::<G1024, Sha1>::compute_x(identity_hash.as_slice(), &s);
 
     assert_eq!(
         &*x.to_be_bytes_trimmed_vartime(),
@@ -31,7 +29,7 @@ fn rfc5054() {
         "bad x value"
     );
 
-    let client = Client::<Sha1>::new(group);
+    let client = Client::<G1024, Sha1>::new();
     let v = client.compute_g_x(&x);
 
     assert_eq!(
@@ -70,7 +68,7 @@ fn rfc5054() {
         "bad a_pub value"
     );
 
-    let server = Server::<Sha1>::new(group);
+    let server = Server::<G1024, Sha1>::new();
     let b_pub = server.compute_b_pub(&b, &k, &v);
 
     assert_eq!(

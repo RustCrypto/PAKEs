@@ -1,77 +1,58 @@
 //! Groups from [RFC 5054](https://tools.ietf.org/html/rfc5054)
 //!
 //! It is strongly recommended to use them instead of custom generated
-//! groups. Additionally, it is not recommended to use `G_1024` and `G_1536`,
+//! groups. Additionally, it is not recommended to use `G1024` and `G_1536`,
 //! they are provided only for compatibility with the legacy software.
 
 use crypto_bigint::{
     BoxedUint, Odd, Resize,
     modular::{BoxedMontyForm, BoxedMontyParams},
 };
-use once_cell::sync::Lazy;
 
-/// Group used for SRP computations
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Group {
-    /// A large safe prime (N = 2q+1, where q is prime)
-    pub n: BoxedMontyParams,
-    /// A generator modulo N
-    pub g: BoxedMontyForm,
-}
+/// Group used for SRP computations.
+pub trait Group {
+    /// Group generator modulo `N`.
+    const G: u64;
 
-impl Group {
-    /// Initialize a new group from the given boxed integers.
-    pub fn new(n: BoxedUint, g: BoxedUint) -> Self {
+    /// Big endian bytes representing a large safe prime (`N = 2q + 1`, where `q` is prime) which
+    /// acts as the modulus.
+    const N: &'static [u8];
+
+    /// Initialize group generator as a [`BoxedMontyForm`].
+    fn generator() -> BoxedMontyForm {
+        let n = BoxedUint::from_be_slice_vartime(Self::N);
         let n = BoxedMontyParams::new(Odd::new(n).expect("n should be odd"));
-        let g = BoxedMontyForm::new(g.resize(n.bits_precision()), &n);
-        Self { n, g }
+        BoxedMontyForm::new(BoxedUint::from(Self::G).resize(n.bits_precision()), &n)
     }
 }
 
-pub static G_1024: Lazy<Group> = Lazy::new(|| {
-    Group::new(
-        BoxedUint::from_be_slice_vartime(include_bytes!("groups/1024.bin")),
-        BoxedUint::from_be_slice_vartime(&[2]),
-    )
-});
+macro_rules! define_group {
+    ($name:ident, $g:expr, $n:expr, $doc:expr) => {
+        #[doc = $doc]
+        pub struct $name;
 
-pub static G_1536: Lazy<Group> = Lazy::new(|| {
-    Group::new(
-        BoxedUint::from_be_slice_vartime(include_bytes!("groups/1536.bin")),
-        BoxedUint::from_be_slice_vartime(&[2]),
-    )
-});
+        impl Group for $name {
+            const G: u64 = $g;
+            const N: &'static [u8] = include_bytes!("groups/1024.bin");
+        }
+    };
+}
 
-pub static G_2048: Lazy<Group> = Lazy::new(|| {
-    Group::new(
-        BoxedUint::from_be_slice_vartime(include_bytes!("groups/2048.bin")),
-        BoxedUint::from_be_slice_vartime(&[2]),
-    )
-});
-
-pub static G_3072: Lazy<Group> = Lazy::new(|| {
-    Group::new(
-        BoxedUint::from_be_slice_vartime(include_bytes!("groups/3072.bin")),
-        BoxedUint::from_be_slice_vartime(&[5]),
-    )
-});
-
-pub static G_4096: Lazy<Group> = Lazy::new(|| {
-    Group::new(
-        BoxedUint::from_be_slice_vartime(include_bytes!("groups/4096.bin")),
-        BoxedUint::from_be_slice_vartime(&[5]),
-    )
-});
+define_group!(G1024, 2, "groups/1024.bin", "1024-bit group");
+define_group!(G1536, 2, "groups/1536.bin", "1536-bit group");
+define_group!(G2048, 2, "groups/2048.bin", "2048-bit group");
+define_group!(G3072, 5, "groups/3072.bin", "3072-bit group");
+define_group!(G4096, 5, "groups/4096.bin", "4096-bit group");
 
 #[cfg(test)]
 mod tests {
-    use crate::groups::G_1024;
+    use super::{G1024, Group};
     use crate::utils::compute_k;
     use sha1::Sha1;
 
     #[test]
     fn test_k_1024_sha1() {
-        let k = compute_k::<Sha1>(&G_1024).to_be_bytes_trimmed_vartime();
+        let k = compute_k::<Sha1>(&G1024::generator()).to_be_bytes_trimmed_vartime();
         assert_eq!(&*k, include_bytes!("test/k_sha1_1024.bin"));
     }
 }

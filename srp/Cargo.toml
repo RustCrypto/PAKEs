@@ -15,8 +15,7 @@ rust-version = "1.85"
 [dependencies]
 crypto-bigint = { version = "0.7.0-rc.17", features = ["alloc"] }
 digest = "0.11.0-rc.5"
-once_cell = "1"
-subtle = "2.4"
+subtle = { version = "2.4", default-features = false }
 
 [dev-dependencies]
 getrandom = { version = "0.4.0-rc.0", features = ["sys_rng"] }
