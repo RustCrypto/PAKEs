@@ -1,4 +1,4 @@
-use crypto_bigint::BoxedUint;
+use bigint::BoxedUint;
 use hex_literal::hex;
 use sha1::Sha1;
 use srp::utils::{compute_k, compute_u};

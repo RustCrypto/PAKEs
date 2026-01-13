@@ -1,7 +1,7 @@
 use crate::{errors::AuthError, groups::*, utils::*};
 use alloc::vec::Vec;
+use bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
 use core::marker::PhantomData;
-use crypto_bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
 use digest::{Digest, Output};
 use subtle::ConstantTimeEq;
 
@@ -38,12 +38,15 @@ pub type ClientG4096<D> = Client<G4096, D>;
 /// Next send handshake data (username and `a_pub`) to the server and receive
 /// `salt` and `b_pub`:
 ///
-/// ```rust
+#[cfg_attr(feature = "getrandom", doc = "```")]
+#[cfg_attr(not(feature = "getrandom"), doc = "```ignore")]
 /// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # fn server_response()-> (Vec<u8>, Vec<u8>) { (vec![], vec![]) }
+/// // NOTE: requires `getrandom` crate feature is enabled
 ///
-/// let mut a = [0u8; 64];
-/// // rng.fill_bytes(&mut a);
+/// use srp::{EphemeralSecret, Generate};
+///
+/// let mut a = EphemeralSecret::generate();
 /// let a_pub = client.compute_public_ephemeral(&a);
 /// let (salt, b_pub) = server_response();
 /// ```
@@ -58,9 +61,8 @@ pub type ClientG4096<D> = Client<G4096, D>;
 /// # let password = b"password";
 /// # let salt = b"salt";
 /// # let b_pub = b"b_pub";
-///
 /// let private_key = (username, password, salt);
-/// let verifier = client.process_reply_legacy(&a, username, password, salt, b_pub);
+/// let verifier = client.process_reply(&a, username, password, salt, b_pub);
 /// ```
 ///
 /// Finally verify the server: first generate user proof,
@@ -71,7 +73,6 @@ pub type ClientG4096<D> = Client<G4096, D>;
 /// # let client = srp::ClientG2048::<sha2::Sha256>::new();
 /// # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 /// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
-///
 /// let client_proof = verifier.proof();
 /// let server_proof = send_proof(client_proof);
 /// verifier.verify_server(&server_proof).unwrap();
@@ -81,32 +82,14 @@ pub type ClientG4096<D> = Client<G4096, D>;
 /// key using `key()` method.
 /// ```rust
 /// # let client = srp::ClientG2048::<sha2::Sha256>::new();
-/// # let verifier = client.process_reply_legacy(b"", b"", b"", b"", b"1").unwrap();
-///
+/// # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
 /// verifier.key();
 /// ```
 ///
-///
-/// Alternatively, you can use `process_reply_rfc5054` method to process parameters
-/// according to RFC 5054 if the server is using it. This way, it generates M1 and
-/// M2 differently and also the `verify_server` method will return a shared session
-/// key in case of correct server data.
-///
-/// ```ignore
-/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
-/// # let verifier = client.process_reply_rfc5054(b"", b"", b"", b"", b"1").unwrap();
-/// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![10, 215, 214, 40, 136, 200, 122, 121, 68, 160, 38, 32, 85, 82, 128, 30, 199, 194, 126, 222, 61, 55, 2, 28, 120, 181, 155, 102, 141, 65, 17, 64]   }
-///
-/// let client_proof = verifier.proof();
-/// let server_proof = send_proof(client_proof);
-/// let session_key = verifier.verify_server(&server_proof).unwrap();
-/// ```
-///
-///
 /// For user registration on the server first generate salt (e.g. 32 bytes long)
 /// and get password verifier which depends on private key. Send username, salt
-/// and password verifier over protected channel to protect against
-/// Man-in-the-middle (MITM) attack for registration.
+/// and password verifier over a protected channel to protect against Man-in-the-middle
+/// (MITM) attack for registration.
 ///
 /// ```rust
 /// # let client = srp::ClientG2048::<sha2::Sha256>::new();
@@ -114,7 +97,6 @@ pub type ClientG4096<D> = Client<G4096, D>;
 /// # let password = b"password";
 /// # let salt = b"salt";
 /// # fn send_registration_data(_: &[u8], _: &[u8], _: &[u8]) {}
-///
 /// let pwd_verifier = client.compute_verifier(username, password, salt);
 /// send_registration_data(username, salt, &pwd_verifier);
 /// ```
@@ -272,10 +254,7 @@ impl<G: Group, D: Digest> Client<G, D> {
     /// - `a` is a random value,
     /// - `username`, `password` is supplied by the user
     /// - `salt` and `b_pub` come from the server
-    #[deprecated(
-        since = "0.7.0",
-        note = "please switch to `Client::process_reply_rfc5054`"
-    )]
+    #[deprecated(since = "0.7.0", note = "please use `Client::process_reply` (RFC5054)")]
     #[allow(deprecated)]
     pub fn process_reply_legacy(
         &self,

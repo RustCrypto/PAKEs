@@ -126,6 +126,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfc44c334576a43ddece6194e3bf6f177b402728fde319648e36aaf617a473c7"
 dependencies = [
  "ctutils",
+ "getrandom",
  "num-traits",
  "rand_core",
  "serdect",
@@ -137,7 +138,9 @@ version = "0.2.0-rc.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41b8986f836d4aeb30ccf4c9d3bd562fd716074cfd7fc4a2948359fbd21ed809"
 dependencies = [
+ "getrandom",
  "hybrid-array",
+ "rand_core",
 ]
 
 [[package]]
@@ -552,6 +555,7 @@ name = "srp"
 version = "0.7.0-pre.2"
 dependencies = [
  "crypto-bigint",
+ "crypto-common",
  "digest",
  "getrandom",
  "hex-literal",
