@@ -1,9 +1,3 @@
-use alloc::vec::Vec;
-use core::marker::PhantomData;
-use crypto_bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
-use digest::{Digest, Output};
-use subtle::ConstantTimeEq;
-
 use crate::{
     Group,
     errors::AuthError,
@@ -12,6 +6,11 @@ use crate::{
         monty_form,
     },
 };
+use alloc::vec::Vec;
+use core::marker::PhantomData;
+use crypto_bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
+use digest::{Digest, Output};
+use subtle::ConstantTimeEq;
 
 /// SRP server implementation.
 ///
@@ -90,6 +89,7 @@ use crate::{
 /// let session_key = verifier.verify_client(&client_proof).unwrap();
 /// send_proof(verifier.proof());
 /// ```
+#[derive(Debug)]
 pub struct Server<G: Group, D: Digest> {
     g: BoxedMontyForm,
     d: PhantomData<(G, D)>,
@@ -267,6 +267,7 @@ impl<G: Group, D: Digest> Default for Server<G, D> {
 /// [RFC5054] SRP server state after handshake with the client.
 ///
 /// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
+#[derive(Debug)]
 pub struct ServerVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
@@ -299,6 +300,7 @@ impl<D: Digest> ServerVerifier<D> {
 
 /// Legacy SRP server state after handshake with the client, compatible with `srp` v0.6 and earlier.
 #[deprecated(since = "0.7.0", note = "please switch to `ServerVerifierRfc5054`")]
+#[derive(Debug)]
 pub struct LegacyServerVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
