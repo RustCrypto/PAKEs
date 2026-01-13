@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use crypto_bigint::{
+use bigint::{
     BoxedUint, Resize,
     modular::{BoxedMontyForm, BoxedMontyParams},
 };

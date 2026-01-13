@@ -1,4 +1,4 @@
-use crypto_bigint::BoxedUint;
+use bigint::BoxedUint;
 use sha1::Sha1;
 use srp::{ClientG2048, ServerG2048};
 

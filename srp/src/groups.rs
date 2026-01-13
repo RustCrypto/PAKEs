@@ -7,13 +7,13 @@
 //!
 //! [RFC5054]: https://tools.ietf.org/html/rfc5054
 
+use bigint::{
+    BoxedUint, Odd, Resize,
+    modular::{BoxedMontyForm, BoxedMontyParams},
+};
 use core::{
     any,
     fmt::{self, Debug},
-};
-use crypto_bigint::{
-    BoxedUint, Odd, Resize,
-    modular::{BoxedMontyForm, BoxedMontyParams},
 };
 
 /// Group used for SRP computations.

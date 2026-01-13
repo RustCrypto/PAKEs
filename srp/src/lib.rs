@@ -1,4 +1,5 @@
 #![no_std]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/RustCrypto/meta/master/logo.svg",
@@ -78,7 +79,9 @@ mod client;
 mod errors;
 mod server;
 
+pub use bigint;
 pub use client::{Client, ClientG2048, ClientG3072, ClientG4096, ClientVerifier};
+pub use common;
 pub use errors::AuthError;
 pub use groups::Group;
 pub use server::{Server, ServerG2048, ServerG3072, ServerG4096, ServerVerifier};
@@ -88,3 +91,16 @@ pub use {
     client::{ClientG1024, ClientG1536, LegacyClientVerifier},
     server::{LegacyServerVerifier, ServerG1024, ServerG1536},
 };
+
+#[cfg(feature = "rand_core")]
+pub use common::Generate;
+#[cfg(feature = "rand_core")]
+pub use common::rand_core;
+
+/// 384-bit ephemeral secret (usable as `a` or `b`).
+///
+/// Should be large enough for use with any of the groups defined in this crate.
+pub type EphemeralSecret = [u8; 48];
+
+/// 256-bit salt value.
+pub type Salt = [u8; 16];
