@@ -122,6 +122,9 @@ impl<G: Group, D: Digest> Client<G, D> {
         Self::new_with_options(true)
     }
 
+    /// Create a new SRP client instance, with the ability to override username inclusion in `x`.
+    ///
+    /// Set `username_in_x` to false for e.g. compatibility with Apple implementations of SRP.
     #[must_use]
     pub fn new_with_options(username_in_x: bool) -> Self {
         Self {
@@ -131,13 +134,23 @@ impl<G: Group, D: Digest> Client<G, D> {
         }
     }
 
-    // v = g^x % N
+    /// Compute `g^x % N`, which can be used when computing e.g. `v`.
     #[must_use]
     pub fn compute_g_x(&self, x: &BoxedUint) -> BoxedUint {
         self.g.pow(x).retrieve()
     }
 
-    //  H(<username> | ":" | <raw password>)
+    /// Get public ephemeral value for handshaking with the server: `g^a % N`.
+    ///
+    /// This returns a big endian byte serialization stripped of leading zeros.
+    #[must_use]
+    pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
+        self.compute_g_x(&BoxedUint::from_be_slice_vartime(a))
+            .to_be_bytes_trimmed_vartime()
+            .into()
+    }
+
+    /// Compute the identity hash: `H(<username> | ":" | <raw password>)`.
     #[must_use]
     pub fn compute_identity_hash(username: &[u8], password: &[u8]) -> Output<D> {
         let mut d = D::new();
@@ -147,7 +160,7 @@ impl<G: Group, D: Digest> Client<G, D> {
         d.finalize()
     }
 
-    // x = H(<salt> | H(<username> | ":" | <raw password>))
+    /// Compute `x = H(<salt> | H(<username> | ":" | <raw password>))`.
     #[must_use]
     pub fn compute_x(identity_hash: &[u8], salt: &[u8]) -> BoxedUint {
         let mut x = D::new();
@@ -156,7 +169,7 @@ impl<G: Group, D: Digest> Client<G, D> {
         BoxedUint::from_be_slice_vartime(&x.finalize())
     }
 
-    // (B - (k * g^x)) ^ (a + (u * x)) % N
+    /// Compute the premaster secret: `(B - (k * g^x)) ^ (a + (u * x)) % N`.
     #[must_use]
     pub fn compute_premaster_secret(
         &self,
@@ -179,7 +192,7 @@ impl<G: Group, D: Digest> Client<G, D> {
         base.pow(&exp).retrieve()
     }
 
-    /// Get password verifier (v in RFC5054) for user registration on the server.
+    /// Get password verifier (`v` in RFC5054) for user registration on the server.
     #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
         let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
@@ -187,21 +200,14 @@ impl<G: Group, D: Digest> Client<G, D> {
         self.compute_g_x(&x).to_be_bytes_trimmed_vartime().into()
     }
 
-    /// Get public ephemeral value for handshaking with the server.
-    /// g^a % N
-    #[must_use]
-    pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
-        self.compute_g_x(&BoxedUint::from_be_slice_vartime(a))
-            .to_be_bytes_trimmed_vartime()
-            .into()
-    }
-
-    /// Process server reply to the handshake according to RFC 5054.
+    /// Process server reply to the handshake according to [RFC5054].
     ///
     /// # Params
     /// - `a` is a random value,
     /// - `username`, `password` is supplied by the user
     /// - `salt` and `b_pub` come from the server
+    ///
+    /// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
     pub fn process_reply(
         &self,
         a: &[u8],
@@ -325,7 +331,9 @@ impl<G: Group, D: Digest> Default for Client<G, D> {
     }
 }
 
-/// RFC 5054 SRP client state after handshake with the server.
+/// [RFC5054]-compatible SRP client state after handshake with the server.
+///
+/// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
 pub struct ClientVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,

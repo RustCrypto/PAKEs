@@ -5,10 +5,12 @@ use core::{error, fmt};
 /// SRP authentication error.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AuthError {
+    /// Parameter with the given `name` is illegal.
     IllegalParameter {
         /// Parameter name
         name: &'static str,
     },
+    /// Invalid MAC when computing proof for the given peer.
     BadRecordMac {
         /// Which peer's proof is invalid
         peer: &'static str,

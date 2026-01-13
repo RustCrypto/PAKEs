@@ -102,7 +102,7 @@ impl<G: Group, D: Digest> Server<G, D> {
         }
     }
 
-    //  k*v + g^b % N
+    /// Compute the server's public ephemeral: `k*v + g^b % N`.
     #[must_use]
     pub fn compute_b_pub(&self, b: &BoxedUint, k: &BoxedUint, v: &BoxedUint) -> BoxedUint {
         let k = self.monty_form(k);
@@ -110,7 +110,7 @@ impl<G: Group, D: Digest> Server<G, D> {
         (k * v + self.g.pow(b)).retrieve()
     }
 
-    // <premaster secret> = (A * v^u) ^ b % N
+    /// Compute the premaster secret: `(A * v^u) ^ b % N`.
     #[must_use]
     pub fn compute_premaster_secret(
         &self,
@@ -138,11 +138,13 @@ impl<G: Group, D: Digest> Server<G, D> {
         .into()
     }
 
-    /// Process client reply to the handshake according to RFC 5054.
+    /// Process client reply to the handshake according to [RFC5054].
     ///
     /// # Params
     /// - `b` is a random value,
     /// - `v` is the provided during initial user registration
+    ///
+    /// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
     pub fn process_reply(
         &self,
         username: &[u8],
@@ -265,7 +267,9 @@ impl<G: Group, D: Digest> Default for Server<G, D> {
     }
 }
 
-/// RFC 5054 SRP server state after handshake with the client.
+/// [RFC5054] SRP server state after handshake with the client.
+///
+/// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
 pub struct ServerVerifier<D: Digest> {
     m1: Output<D>,
     m2: Output<D>,
