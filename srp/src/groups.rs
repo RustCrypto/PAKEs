@@ -38,11 +38,11 @@ macro_rules! define_group {
     };
 }
 
-define_group!(G1024, 2, "groups/1024.bin", "1024-bit group");
-define_group!(G1536, 2, "groups/1536.bin", "1536-bit group");
-define_group!(G2048, 2, "groups/2048.bin", "2048-bit group");
-define_group!(G3072, 5, "groups/3072.bin", "3072-bit group");
-define_group!(G4096, 5, "groups/4096.bin", "4096-bit group");
+define_group!(G1024, 2, "groups/1024.bin", "1024-bit group.");
+define_group!(G1536, 2, "groups/1536.bin", "1536-bit group.");
+define_group!(G2048, 2, "groups/2048.bin", "2048-bit group.");
+define_group!(G3072, 5, "groups/3072.bin", "3072-bit group.");
+define_group!(G4096, 5, "groups/4096.bin", "4096-bit group.");
 
 #[cfg(test)]
 mod tests {

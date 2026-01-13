@@ -1,10 +1,8 @@
 use crypto_bigint::BoxedUint;
 use hex_literal::hex;
 use sha1::Sha1;
-use srp::client::Client;
-use srp::groups::{G1024, Group};
-use srp::server::Server;
 use srp::utils::{compute_k, compute_u};
+use srp::{Client, G1024, Group, Server};
 
 #[test]
 #[allow(clippy::many_single_char_names)]

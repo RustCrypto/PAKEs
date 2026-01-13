@@ -3,7 +3,7 @@ use getrandom::{
     rand_core::{RngCore, TryRngCore},
 };
 use sha2::Sha256;
-use srp::{client::Client, groups::G2048, server::Server};
+use srp::{Client, G2048, Server};
 
 fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
     let mut rng = SysRng.unwrap_err();

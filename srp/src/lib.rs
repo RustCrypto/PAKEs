@@ -7,22 +7,15 @@
 #![allow(clippy::many_single_char_names)]
 
 //! # Usage
-//! Add `srp` dependency to your `Cargo.toml`:
-//!
-//! ```toml
-//! [dependencies]
-//! srp = "0.6"
-//! ```
-//!
-//! Next read documentation for [`client`](client/index.html) and
-//! [`server`](server/index.html) modules.
+//! See [`Client`] and [`Server`] types for usage information.
 //!
 //! # Algorithm description
-//! Here we briefly describe implemented algorithm. For additional information
-//! refer to SRP literature. All arithmetic is done modulo `N`, where `N` is a
-//! large safe prime (`N = 2q+1`, where `q` is prime). Additionally `g` MUST be
-//! a generator modulo `N`. It's STRONGLY recommended to use SRP parameters
-//! provided by this crate in the [`groups`](groups/index.html) module.
+//! Here we briefly describe implemented algorithm. For additional information refer to SRP
+//! literature. All arithmetic is done modulo `N`, where `N` is a large safe prime
+//! (`N = 2q + 1`, where `q` is prime).
+//!
+//! Additionally, `g` MUST be a generator modulo `N`. It's STRONGLY recommended to use SRP
+//! parameters provided by this crate as [`G1024`], [`G1536`], [`G2048`], [`G3072`] and [`G4096`].
 //!
 //! |       Client           |   Data transfer   |      Server                     |
 //! |------------------------|-------------------|---------------------------------|
@@ -57,12 +50,17 @@
 #[macro_use]
 extern crate alloc;
 
-pub mod client;
-pub mod errors;
-pub mod groups;
-pub mod server;
+mod client;
+mod errors;
+mod groups;
+mod server;
+#[doc(hidden)]
 pub mod utils;
 
-pub use client::Client;
+pub use client::{Client, ClientVerifier};
+pub use errors::AuthError;
 pub use groups::*;
-pub use server::Server;
+pub use server::{Server, ServerVerifier};
+
+#[allow(deprecated)]
+pub use {client::LegacyClientVerifier, server::LegacyServerVerifier};
