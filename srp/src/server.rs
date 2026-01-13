@@ -153,22 +153,19 @@ impl<G: Group, D: Digest> Server<G, D> {
         salt: &[u8],
         b: &[u8],
         v: &[u8],
-        a_pub: &[u8],
+        a_pub_bytes: &[u8],
     ) -> Result<ServerVerifier<D>, AuthError> {
         let b = BoxedUint::from_be_slice_vartime(b);
         let v = BoxedUint::from_be_slice_vartime(v);
-        let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
+        let a_pub = BoxedUint::from_be_slice_vartime(a_pub_bytes);
 
         let k = compute_k::<D>(&self.g);
-        let b_pub = self.compute_b_pub(&b, &k, &v);
+        let b_pub_bytes = self.compute_b_pub(&b, &k, &v).to_be_bytes_trimmed_vartime();
 
         // Safeguard against malicious A
         self.validate_a_pub(&a_pub)?;
 
-        let u = compute_u::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-        );
+        let u = compute_u::<D>(a_pub_bytes, &b_pub_bytes);
 
         let premaster_secret = self
             .compute_premaster_secret(&a_pub, &v, &u, &b)
@@ -180,16 +177,12 @@ impl<G: Group, D: Digest> Server<G, D> {
             &self.g,
             username,
             salt,
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
+            a_pub_bytes,
+            &b_pub_bytes,
             session_key.as_slice(),
         );
 
-        let m2 = compute_m2::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &m1,
-            session_key.as_slice(),
-        );
+        let m2 = compute_m2::<D>(a_pub_bytes, &m1, session_key.as_slice());
 
         Ok(ServerVerifier {
             m1,
@@ -216,36 +209,29 @@ impl<G: Group, D: Digest> Server<G, D> {
         &self,
         b: &[u8],
         v: &[u8],
-        a_pub: &[u8],
+        a_pub_bytes: &[u8],
     ) -> Result<LegacyServerVerifier<D>, AuthError> {
         let b = BoxedUint::from_be_slice_vartime(b);
         let v = BoxedUint::from_be_slice_vartime(v);
-        let a_pub = BoxedUint::from_be_slice_vartime(a_pub);
+        let a_pub = BoxedUint::from_be_slice_vartime(a_pub_bytes);
 
         let k = compute_k::<D>(&self.g);
-        let b_pub = self.compute_b_pub(&b, &k, &v);
+        let b_pub_bytes = self.compute_b_pub(&b, &k, &v).to_be_bytes_trimmed_vartime();
 
         // Safeguard against malicious A
         self.validate_a_pub(&a_pub)?;
 
-        let u = compute_u::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
-        );
+        let u = compute_u::<D>(a_pub_bytes, &b_pub_bytes);
 
         let key = self.compute_premaster_secret(&a_pub, &v, &u, &b);
 
         let m1 = compute_m1::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &b_pub.to_be_bytes_trimmed_vartime(),
+            a_pub_bytes,
+            &b_pub_bytes,
             &key.to_be_bytes_trimmed_vartime(),
         );
 
-        let m2 = compute_m2::<D>(
-            &a_pub.to_be_bytes_trimmed_vartime(),
-            &m1,
-            &key.to_be_bytes_trimmed_vartime(),
-        );
+        let m2 = compute_m2::<D>(a_pub_bytes, &m1, &key.to_be_bytes_trimmed_vartime());
 
         Ok(LegacyServerVerifier {
             m1,
