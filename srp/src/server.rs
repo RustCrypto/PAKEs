@@ -90,8 +90,8 @@ use crate::{
 };
 
 /// SRP server state
-pub struct SrpServer<'a, D: Digest> {
-    params: &'a SrpGroup,
+pub struct SrpServer<D: Digest> {
+    params: &'static SrpGroup,
     d: PhantomData<D>,
 }
 
@@ -110,10 +110,10 @@ pub struct SrpServerVerifierRfc5054<D: Digest> {
     session_key: Vec<u8>,
 }
 
-impl<'a, D: Digest> SrpServer<'a, D> {
+impl<D: Digest> SrpServer<D> {
     /// Create new server state.
     #[must_use]
-    pub const fn new(params: &'a SrpGroup) -> Self {
+    pub const fn new(params: &'static SrpGroup) -> Self {
         Self {
             params,
             d: PhantomData,
