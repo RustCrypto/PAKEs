@@ -281,7 +281,8 @@ fn init() -> Result<(Client, Server, SingleUserDatabase)> {
 
     // register a user in the database
     let params = Params::RECOMMENDED;
-    let registration = base_client.register_alloc_strong(USERNAME, PASSWORD, params, Scrypt)?;
+    let registration =
+        base_client.register_alloc_strong(USERNAME, PASSWORD, params, Scrypt::default())?;
     if let ClientMessage::StrongRegistration {
         username,
         secret_exponent,
@@ -338,7 +339,7 @@ fn test_core(
 
             Params::new(log_n, r, p).unwrap()
         };
-        client.generate_cpace_alloc(x_pub, blinded_salt, params, Scrypt)?
+        client.generate_cpace_alloc(x_pub, blinded_salt, params, Scrypt::default())?
     } else {
         panic!("Received invalid server message {:?}", server_message);
     };

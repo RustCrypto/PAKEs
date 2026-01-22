@@ -40,7 +40,8 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     let params = Params::RECOMMENDED;
-    let registration = base_client.register::<&[u8], 100>(USERNAME, PASSWORD, params, Scrypt)?;
+    let registration =
+        base_client.register::<&[u8], 100>(USERNAME, PASSWORD, params, Scrypt::default())?;
     if let ClientMessage::Registration {
         username,
         salt,
@@ -143,7 +144,7 @@ fn main() -> Result<()> {
 
             Params::new(log_n, r, p).unwrap()
         };
-        client.generate_cpace::<&SaltString, 100>(x_pub, &salt, params, Scrypt)?
+        client.generate_cpace::<&SaltString, 100>(x_pub, &salt, params, Scrypt::default())?
     } else {
         panic!("Received invalid server message {:?}", server_message);
     };
