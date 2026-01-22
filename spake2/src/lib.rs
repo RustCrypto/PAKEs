@@ -323,7 +323,7 @@ impl<G: Group> Spake2<G> {
     #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
-        Self::start_a_with_rng(password, id_a, id_b, SysRng.unwrap_mut())
+        Self::start_a_with_rng(password, id_a, id_b, &mut SysRng.unwrap_err())
     }
 
     /// Start with identity `idB`.
@@ -332,7 +332,7 @@ impl<G: Group> Spake2<G> {
     #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
-        Self::start_b_with_rng(password, id_a, id_b, SysRng.unwrap_mut())
+        Self::start_b_with_rng(password, id_a, id_b, &mut SysRng.unwrap_err())
     }
 
     /// Start with symmetric identity.
@@ -341,7 +341,7 @@ impl<G: Group> Spake2<G> {
     #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Self, Vec<u8>) {
-        Self::start_symmetric_with_rng(password, id_s, SysRng.unwrap_mut())
+        Self::start_symmetric_with_rng(password, id_s, &mut SysRng.unwrap_err())
     }
 
     /// Start with identity `idA` and the provided cryptographically secure RNG.

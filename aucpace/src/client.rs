@@ -1069,15 +1069,16 @@ mod tests {
         // they are used here to make the test run faster
         let params: Params = Default::default();
 
+        let scrypt = Scrypt::default();
         let no_std_res = hash_password::<&str, &str, &SaltString, Scrypt, 100>(
             username,
             password,
             &salt.into(),
             params,
-            &Scrypt,
+            &scrypt,
         )
         .unwrap();
-        let alloc_res = hash_password_alloc(username, password, salt, params, &Scrypt).unwrap();
+        let alloc_res = hash_password_alloc(username, password, salt, params, &scrypt).unwrap();
 
         assert_eq!(alloc_res, no_std_res);
     }
@@ -1108,7 +1109,7 @@ mod tests {
             RistrettoPoint::identity(),
             &Salt::new(b"saltyboi").unwrap().into(),
             scrypt::Params::RECOMMENDED,
-            scrypt::Scrypt,
+            scrypt::Scrypt::default(),
         );
 
         if let Err(e) = res {
@@ -1134,7 +1135,7 @@ mod tests {
             RistrettoPoint::identity(),
             &Salt::new(b"saltyboi").unwrap().into(),
             scrypt::Params::RECOMMENDED,
-            scrypt::Scrypt,
+            scrypt::Scrypt::default(),
         );
 
         if let Err(e) = res {
@@ -1163,7 +1164,7 @@ mod tests {
             RistrettoPoint::identity(),
             RISTRETTO_BASEPOINT_POINT,
             scrypt::Params::RECOMMENDED,
-            scrypt::Scrypt,
+            scrypt::Scrypt::default(),
         );
 
         if let Err(e) = res {
@@ -1197,7 +1198,7 @@ mod tests {
             RistrettoPoint::identity(),
             RISTRETTO_BASEPOINT_POINT,
             scrypt::Params::RECOMMENDED,
-            scrypt::Scrypt,
+            scrypt::Scrypt::default(),
         );
 
         if let Err(e) = res {
@@ -1265,7 +1266,7 @@ mod tests {
             RISTRETTO_BASEPOINT_POINT,
             RistrettoPoint::identity(),
             scrypt::Params::RECOMMENDED,
-            scrypt::Scrypt,
+            scrypt::Scrypt::default(),
         );
 
         if let Err(e) = res {
