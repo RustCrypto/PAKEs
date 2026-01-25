@@ -251,10 +251,7 @@ use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2
 use rand_core::CryptoRng;
 
 #[cfg(feature = "getrandom")]
-pub use getrandom::SysRng;
-
-#[cfg(feature = "getrandom")]
-use rand_core::TryRngCore;
+pub use getrandom::{SysRng, rand_core::UnwrapErr};
 
 /// Password type.
 // TODO(tarcieri): avoid allocation?
@@ -323,7 +320,7 @@ impl<G: Group> Spake2<G> {
     #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_a(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
-        Self::start_a_with_rng(password, id_a, id_b, &mut SysRng.unwrap_err())
+        Self::start_a_with_rng(password, id_a, id_b, &mut UnwrapErr(SysRng))
     }
 
     /// Start with identity `idB`.
@@ -332,7 +329,7 @@ impl<G: Group> Spake2<G> {
     #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_b(password: &Password, id_a: &Identity, id_b: &Identity) -> (Self, Vec<u8>) {
-        Self::start_b_with_rng(password, id_a, id_b, &mut SysRng.unwrap_err())
+        Self::start_b_with_rng(password, id_a, id_b, &mut UnwrapErr(SysRng))
     }
 
     /// Start with symmetric identity.
@@ -341,7 +338,7 @@ impl<G: Group> Spake2<G> {
     #[cfg(feature = "getrandom")]
     #[must_use]
     pub fn start_symmetric(password: &Password, id_s: &Identity) -> (Self, Vec<u8>) {
-        Self::start_symmetric_with_rng(password, id_s, &mut SysRng.unwrap_err())
+        Self::start_symmetric_with_rng(password, id_s, &mut UnwrapErr(SysRng))
     }
 
     /// Start with identity `idA` and the provided cryptographically secure RNG.

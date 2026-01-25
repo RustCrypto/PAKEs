@@ -3,11 +3,11 @@
 use aucpace::{
     Client, ClientMessage, Result, Server, ServerMessage, StrongDatabase, SysRng,
     client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},
-    rand_core::TryRngCore,
     server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
 };
 use curve25519_dalek::{RistrettoPoint, Scalar};
 use password_hash::phc::ParamsString;
+use rand_core::UnwrapErr;
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
 
@@ -235,7 +235,7 @@ fn test_key_agreement_prestablished_ssid_implicit_auth() -> Result<()> {
 
 /// Perform the initialisation step for all tests
 fn init() -> Result<(Client, Server, SingleUserDatabase)> {
-    let rng = SysRng.unwrap_err();
+    let rng = UnwrapErr(SysRng);
 
     // Create the client, server and database
     let base_server = Server::new(rng);
@@ -270,7 +270,7 @@ fn test_core(
     ClientMessage<'_, K1>,
     ServerMessage<'_, K1>,
 )> {
-    let mut rng = SysRng.unwrap_err();
+    let mut rng = UnwrapErr(SysRng);
 
     // ===== Augmentation Layer =====
     // client initiates the augmentation phase

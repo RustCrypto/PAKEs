@@ -9,7 +9,7 @@
 
 use bigint::{
     Odd, U1024, U1536, U2048, U3072, U4096,
-    modular::{BoxedMontyForm, ConstMontyForm, ConstMontyParams, MontyParams},
+    modular::{BoxedMontyForm, ConstMontyForm, ConstMontyParams, FixedMontyParams},
 };
 use core::{
     any,
@@ -65,8 +65,8 @@ macro_rules! group_trait_impls {
         #[allow(deprecated)]
         impl ConstMontyParams<{ <$uint>::LIMBS }> for $name {
             const LIMBS: usize = <$uint>::LIMBS;
-            const PARAMS: MontyParams<{ <$uint>::LIMBS }> =
-                MontyParams::new_vartime(Odd::<$uint>::from_be_hex($n));
+            const PARAMS: FixedMontyParams<{ <$uint>::LIMBS }> =
+                FixedMontyParams::new_vartime(Odd::<$uint>::from_be_hex($n));
         }
 
         #[allow(deprecated)]
