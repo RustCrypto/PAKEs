@@ -1,6 +1,6 @@
 [package]
 name = "spake2"
-version = "0.5.0-pre"
+version = "0.5.0-pre.0"
 authors = ["Brian Warner <warner@lothar.com>"]
 description = "The SPAKE2 password-authenticated key-exchange algorithm."
 documentation = "https://docs.rs/spake2"

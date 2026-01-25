@@ -1,6 +1,6 @@
 [package]
 name = "aucpace"
-version = "0.2.0-pre"
+version = "0.2.0-pre.0"
 authors = ["Sam Leonard <tritoke@protonmail.com>"]
 description = "AuCPace protocol implementation"
 documentation = "https://docs.rs/aucpace"
