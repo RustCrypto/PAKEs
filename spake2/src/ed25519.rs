@@ -4,7 +4,7 @@ use crate::{Group, c2_Element, c2_Scalar};
 use alloc::vec::Vec;
 use curve25519_dalek::{constants::ED25519_BASEPOINT_POINT, edwards::CompressedEdwardsY};
 use hkdf::Hkdf;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, Rng};
 use sha2::{Digest, Sha256};
 
 /// Ed25519 elliptic curve group.
@@ -62,7 +62,7 @@ impl Group for Ed25519Group {
 
     fn random_scalar<T>(cspring: &mut T) -> c2_Scalar
     where
-        T: RngCore + CryptoRng,
+        T: Rng + CryptoRng,
     {
         c2_Scalar::random(cspring)
     }

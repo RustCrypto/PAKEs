@@ -1,10 +1,10 @@
-use aucpace::rand_core::TryRngCore;
 use aucpace::{
     Client, ClientMessage, Database, Error, PartialAugDatabase, Result, Server, ServerMessage,
     SysRng,
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use password_hash::phc::{ParamsString, SaltString};
+use rand_core::UnwrapErr;
 use scrypt::{Params, Scrypt};
 use sha2::{Sha512, digest::Output};
 use std::{
@@ -42,7 +42,7 @@ fn main() -> Result<()> {
     let server_socket: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 25519);
 
     // random number generator from OS
-    let mut rng = SysRng.unwrap_err();
+    let mut rng = UnwrapErr(SysRng);
 
     // register the user in the database
     let mut base_client = Client::new(rng);

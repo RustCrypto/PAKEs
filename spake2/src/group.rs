@@ -1,7 +1,7 @@
 //! Group trait.
 
 use alloc::vec::Vec;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, Rng};
 
 /// Group trait.
 // TODO(tarcieri): replace with `group` crate?
@@ -33,7 +33,7 @@ pub trait Group {
     /// Generate a random scalar
     fn random_scalar<T>(cspring: &mut T) -> Self::Scalar
     where
-        T: RngCore + CryptoRng;
+        T: Rng + CryptoRng;
 
     /// Scalar negation
     fn scalar_neg(s: &Self::Scalar) -> Self::Scalar;

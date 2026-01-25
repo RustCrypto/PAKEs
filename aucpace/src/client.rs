@@ -24,13 +24,10 @@ use subtle::ConstantTimeEq;
 
 #[cfg(feature = "strong_aucpace")]
 use crate::utils::H1;
-
 #[cfg(feature = "alloc")]
 extern crate alloc;
-
 #[cfg(feature = "serde")]
 use crate::utils::{serde_paramsstring, serde_saltstring};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -1053,11 +1050,12 @@ mod tests {
     use super::*;
 
     #[cfg(all(feature = "getrandom", feature = "sha2"))]
-    use crate::{SysRng, rand_core::TryRngCore};
+    use crate::{SysRng, rand_core::UnwrapErr};
 
     #[test]
     #[cfg(all(feature = "alloc", feature = "getrandom", feature = "scrypt"))]
     fn test_hash_password_no_std_and_alloc_agree() {
+        use rand_core::TryRng;
         use scrypt::{Params, Scrypt};
 
         let username = "worf@starship.enterprise";
@@ -1088,7 +1086,7 @@ mod tests {
     fn test_client_doesnt_accept_insecure_ssid() {
         use crate::Client;
 
-        let mut client = Client::new(SysRng.unwrap_err());
+        let mut client = Client::new(UnwrapErr(SysRng));
         let res = client.begin_prestablished_ssid("bad ssid");
         assert!(matches!(res, Err(Error::InsecureSsid)));
     }
