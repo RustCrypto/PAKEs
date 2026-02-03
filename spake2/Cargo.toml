@@ -16,12 +16,12 @@ rust-version = "1.85"
 
 [dependencies]
 curve25519-dalek = { version = "5.0.0-pre.5", default-features = false, features = ["rand_core"] }
-rand_core = { version = "0.10.0-rc-6", default-features = false }
-sha2 = { version = "0.11.0-rc.4", default-features = false }
-hkdf = { version = "0.13.0-rc.4", default-features = false }
+rand_core = { version = "0.10", default-features = false }
+sha2 = { version = "0.11.0-rc.5", default-features = false }
+hkdf = { version = "0.13.0-rc.5", default-features = false }
 
 # optional dependencies
-getrandom = { version = "0.4.0-rc.1", optional = true, features = ["sys_rng"] }
+getrandom = { version = "0.4", optional = true, features = ["sys_rng"] }
 
 [dev-dependencies]
 bencher = "0.1"
