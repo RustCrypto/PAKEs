@@ -180,7 +180,7 @@ impl<G: Group, D: Digest> Client<G, D> {
         // S = (B - kg^x) ^ (a + ux)
         // or
         // S = base ^ exp
-        let exp = a.concatenating_add(&u.concatenating_mul(x));
+        let exp = a.concatenating_add(u.concatenating_mul(x));
         base.pow(&exp).retrieve()
     }
 
