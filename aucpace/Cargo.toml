@@ -15,7 +15,7 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-curve25519-dalek = { version = "5.0.0-pre.5", default-features = false, features = ["digest", "rand_core"] }
+curve25519-dalek = { version = "5.0.0-pre.6", default-features = false, features = ["digest", "rand_core"] }
 password-hash = { version = "0.6.0-rc.12", default-features = false, features = ["phc", "rand_core"] }
 rand_core = { version = "0.10", default-features = false }
 subtle = { version = "2.4", default-features = false }
@@ -28,7 +28,7 @@ scrypt = { version = "0.12.0-rc.10", default-features = false, optional = true, 
 sha2 = { version = "0.11.0-rc.5", default-features = false, optional = true }
 
 [dev-dependencies]
-curve25519-dalek = { version = "5.0.0-pre.5", features = ["digest", "rand_core"] }
+curve25519-dalek = { version = "5.0.0-pre.6", features = ["digest", "rand_core"] }
 password-hash = { version = "0.6.0-rc.12", features = ["rand_core"] }
 postcard = { version = "1", features = ["use-std"] }
 scrypt = { version = "0.12.0-rc.10", features = ["phc"] }
