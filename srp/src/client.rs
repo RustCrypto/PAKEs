@@ -228,6 +228,7 @@ impl<G: Group, D: Digest> Client<G, D> {
 
         let m1 = compute_m1_rfc5054::<D>(
             &self.g,
+            false,
             username,
             salt,
             &a_pub_bytes,
