@@ -25,14 +25,14 @@ getrandom = { version = "0.4", optional = true, features = ["sys_rng"] }
 serde = { version = "1.0.184", default-features = false, optional = true, features = ["derive"] }
 serde-byte-array = { version = "0.1", optional = true }
 scrypt = { version = "0.12.0-rc.10", default-features = false, optional = true, features = ["phc"] }
-sha2 = { version = "0.11.0-rc.5", default-features = false, optional = true }
+sha2 = { version = "0.11.0", default-features = false, optional = true }
 
 [dev-dependencies]
 curve25519-dalek = { version = "5.0.0-pre.6", features = ["digest", "rand_core"] }
 password-hash = { version = "0.6.0", features = ["rand_core"] }
 postcard = { version = "1", features = ["use-std"] }
 scrypt = { version = "0.12.0-rc.10", features = ["phc"] }
-sha2 = "0.11.0-rc.5"
+sha2 = "0.11.0"
 
 [features]
 default = ["getrandom", "scrypt", "sha2"]
