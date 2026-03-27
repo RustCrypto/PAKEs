@@ -25,7 +25,7 @@ subtle = { version = "2.4", default-features = false }
 [dev-dependencies]
 getrandom = { version = "0.4", features = ["sys_rng"] }
 hex-literal = "1"
-sha1 = "0.11.0-rc.5"
+sha1 = "0.11.0"
 sha2 = "0.11.0-rc.5"
 
 [features]
