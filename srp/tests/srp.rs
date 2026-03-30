@@ -1,55 +1,50 @@
-use getrandom::{
-    SysRng,
-    rand_core::{Rng, UnwrapErr},
-};
+use proptest::prelude::*;
 use sha2::Sha256;
-use srp::{Client, Server, groups::G2048};
+use srp::{Client, Salt, Server, groups::G2048};
 
-fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = UnwrapErr(SysRng);
+type EphemeralSecret = [u8; 64];
+
+fn auth_test_rfc5054(
+    true_pwd: &[u8],
+    auth_pwd: &[u8],
+    a: &EphemeralSecret,
+    b: &EphemeralSecret,
+    salt: &Salt,
+) {
     let username = b"alice";
 
     // Client instance creation
     let client = Client::<G2048, Sha256>::new();
 
     // Begin Registration
-
-    let mut salt = [0u8; 16];
-    rng.fill_bytes(&mut salt);
-    let verifier = client.compute_verifier(username, true_pwd, &salt);
+    let verifier = client.compute_verifier(username, true_pwd, salt);
 
     // Client sends username and verifier and salt to the Server for storage
-
     // Registration Ends
 
     // Begin Authentication
-
     // User sends username
 
     // Server instance creation
     let server = Server::<G2048, Sha256>::new();
 
     // Server retrieves verifier, salt and computes a public B value
-    let mut b = [0u8; 64];
-    rng.fill_bytes(&mut b);
-    let (salt, b_pub) = (&salt, server.compute_public_ephemeral(&b, &verifier));
+    let b_pub = server.compute_public_ephemeral(b, &verifier);
 
     // Server sends salt and b_pub to client
 
     // Client computes the public A value and the clientVerifier containing the key, m1, and m2
-    let mut a = [0u8; 64];
-    rng.fill_bytes(&mut a);
     let client_verifier = client
-        .process_reply(&a, username, auth_pwd, salt, &b_pub)
+        .process_reply(a, username, auth_pwd, salt, &b_pub)
         .unwrap();
-    let a_pub = client.compute_public_ephemeral(&a);
+    let a_pub = client.compute_public_ephemeral(a);
     let client_proof = client_verifier.proof();
 
     // Client sends a_pub and client_proof to server (M1)
 
     // Server processes verification data
     let server_verifier = server
-        .process_reply(username, salt, &b, &verifier, &a_pub)
+        .process_reply(username, salt, b, &verifier, &a_pub)
         .unwrap();
     println!("Client verification on server");
     let server_session_key = server_verifier.verify_client(client_proof).unwrap();
@@ -77,50 +72,46 @@ fn auth_test_rfc5054(true_pwd: &[u8], auth_pwd: &[u8]) {
 }
 
 #[allow(deprecated)]
-fn auth_test_legacy(true_pwd: &[u8], auth_pwd: &[u8]) {
-    let mut rng = UnwrapErr(SysRng);
+fn auth_test_legacy(
+    true_pwd: &[u8],
+    auth_pwd: &[u8],
+    a: &EphemeralSecret,
+    b: &EphemeralSecret,
+    salt: &Salt,
+) {
     let username = b"alice";
 
     // Client instance creation
     let client = Client::<G2048, Sha256>::new();
 
     // Begin Registration
-
-    let mut salt = [0u8; 16];
-    rng.fill_bytes(&mut salt);
-    let verifier = client.compute_verifier(username, true_pwd, &salt);
+    let verifier = client.compute_verifier(username, true_pwd, salt);
 
     // Client sends username and verifier and salt to the Server for storage
-
     // Registration Ends
 
     // Begin Authentication
-
     // User sends username
 
     // Server instance creation
     let server = Server::<G2048, Sha256>::new();
 
     // Server retrieves verifier, salt and computes a public B value
-    let mut b = [0u8; 64];
-    rng.fill_bytes(&mut b);
-    let (salt, b_pub) = (&salt, server.compute_public_ephemeral(&b, &verifier));
+    let b_pub = server.compute_public_ephemeral(b, &verifier);
 
     // Server sends salt and b_pub to client
 
     // Client computes the public A value and the clientVerifier containing the key, m1, and m2
-    let mut a = [0u8; 64];
-    rng.fill_bytes(&mut a);
     let client_verifier = client
-        .process_reply_legacy(&a, username, auth_pwd, salt, &b_pub)
+        .process_reply_legacy(a, username, auth_pwd, salt, &b_pub)
         .unwrap();
-    let a_pub = client.compute_public_ephemeral(&a);
+    let a_pub = client.compute_public_ephemeral(a);
     let client_proof = client_verifier.proof();
 
     // Client sends a_pub and client_proof to server (M1)
 
     // Server processes verification data
-    let server_verifier = server.process_reply_legacy(&b, &verifier, &a_pub).unwrap();
+    let server_verifier = server.process_reply_legacy(b, &verifier, &a_pub).unwrap();
     println!("Client verification on server");
     server_verifier.verify_client(client_proof).unwrap();
     let server_proof = server_verifier.proof();
@@ -140,24 +131,42 @@ fn auth_test_legacy(true_pwd: &[u8], auth_pwd: &[u8]) {
     );
 }
 
-#[test]
-fn rfc5054_good_password() {
-    auth_test_rfc5054(b"password", b"password");
-}
+proptest! {
+    #[test]
+    fn rfc5054_good_password(
+        a in any::<EphemeralSecret>(),
+        b in any::<EphemeralSecret>(),
+        salt in any::<Salt>()
+    ) {
+        auth_test_rfc5054(b"password", b"password", &a, &b, &salt);
+    }
 
-#[test]
-#[should_panic]
-fn rfc5054_bad_password() {
-    auth_test_rfc5054(b"password", b"paSsword");
-}
+    #[test]
+    #[should_panic]
+    fn rfc5054_bad_password(
+        a in any::<EphemeralSecret>(),
+        b in any::<EphemeralSecret>(),
+        salt in any::<Salt>()
+    ) {
+        auth_test_rfc5054(b"password", b"paSsword", &a, &b, &salt);
+    }
 
-#[test]
-fn legacy_good_password() {
-    auth_test_legacy(b"password", b"password");
-}
+    #[test]
+    fn legacy_good_password(
+        a in any::<EphemeralSecret>(),
+        b in any::<EphemeralSecret>(),
+        salt in any::<Salt>()
+    ) {
+        auth_test_legacy(b"password", b"password", &a, &b, &salt);
+    }
 
-#[test]
-#[should_panic]
-fn legacy_bad_password() {
-    auth_test_legacy(b"password", b"paSsword");
+    #[test]
+    #[should_panic]
+    fn legacy_bad_password(
+        a in any::<EphemeralSecret>(),
+        b in any::<EphemeralSecret>(),
+        salt in any::<Salt>()
+    ) {
+        auth_test_legacy(b"password", b"paSsword", &a, &b, &salt);
+    }
 }
