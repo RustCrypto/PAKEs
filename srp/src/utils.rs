@@ -5,12 +5,29 @@ use bigint::{
 };
 use digest::{Digest, Output};
 
-/// `u = H(PAD(A) | PAD(B))`
+/// `u = H(A | B)`
 #[must_use]
 pub fn compute_u<D: Digest>(a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
     let mut u = D::new();
     u.update(a_pub);
     u.update(b_pub);
+    BoxedUint::from_be_slice_vartime(&u.finalize())
+}
+
+/// `u = H(PAD(A) | PAD(B))`
+#[must_use]
+pub fn compute_u_padded<D: Digest>(g: &BoxedMontyForm, a_pub: &[u8], b_pub: &[u8]) -> BoxedUint {
+    let n = g.params().modulus().to_be_bytes();
+    let mut buf_a = vec![0u8; n.len()];
+    let mut buf_b = vec![0u8; n.len()];
+    let l_a = n.len() - a_pub.len();
+    let l_b = n.len() - b_pub.len();
+    buf_a[l_a..].copy_from_slice(a_pub);
+    buf_b[l_b..].copy_from_slice(b_pub);
+
+    let mut u = D::new();
+    u.update(&buf_a);
+    u.update(&buf_b);
     BoxedUint::from_be_slice_vartime(&u.finalize())
 }
 
@@ -31,7 +48,7 @@ pub fn compute_k<D: Digest>(g: &BoxedMontyForm) -> BoxedUint {
 
 /// `H(N) XOR H(PAD(g))`
 #[must_use]
-pub fn compute_hash_n_xor_hash_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
+pub fn compute_hash_n_xor_hash_pad_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
     let n = g.params().modulus().to_be_bytes();
     let g_bytes = g.retrieve().to_be_bytes();
     let mut buf = vec![0u8; n.len()];
@@ -47,6 +64,24 @@ pub fn compute_hash_n_xor_hash_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
         .collect()
 }
 
+/// `H(N) XOR H(g)`
+#[must_use]
+pub fn compute_hash_n_xor_hash_g<D: Digest>(g: &BoxedMontyForm) -> Vec<u8> {
+    let n = g.params().modulus().to_be_bytes();
+    let g_bytes = g.retrieve().to_be_bytes();
+    let first = g_bytes
+        .iter()
+        .position(|&b| b != 0)
+        .unwrap_or(g_bytes.len().saturating_sub(1));
+    let g_bytes = &g_bytes[first..];
+
+    // H(N) and H(g) as byte strings
+    let h_n = compute_hash::<D>(&n);
+    let h_g = compute_hash::<D>(g_bytes);
+
+    h_n.iter().zip(h_g.iter()).map(|(&a, &b)| a ^ b).collect()
+}
+
 #[must_use]
 pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
     let mut d = D::new();
@@ -54,10 +89,12 @@ pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
     d.finalize()
 }
 
-/// `M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K)` following RFC5054
+/// `M1 = H(H(N) XOR H(PAD(g)) | H(U) | s | A | B | K)` following RFC5054
+/// Or `M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K)` with `g_no_pad` set to true.
 #[must_use]
 pub fn compute_m1_rfc5054<D: Digest>(
     g: &BoxedMontyForm,
+    g_no_pad: bool,
     username: &[u8],
     salt: &[u8],
     a_pub: &[u8],
@@ -65,7 +102,11 @@ pub fn compute_m1_rfc5054<D: Digest>(
     key: &[u8],
 ) -> Output<D> {
     let mut d = D::new();
-    d.update(compute_hash_n_xor_hash_g::<D>(g));
+    if g_no_pad {
+        d.update(compute_hash_n_xor_hash_g::<D>(g));
+    } else {
+        d.update(compute_hash_n_xor_hash_pad_g::<D>(g));
+    }
     d.update(compute_hash::<D>(username));
     d.update(salt);
     d.update(a_pub);

@@ -82,6 +82,7 @@ pub type ServerG4096<D> = Server<G4096, D>;
 #[derive(Debug)]
 pub struct Server<G: Group, D: Digest> {
     g: BoxedMontyForm,
+    g_no_pad: bool,
     d: PhantomData<(G, D)>,
 }
 
@@ -90,6 +91,19 @@ impl<G: Group, D: Digest> Server<G, D> {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            g: G::generator(),
+            g_no_pad: false,
+            d: PhantomData,
+        }
+    }
+
+    /// Create a new SRP server instance.
+    ///
+    /// Set `g_no_pad` to `false` for Apple's HomeKit compatibility.
+    #[must_use]
+    pub fn new_with_options(g_no_pad: bool) -> Self {
+        Self {
+            g_no_pad,
             g: G::generator(),
             d: PhantomData,
         }
@@ -156,7 +170,8 @@ impl<G: Group, D: Digest> Server<G, D> {
         // Safeguard against malicious A
         self.validate_a_pub(&a_pub)?;
 
-        let u = compute_u::<D>(a_pub_bytes, &b_pub_bytes);
+        // [RFC5054]: Section 2.6.
+        let u = compute_u_padded::<D>(&self.g, a_pub_bytes, &b_pub_bytes);
 
         let premaster_secret = self
             .compute_premaster_secret(&a_pub, &v, &u, &b)
@@ -166,13 +181,13 @@ impl<G: Group, D: Digest> Server<G, D> {
 
         let m1 = compute_m1_rfc5054::<D>(
             &self.g,
+            self.g_no_pad,
             username,
             salt,
             a_pub_bytes,
             &b_pub_bytes,
             session_key.as_slice(),
         );
-
         let m2 = compute_m2::<D>(a_pub_bytes, &m1, session_key.as_slice());
 
         Ok(ServerVerifier {
