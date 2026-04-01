@@ -215,7 +215,7 @@ impl<G: Group, D: Digest> Client<G, D> {
         // Safeguard against malicious B
         self.validate_b_pub(&b_pub)?;
 
-        let u = compute_u::<D>(&a_pub_bytes, b_pub_bytes);
+        let u = compute_u_padded::<D>(&self.g, &a_pub_bytes, b_pub_bytes);
         let k = compute_k::<D>(&self.g);
         let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
         let x = Self::compute_x(identity_hash.as_slice(), salt);
