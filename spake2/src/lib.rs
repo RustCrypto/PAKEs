@@ -249,14 +249,25 @@ use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::CryptoRng;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 #[cfg(feature = "getrandom")]
 pub use getrandom::{SysRng, rand_core::UnwrapErr};
 
 /// Password type.
+///
+/// The password bytes are zeroized on drop.
 // TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Password(Vec<u8>);
+
+impl Drop for Password {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl ZeroizeOnDrop for Password {}
 
 impl Password {
     /// Create a new password.
@@ -408,10 +419,11 @@ impl<G: Group> Spake2<G> {
             Side::B { id_a: _, id_b: _ } => G::const_m(),
             Side::Symmetric { id_s: _ } => G::const_s(),
         };
-        let tmp1 = G::scalarmult(&unblinding, &G::scalar_neg(&self.password_scalar));
-        let tmp2 = G::add(&msg2_element, &tmp1);
-        let key_element = G::scalarmult(&tmp2, &self.xy_scalar);
-        let key_bytes = G::element_to_bytes(&key_element);
+        let neg_password_scalar = Zeroizing::new(G::scalar_neg(&self.password_scalar));
+        let tmp1 = Zeroizing::new(G::scalarmult(&unblinding, &neg_password_scalar));
+        let tmp2 = Zeroizing::new(G::add(&msg2_element, &tmp1));
+        let key_element = Zeroizing::new(G::scalarmult(&tmp2, &self.xy_scalar));
+        let key_bytes = Zeroizing::new(G::element_to_bytes(&key_element));
 
         // key = H(H(pw) + H(idA) + H(idB) + X + Y + K)
         //transcript = b"".join([sha256(pw).digest(),
@@ -420,26 +432,26 @@ impl<G: Group> Spake2<G> {
         //key = sha256(transcript).digest()
         // note that both sides must use the same order
 
-        Ok(match self.side {
+        Ok(match &self.side {
             Side::A { id_a, id_b } => ed25519::hash_ab(
                 &self.password_vec,
-                &id_a,
-                &id_b,
+                id_a,
+                id_b,
                 self.msg1.as_slice(),
                 &msg2[1..],
                 &key_bytes,
             ),
             Side::B { id_a, id_b } => ed25519::hash_ab(
                 &self.password_vec,
-                &id_a,
-                &id_b,
+                id_a,
+                id_b,
                 &msg2[1..],
                 self.msg1.as_slice(),
                 &key_bytes,
             ),
             Side::Symmetric { id_s } => ed25519::hash_symmetric(
                 &self.password_vec,
-                &id_s,
+                id_s,
                 &self.msg1,
                 &msg2[1..],
                 &key_bytes,
@@ -459,10 +471,9 @@ impl<G: Group> Spake2<G> {
             Side::B { id_a: _, id_b: _ } => G::const_n(),
             Side::Symmetric { id_s: _ } => G::const_s(),
         };
-        let m1: G::Element = G::add(
-            &G::basepoint_mult(&xy_scalar),
-            &G::scalarmult(&blinding, &password_scalar),
-        );
+        let xy_point = Zeroizing::new(G::basepoint_mult(&xy_scalar));
+        let password_point = Zeroizing::new(G::scalarmult(&blinding, &password_scalar));
+        let m1: G::Element = G::add(&xy_point, &password_point);
         //let m1: G::Element = &G::basepoint_mult(&x) + &(blinding * &password_scalar);
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
         let mut password_vec = Vec::new();
@@ -533,6 +544,16 @@ impl<G: Group> Spake2<G> {
         )
     }
 }
+
+impl<G: Group> Drop for Spake2<G> {
+    fn drop(&mut self) {
+        self.xy_scalar.zeroize();
+        self.password_scalar.zeroize();
+        self.password_vec.zeroize();
+    }
+}
+
+impl<G: Group> ZeroizeOnDrop for Spake2<G> {}
 
 impl fmt::Debug for Side {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {

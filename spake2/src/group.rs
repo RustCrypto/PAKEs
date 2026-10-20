@@ -2,15 +2,22 @@
 
 use alloc::vec::Vec;
 use rand_core::{CryptoRng, Rng};
+use zeroize::Zeroize;
 
 /// Group trait.
 // TODO(tarcieri): replace with `group` crate?
 pub trait Group {
     /// Scalar element
-    type Scalar;
+    ///
+    /// Wiped when no longer needed, since it holds the ephemeral secret and the
+    /// password-derived scalar.
+    type Scalar: Zeroize;
 
     /// Base field element
-    type Element;
+    ///
+    /// Wiped when no longer needed, since intermediate elements are derived
+    /// from secret scalars.
+    type Element: Zeroize;
 
     /// Transcript hash
     type TranscriptHash;
