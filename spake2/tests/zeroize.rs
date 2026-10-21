@@ -1,5 +1,7 @@
 //! Types holding secret material are zeroized on drop.
 
+#![cfg(feature = "zeroize")]
+
 use spake2::{Ed25519Group, Password, Spake2};
 use zeroize::ZeroizeOnDrop;
 

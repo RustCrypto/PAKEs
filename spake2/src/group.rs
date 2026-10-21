@@ -2,15 +2,17 @@
 
 use alloc::vec::Vec;
 use rand_core::{CryptoRng, Rng};
+#[cfg(feature = "zeroize")]
 use zeroize::Zeroize;
 
 /// Group trait.
 // TODO(tarcieri): replace with `group` crate?
 pub trait Group {
     /// Scalar element
-    ///
-    /// Wiped when [`Spake2`](crate::Spake2) is dropped, since it holds the
-    /// ephemeral secret and the password-derived scalar.
+    #[cfg(not(feature = "zeroize"))]
+    type Scalar;
+    /// Scalar element
+    #[cfg(feature = "zeroize")]
     type Scalar: Zeroize;
 
     /// Base field element

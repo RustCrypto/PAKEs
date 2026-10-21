@@ -249,24 +249,25 @@ use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::CryptoRng;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[cfg(feature = "getrandom")]
 pub use getrandom::{SysRng, rand_core::UnwrapErr};
+#[cfg(feature = "zeroize")]
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Password type.
-///
-/// The password bytes are zeroized on drop.
 // TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Password(Vec<u8>);
 
+#[cfg(feature = "zeroize")]
 impl Drop for Password {
     fn drop(&mut self) {
         self.0.zeroize();
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl ZeroizeOnDrop for Password {}
 
 impl Password {
@@ -545,6 +546,7 @@ impl<G: Group> Spake2<G> {
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl<G: Group> Drop for Spake2<G> {
     fn drop(&mut self) {
         self.xy_scalar.zeroize();
@@ -553,6 +555,7 @@ impl<G: Group> Drop for Spake2<G> {
     }
 }
 
+#[cfg(feature = "zeroize")]
 impl<G: Group> ZeroizeOnDrop for Spake2<G> {}
 
 impl fmt::Debug for Side {
