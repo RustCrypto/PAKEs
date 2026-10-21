@@ -9,15 +9,12 @@ use zeroize::Zeroize;
 pub trait Group {
     /// Scalar element
     ///
-    /// Wiped when no longer needed, since it holds the ephemeral secret and the
-    /// password-derived scalar.
+    /// Wiped when [`Spake2`](crate::Spake2) is dropped, since it holds the
+    /// ephemeral secret and the password-derived scalar.
     type Scalar: Zeroize;
 
     /// Base field element
-    ///
-    /// Wiped when no longer needed, since intermediate elements are derived
-    /// from secret scalars.
-    type Element: Zeroize;
+    type Element;
 
     /// Transcript hash
     type TranscriptHash;

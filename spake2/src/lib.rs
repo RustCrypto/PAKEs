@@ -249,7 +249,7 @@ use alloc::vec::Vec;
 use core::{fmt, ops::Deref, str};
 use curve25519_dalek::{edwards::EdwardsPoint as c2_Element, scalar::Scalar as c2_Scalar};
 use rand_core::CryptoRng;
-use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[cfg(feature = "getrandom")]
 pub use getrandom::{SysRng, rand_core::UnwrapErr};
@@ -419,11 +419,10 @@ impl<G: Group> Spake2<G> {
             Side::B { id_a: _, id_b: _ } => G::const_m(),
             Side::Symmetric { id_s: _ } => G::const_s(),
         };
-        let neg_password_scalar = Zeroizing::new(G::scalar_neg(&self.password_scalar));
-        let tmp1 = Zeroizing::new(G::scalarmult(&unblinding, &neg_password_scalar));
-        let tmp2 = Zeroizing::new(G::add(&msg2_element, &tmp1));
-        let key_element = Zeroizing::new(G::scalarmult(&tmp2, &self.xy_scalar));
-        let key_bytes = Zeroizing::new(G::element_to_bytes(&key_element));
+        let tmp1 = G::scalarmult(&unblinding, &G::scalar_neg(&self.password_scalar));
+        let tmp2 = G::add(&msg2_element, &tmp1);
+        let key_element = G::scalarmult(&tmp2, &self.xy_scalar);
+        let key_bytes = G::element_to_bytes(&key_element);
 
         // key = H(H(pw) + H(idA) + H(idB) + X + Y + K)
         //transcript = b"".join([sha256(pw).digest(),
@@ -471,9 +470,10 @@ impl<G: Group> Spake2<G> {
             Side::B { id_a: _, id_b: _ } => G::const_n(),
             Side::Symmetric { id_s: _ } => G::const_s(),
         };
-        let xy_point = Zeroizing::new(G::basepoint_mult(&xy_scalar));
-        let password_point = Zeroizing::new(G::scalarmult(&blinding, &password_scalar));
-        let m1: G::Element = G::add(&xy_point, &password_point);
+        let m1: G::Element = G::add(
+            &G::basepoint_mult(&xy_scalar),
+            &G::scalarmult(&blinding, &password_scalar),
+        );
         //let m1: G::Element = &G::basepoint_mult(&x) + &(blinding * &password_scalar);
         let msg1: Vec<u8> = G::element_to_bytes(&m1);
         let mut password_vec = Vec::new();

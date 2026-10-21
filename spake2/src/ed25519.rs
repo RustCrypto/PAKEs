@@ -6,7 +6,6 @@ use curve25519_dalek::{constants::ED25519_BASEPOINT_POINT, edwards::CompressedEd
 use hkdf::Hkdf;
 use rand_core::{CryptoRng, Rng};
 use sha2::{Digest, Sha256};
-use zeroize::{Zeroize, Zeroizing};
 
 /// Ed25519 elliptic curve group.
 #[derive(Debug, PartialEq, Eq)]
@@ -111,13 +110,13 @@ fn ed25519_hash_to_scalar(s: &[u8]) -> c2_Scalar {
     //  i = int(h, 16)
     //  i % q
 
-    let mut okm = Zeroizing::new([0u8; 32 + 16]);
-    let (mut prk, hkdf) = Hkdf::<Sha256>::extract(Some(b""), s);
-    prk.as_mut_slice().zeroize();
-    hkdf.expand(b"SPAKE2 pw", okm.as_mut_slice()).unwrap();
+    let mut okm = [0u8; 32 + 16];
+    Hkdf::<Sha256>::new(Some(b""), s)
+        .expand(b"SPAKE2 pw", &mut okm)
+        .unwrap();
     //println!("expanded:   {}{}", "................................", okm.iter().to_hex()); // ok
 
-    let mut reducible = Zeroizing::new([0u8; 64]); // little-endian
+    let mut reducible = [0u8; 64]; // little-endian
     for (i, x) in okm.iter().enumerate().take(32 + 16) {
         reducible[32 + 16 - 1 - i] = *x;
     }
@@ -147,11 +146,11 @@ pub fn hash_ab(
     // byte 96-127 : X_msg
     // byte 128-159: Y_msg
     // byte 160-191: K_bytes
-    let mut transcript = Zeroizing::new([0u8; 6 * 32]);
+    let mut transcript = [0u8; 6 * 32];
 
     let mut pw_hash = Sha256::new();
     pw_hash.update(password_vec);
-    pw_hash.finalize_into((&mut transcript[0..32]).try_into().expect("32-byte slice"));
+    transcript[0..32].copy_from_slice(&pw_hash.finalize());
 
     let mut ida_hash = Sha256::new();
     ida_hash.update(id_a);
@@ -169,7 +168,7 @@ pub fn hash_ab(
 
     //let mut hash = G::TranscriptHash::default();
     let mut hash = Sha256::new();
-    hash.update(transcript.as_slice());
+    hash.update(transcript);
     hash.finalize().to_vec()
 }
 
@@ -195,11 +194,11 @@ pub fn hash_symmetric(
     // byte 64-95  : X_msg
     // byte 96-127 : Y_msg
     // byte 128-159: K_bytes
-    let mut transcript = Zeroizing::new([0u8; 5 * 32]);
+    let mut transcript = [0u8; 5 * 32];
 
     let mut pw_hash = Sha256::new();
     pw_hash.update(password_vec);
-    pw_hash.finalize_into((&mut transcript[0..32]).try_into().expect("32-byte slice"));
+    transcript[0..32].copy_from_slice(&pw_hash.finalize());
 
     let mut ids_hash = Sha256::new();
     ids_hash.update(id_s);
@@ -215,6 +214,6 @@ pub fn hash_symmetric(
     transcript[128..160].copy_from_slice(key_bytes);
 
     let mut hash = Sha256::new();
-    hash.update(transcript.as_slice());
+    hash.update(transcript);
     hash.finalize().to_vec()
 }
