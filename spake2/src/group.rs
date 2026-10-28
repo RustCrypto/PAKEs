@@ -2,12 +2,18 @@
 
 use alloc::vec::Vec;
 use rand_core::{CryptoRng, Rng};
+#[cfg(feature = "zeroize")]
+use zeroize::Zeroize;
 
 /// Group trait.
 // TODO(tarcieri): replace with `group` crate?
 pub trait Group {
     /// Scalar element
+    #[cfg(not(feature = "zeroize"))]
     type Scalar;
+    /// Scalar element
+    #[cfg(feature = "zeroize")]
+    type Scalar: Zeroize;
 
     /// Base field element
     type Element;

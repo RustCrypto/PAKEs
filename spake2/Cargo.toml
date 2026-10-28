@@ -22,6 +22,7 @@ hkdf = { version = "0.13", default-features = false }
 
 # optional dependencies
 getrandom = { version = "0.4", optional = true, features = ["sys_rng"] }
+zeroize = { version = "1.8", optional = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 bencher = "0.1"
@@ -31,6 +32,7 @@ num-bigint = "0.5"
 [features]
 default = []
 std = []
+zeroize = ["dep:zeroize", "curve25519-dalek/zeroize"]
 
 [package.metadata.docs.rs]
 all-features = true

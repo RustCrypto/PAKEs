@@ -252,11 +252,23 @@ use rand_core::CryptoRng;
 
 #[cfg(feature = "getrandom")]
 pub use getrandom::{SysRng, rand_core::UnwrapErr};
+#[cfg(feature = "zeroize")]
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Password type.
 // TODO(tarcieri): avoid allocation?
 #[derive(PartialEq, Eq, Clone)]
 pub struct Password(Vec<u8>);
+
+#[cfg(feature = "zeroize")]
+impl Drop for Password {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl ZeroizeOnDrop for Password {}
 
 impl Password {
     /// Create a new password.
@@ -420,26 +432,26 @@ impl<G: Group> Spake2<G> {
         //key = sha256(transcript).digest()
         // note that both sides must use the same order
 
-        Ok(match self.side {
+        Ok(match &self.side {
             Side::A { id_a, id_b } => ed25519::hash_ab(
                 &self.password_vec,
-                &id_a,
-                &id_b,
+                id_a,
+                id_b,
                 self.msg1.as_slice(),
                 &msg2[1..],
                 &key_bytes,
             ),
             Side::B { id_a, id_b } => ed25519::hash_ab(
                 &self.password_vec,
-                &id_a,
-                &id_b,
+                id_a,
+                id_b,
                 &msg2[1..],
                 self.msg1.as_slice(),
                 &key_bytes,
             ),
             Side::Symmetric { id_s } => ed25519::hash_symmetric(
                 &self.password_vec,
-                &id_s,
+                id_s,
                 &self.msg1,
                 &msg2[1..],
                 &key_bytes,
@@ -533,6 +545,18 @@ impl<G: Group> Spake2<G> {
         )
     }
 }
+
+#[cfg(feature = "zeroize")]
+impl<G: Group> Drop for Spake2<G> {
+    fn drop(&mut self) {
+        self.xy_scalar.zeroize();
+        self.password_scalar.zeroize();
+        self.password_vec.zeroize();
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl<G: Group> ZeroizeOnDrop for Spake2<G> {}
 
 impl fmt::Debug for Side {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
