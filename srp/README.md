@@ -34,23 +34,25 @@ unpadded inputs to `u` and proofs using the unhashed premaster secret `S`.
 
 ## HomeKit Usage
 
-The following example generates a verifier and configures server parameters for
+The following example generates a verifier and configures both SRP roles for
 HomeKit Pair Setup:
 
 ```rust
 use sha2::Sha512;
-use srp::{ClientG3072, Generate, Salt, ServerG3072};
+use srp::{ClientG3072, EncodingOptions, Generate, Salt, ServerG3072};
 
 let username = b"Pair-Setup";
 let setup_code = b"867-53-090"; // Example only: use accessory's setup code here
 let salt = Salt::generate();
-let client = ClientG3072::<Sha512>::new();
+let client = ClientG3072::<Sha512>::new_with_options(EncodingOptions::HOMEKIT);
 let v = client.compute_verifier(username, setup_code, &salt);
-let server = ServerG3072::<Sha512>::new_with_options(true); // Unpadded g in M1.
+let server = ServerG3072::<Sha512>::new_with_options(EncodingOptions::HOMEKIT);
 ```
 
-`Client` is used only to compute `v`; `Client::process_reply` does not support
-HomeKit proofs.
+This preset matches Apple's [HomeKit ADK]. `Minimal` removes leading zero
+bytes; `Padded` uses the modulus width (384 bytes for `G3072`). The SRP-6a
+padding in `k` and `u` remains fixed. Salt bytes are always preserved. The
+padded `A` in `M2` is an ADK convention, not a standalone-proof rule from RFC 5054.
 
 After successful proof verification, `verify_client`/`verify_server` returns
 `K`, which is the input to HomeKit's subsequent HKDF-SHA-512 derivations.
@@ -104,6 +106,7 @@ dual licensed as above, without any additional terms or conditions.
 [Secure Remote Password]: https://en.wikipedia.org/wiki/Secure_Remote_Password_protocol
 [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
 [RFC2945]: https://datatracker.ietf.org/doc/html/rfc2945
+[HomeKit ADK]: https://github.com/apple/HomeKitADK/blob/fb201f98f5fdc7fef6a455054f08b59cca5d1ec8/PAL/Crypto/OpenSSL/HAPOpenSSL.c
 [`crypto-bigint`]: https://docs.rs/crypto-bigint
 [`Digest`]: https://docs.rs/digest
 [`sha2`]: https://crates.io/crates/sha2

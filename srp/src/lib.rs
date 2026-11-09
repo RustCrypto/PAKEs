@@ -50,15 +50,15 @@
 //! | Verify `M2` | ← `M2` — | `M2 = H(A ‖ M1 ‖ K)` |
 //!
 //! By default, `M1 = H((H(N) XOR H(PAD(g))) ‖ H(I) ‖ s ‖ A ‖ B ‖ K)`.
-//! [`Server::new_with_options(true)`](Server::new_with_options) instead uses
-//! `H(MIN(g))` in this proof; it does not change `k`. The client does not expose
-//! this proof option. [`Client::new_with_options(false)`](Client::new_with_options)
-//! omits `I` only from the inner hash used to compute `x`.
+//! Setting [`EncodingOptions::m1_generator`] to [`IntegerEncoding::Minimal`]
+//! uses `H(MIN(g))` in this proof; it does not change `k`.
+//! Setting [`EncodingOptions::username_in_x`] to `false` omits `I` only from
+//! the inner hash used to compute `x`.
 //!
-//! For `u`, both public values are padded internally. In the proofs, locally
-//! computed public values are minimally encoded, while peer-supplied values are
-//! hashed exactly as received. The peers must therefore agree on their encodings.
-//! See the HomeKit section above for the resulting interoperability limitations.
+//! For `u`, both public values are padded internally. In the default proofs,
+//! public values are minimally encoded, independently of their wire representation.
+//! [`Client::new_with_options`] and [`Server::new_with_options`] configure password
+//! derivation and integer encodings via [`EncodingOptions`].
 //!
 //! [`ClientVerifier::key`] and [`ServerVerifier::key`] return `MIN(S)`, without
 //! authenticating the peer. Successful [`ClientVerifier::verify_server`] or
@@ -89,12 +89,14 @@ pub mod groups;
 pub mod utils;
 
 mod client;
+mod encoding;
 mod errors;
 mod server;
 
 pub use bigint;
 pub use client::{Client, ClientG2048, ClientG3072, ClientG4096, ClientVerifier};
 pub use common;
+pub use encoding::{EncodingOptions, IntegerEncoding};
 pub use errors::AuthError;
 pub use groups::Group;
 pub use server::{Server, ServerG2048, ServerG3072, ServerG4096, ServerVerifier};

@@ -1,4 +1,10 @@
-use crate::{errors::AuthError, groups::*, utils::*};
+use crate::{
+    EncodingOptions, IntegerEncoding,
+    encoding::{compute_proofs, validate_public_len},
+    errors::AuthError,
+    groups::*,
+    utils::*,
+};
 use alloc::vec::Vec;
 use bigint::{BoxedUint, ConcatenatingMul, Odd, Resize, modular::BoxedMontyForm};
 use core::marker::PhantomData;
@@ -101,32 +107,26 @@ pub type ClientG4096<D> = Client<G4096, D>;
 #[derive(Debug)]
 pub struct Client<G: Group, D: Digest> {
     g: BoxedMontyForm,
-    username_in_x: bool,
+    encoding: EncodingOptions,
     d: PhantomData<(G, D)>,
 }
 
 impl<G: Group, D: Digest> Client<G, D> {
-    /// Create an SRP-6a client which includes the username in `x`.
+    /// Create an SRP-6a client with default encoding options.
     #[must_use]
     pub fn new() -> Self {
-        Self::new_with_options(true)
+        Self::new_with_options(EncodingOptions::default())
     }
 
-    /// Create a new SRP client instance, with the ability to override username inclusion in `x`.
+    /// Create an SRP-6a client with the selected password derivation and encodings.
     ///
-    /// With `true` (the default), `x = H(s | H(I | ":" | P))`. With `false`,
-    /// `x = H(s | H(":" | P))`; the colon is retained. This option affects
-    /// [`Self::compute_verifier`] and [`Self::process_reply`], not the static
-    /// [`Self::compute_identity_hash`] helper or the username hash in `M1`.
-    ///
-    /// HomeKit Pair Setup requires `true`. This option does not configure proof
-    /// encoding: [`Self::process_reply`] always hashes `PAD(g)` in `M1` and does
-    /// not currently support the HomeKit client proof.
+    /// See [`EncodingOptions`], including [`EncodingOptions::HOMEKIT`] for
+    /// HomeKit Pair Setup.
     #[must_use]
-    pub fn new_with_options(username_in_x: bool) -> Self {
+    pub fn new_with_options(encoding: EncodingOptions) -> Self {
         Self {
             g: G::generator(),
-            username_in_x,
+            encoding,
             d: PhantomData,
         }
     }
@@ -139,12 +139,17 @@ impl<G: Group, D: Digest> Client<G, D> {
 
     /// Get public ephemeral value for handshaking with the server: `g^a % N`.
     ///
-    /// This returns a big endian byte serialization stripped of leading zeros.
+    /// Returns a minimal big-endian encoding by default. Set
+    /// [`EncodingOptions::public_ephemeral`] to [`IntegerEncoding::Padded`]
+    /// via [`Self::new_with_options`] to pad it to the group width.
     #[must_use]
     pub fn compute_public_ephemeral(&self, a: &[u8]) -> Vec<u8> {
-        self.compute_g_x(&BoxedUint::from_be_slice_vartime(a))
-            .to_be_bytes_trimmed_vartime()
-            .into()
+        let a_pub = self.compute_g_x(&BoxedUint::from_be_slice_vartime(a));
+        if self.encoding.public_ephemeral == IntegerEncoding::Padded {
+            a_pub.to_be_bytes().into()
+        } else {
+            a_pub.to_be_bytes_trimmed_vartime().into()
+        }
     }
 
     /// Compute the identity hash: `H(<username> | ":" | <raw password>)`.
@@ -210,8 +215,8 @@ impl<G: Group, D: Digest> Client<G, D> {
 
     /// Process the server's SRP-6a reply and prepare RFC 2945-style proofs.
     ///
-    /// Derives `K = H(S)` and uses `H(PAD(g))` in `M1`. This does not implement
-    /// TLS-SRP or the HomeKit client proof. Call [`ClientVerifier::verify_server`]
+    /// Derives `K = H(S)` and uses the encodings selected by [`Self::new_with_options`].
+    /// This does not implement TLS-SRP. Call [`ClientVerifier::verify_server`]
     /// to authenticate the server and obtain `K`.
     ///
     /// # Params
@@ -219,9 +224,9 @@ impl<G: Group, D: Digest> Client<G, D> {
     /// - `username`, `password` is supplied by the user
     /// - `salt` and `b_pub` come from the server
     ///
-    /// # Panics
-    /// May panic if `b_pub_bytes` is longer than the group modulus encoding.
-    /// Validate the received public value's length before calling this method.
+    /// # Errors
+    /// Returns [`AuthError::IllegalParameter`] if `b_pub_bytes` exceeds the group
+    /// width or its integer value is zero modulo `N`.
     pub fn process_reply(
         &self,
         a: &[u8],
@@ -230,6 +235,7 @@ impl<G: Group, D: Digest> Client<G, D> {
         salt: &[u8],
         b_pub_bytes: &[u8],
     ) -> Result<ClientVerifier<D>, AuthError> {
+        validate_public_len(&self.g, b_pub_bytes, "b_pub")?;
         let a = BoxedUint::from_be_slice_vartime(a);
         let a_pub_bytes = self.compute_g_x(&a).to_be_bytes_trimmed_vartime();
         let b_pub = BoxedUint::from_be_slice_vartime(b_pub_bytes);
@@ -248,17 +254,15 @@ impl<G: Group, D: Digest> Client<G, D> {
 
         let session_key = compute_hash::<D>(&premaster_secret);
 
-        let m1 = compute_m1_rfc5054::<D>(
+        let (m1, m2) = compute_proofs::<D>(
             &self.g,
-            false,
+            self.encoding,
             username,
             salt,
             &a_pub_bytes,
             b_pub_bytes,
             session_key.as_slice(),
         );
-
-        let m2 = compute_m2::<D>(&a_pub_bytes, &m1, session_key.as_slice());
 
         Ok(ClientVerifier {
             m1,
@@ -312,7 +316,11 @@ impl<G: Group, D: Digest> Client<G, D> {
 
     /// Conditionally include username in the computation of `x`.
     fn identity_username<'a>(&self, username: &'a [u8]) -> &'a [u8] {
-        if self.username_in_x { username } else { &[] }
+        if self.encoding.username_in_x {
+            username
+        } else {
+            &[]
+        }
     }
 
     /// Get the modulus `N`.

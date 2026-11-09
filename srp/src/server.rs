@@ -1,4 +1,10 @@
-use crate::{errors::AuthError, groups::*, utils::*};
+use crate::{
+    EncodingOptions, IntegerEncoding,
+    encoding::{compute_proofs, validate_public_len},
+    errors::AuthError,
+    groups::*,
+    utils::*,
+};
 use alloc::vec::Vec;
 use bigint::{BoxedUint, Odd, Resize, modular::BoxedMontyForm};
 use core::marker::PhantomData;
@@ -78,35 +84,27 @@ pub type ServerG4096<D> = Server<G4096, D>;
 #[derive(Debug)]
 pub struct Server<G: Group, D: Digest> {
     g: BoxedMontyForm,
-    g_no_pad: bool,
+    encoding: EncodingOptions,
     d: PhantomData<(G, D)>,
 }
 
 impl<G: Group, D: Digest> Server<G, D> {
-    /// Create an SRP-6a server which uses `H(PAD(g))` in the client proof.
+    /// Create an SRP-6a server with default encoding options.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            g: G::generator(),
-            g_no_pad: false,
-            d: PhantomData,
-        }
+        Self::new_with_options(EncodingOptions::default())
     }
 
-    /// Create an SRP-6a server with a choice of generator encoding in `M1`.
+    /// Create an SRP-6a server with the selected public-value and proof encodings.
     ///
-    /// Set `g_no_pad` to `true` to hash the minimal big-endian encoding of `g`,
-    /// as required by HomeKit. With `false` (the default), `g` is left-padded to
-    /// the byte length of `N`. The multiplier `k` always uses padded `g`.
-    ///
-    /// This option alone does not provide complete HomeKit compatibility: the
-    /// received `A` is hashed unchanged in both proofs, whereas Apple's ADK
-    /// trims it for `M1` and pads it for `M2`. See the crate-level HomeKit section.
+    /// See [`EncodingOptions`], including [`EncodingOptions::HOMEKIT`] for
+    /// HomeKit Pair Setup. [`EncodingOptions::username_in_x`] is ignored because
+    /// the server uses the registered verifier.
     #[must_use]
-    pub fn new_with_options(g_no_pad: bool) -> Self {
+    pub fn new_with_options(encoding: EncodingOptions) -> Self {
         Self {
-            g_no_pad,
             g: G::generator(),
+            encoding,
             d: PhantomData,
         }
     }
@@ -137,23 +135,27 @@ impl<G: Group, D: Digest> Server<G, D> {
 
     /// Get public ephemeral value for sending to the client.
     ///
-    /// This returns an unsigned big-endian serialization without leading zeros.
-    /// The enclosing protocol may require left-padding it to the group width.
+    /// Returns a minimal big-endian encoding by default. Set
+    /// [`EncodingOptions::public_ephemeral`] to [`IntegerEncoding::Padded`]
+    /// via [`Self::new_with_options`] to pad it to the group width.
     #[must_use]
     pub fn compute_public_ephemeral(&self, b: &[u8], v: &[u8]) -> Vec<u8> {
-        self.compute_b_pub(
+        let b_pub = self.compute_b_pub(
             &BoxedUint::from_be_slice_vartime(b),
             &compute_k::<D>(&self.g),
             &BoxedUint::from_be_slice_vartime(v),
-        )
-        .to_be_bytes_trimmed_vartime()
-        .into()
+        );
+        if self.encoding.public_ephemeral == IntegerEncoding::Padded {
+            b_pub.to_be_bytes().into()
+        } else {
+            b_pub.to_be_bytes_trimmed_vartime().into()
+        }
     }
 
     /// Process the client's SRP-6a reply and prepare RFC 2945-style proofs.
     ///
-    /// Derives `K = H(S)` and uses the generator encoding selected by
-    /// [`Self::new_with_options`] in `M1`. Call [`ServerVerifier::verify_client`]
+    /// Derives `K = H(S)` and uses the encodings selected by [`Self::new_with_options`].
+    /// Call [`ServerVerifier::verify_client`]
     /// before sending the server proof or using `K`.
     ///
     /// # Params
@@ -162,9 +164,9 @@ impl<G: Group, D: Digest> Server<G, D> {
     /// - `username` and `salt` correspond to that verifier
     /// - `a_pub_bytes` is the client's public ephemeral value
     ///
-    /// # Panics
-    /// May panic if `a_pub_bytes` is longer than the group modulus encoding.
-    /// Validate the received public value's length before calling this method.
+    /// # Errors
+    /// Returns [`AuthError::IllegalParameter`] if `a_pub_bytes` exceeds the group
+    /// width or its integer value is zero modulo `N`.
     pub fn process_reply(
         &self,
         username: &[u8],
@@ -173,6 +175,7 @@ impl<G: Group, D: Digest> Server<G, D> {
         v: &[u8],
         a_pub_bytes: &[u8],
     ) -> Result<ServerVerifier<D>, AuthError> {
+        validate_public_len(&self.g, a_pub_bytes, "a_pub")?;
         let b = BoxedUint::from_be_slice_vartime(b);
         let v = BoxedUint::from_be_slice_vartime(v);
         let a_pub = BoxedUint::from_be_slice_vartime(a_pub_bytes);
@@ -192,16 +195,15 @@ impl<G: Group, D: Digest> Server<G, D> {
 
         let session_key = compute_hash::<D>(&premaster_secret);
 
-        let m1 = compute_m1_rfc5054::<D>(
+        let (m1, m2) = compute_proofs::<D>(
             &self.g,
-            self.g_no_pad,
+            self.encoding,
             username,
             salt,
             a_pub_bytes,
             &b_pub_bytes,
             session_key.as_slice(),
         );
-        let m2 = compute_m2::<D>(a_pub_bytes, &m1, session_key.as_slice());
 
         Ok(ServerVerifier {
             m1,
