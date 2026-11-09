@@ -89,8 +89,15 @@ pub fn compute_hash<D: Digest>(data: &[u8]) -> Output<D> {
     d.finalize()
 }
 
-/// `M1 = H(H(N) XOR H(PAD(g)) | H(U) | s | A | B | K)` following RFC5054
-/// Or `M1 = H(H(N) XOR H(g) | H(U) | s | A | B | K)` with `g_no_pad` set to true.
+/// Compute an RFC 2945-style client proof, with configurable generator encoding.
+///
+/// `M1 = H((H(N) XOR H(PAD(g))) | H(I) | s | A | B | K)` by default, or
+/// `H(g)` with the minimal encoding of `g` when `g_no_pad` is `true`.
+/// `A` and `B` are hashed exactly as supplied. `K` is the hashed session key.
+/// The salt is also hashed verbatim, including leading zero bytes, without
+/// integer conversion or padding.
+/// Despite this helper's historical name, RFC 5054 uses TLS Finished messages
+/// instead of defining standalone `M1`/`M2` proofs.
 #[must_use]
 pub fn compute_m1_rfc5054<D: Digest>(
     g: &BoxedMontyForm,
@@ -115,7 +122,7 @@ pub fn compute_m1_rfc5054<D: Digest>(
     d.finalize()
 }
 
-/// `M1 = H(A, B, K)`
+/// Deprecated proof construction: `M1 = H(A | B | S)` with the unhashed secret `S`.
 #[must_use]
 pub fn compute_m1_legacy<D: Digest>(a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> Output<D> {
     let mut d = D::new();
@@ -125,7 +132,8 @@ pub fn compute_m1_legacy<D: Digest>(a_pub: &[u8], b_pub: &[u8], key: &[u8]) -> O
     d.finalize()
 }
 
-/// `M2 = H(A, M1, K)`
+/// `M2 = H(A | M1 | K)`, hashing all byte strings exactly as supplied.
+/// The deprecated callers pass the unhashed secret `S` instead of `K`.
 #[must_use]
 pub fn compute_m2<D: Digest>(a_pub: &[u8], m1: &Output<D>, key: &[u8]) -> Output<D> {
     let mut d = D::new();

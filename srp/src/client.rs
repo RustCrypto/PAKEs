@@ -20,14 +20,16 @@ pub type ClientG3072<D> = Client<G3072, D>;
 /// SRP client configured with a standard 4096-bit group.
 pub type ClientG4096<D> = Client<G4096, D>;
 
-/// SRP client implementation.
+/// SRP-6a client implementation.
 ///
 /// # Usage
 /// First create SRP client struct by passing to it SRP parameters (shared
 /// between client and server).
 ///
-/// You can use SHA1 from SRP-6a, but it's highly recommended to use specialized
-/// password hashing algorithm instead (e.g. PBKDF2, argon2 or scrypt).
+/// Choose the group and digest required by the peer's protocol. The digest is
+/// used throughout SRP, including `x = H(s | H(I | ":" | P))`; it is not a
+/// configurable password-hardening KDF. Changing password derivation requires
+/// agreement between peers and is not compatible with HomeKit Pair Setup.
 ///
 /// ```rust
 /// use sha2::Sha256;
@@ -75,16 +77,12 @@ pub type ClientG4096<D> = Client<G4096, D>;
 /// # fn send_proof(_: &[u8]) -> Vec<u8> { vec![173, 202, 13, 26, 207, 73, 0, 46, 121, 238, 48, 170, 96, 146, 60, 49, 88, 76, 12, 184, 152, 76, 207, 220, 140, 205, 190, 189, 117, 6, 131, 63]   }
 /// let client_proof = verifier.proof();
 /// let server_proof = send_proof(client_proof);
-/// verifier.verify_server(&server_proof).unwrap();
+/// let session_key = verifier.verify_server(&server_proof).unwrap();
 /// ```
 ///
-/// `key` contains shared secret key between user and the server. You can extract shared secret
-/// key using `key()` method.
-/// ```rust
-/// # let client = srp::ClientG2048::<sha2::Sha256>::new();
-/// # let verifier = client.process_reply(b"", b"", b"", b"", b"1").unwrap();
-/// verifier.key();
-/// ```
+/// Successful verification returns the session key `K = H(S)`.
+/// [`ClientVerifier::key`] instead exposes the unhashed premaster secret `S`
+/// without authenticating the server.
 ///
 /// For user registration on the server first generate salt (e.g. 32 bytes long)
 /// and get password verifier which depends on private key. Send username, salt
@@ -108,7 +106,7 @@ pub struct Client<G: Group, D: Digest> {
 }
 
 impl<G: Group, D: Digest> Client<G, D> {
-    /// Create new SRP client instance.
+    /// Create an SRP-6a client which includes the username in `x`.
     #[must_use]
     pub fn new() -> Self {
         Self::new_with_options(true)
@@ -116,7 +114,14 @@ impl<G: Group, D: Digest> Client<G, D> {
 
     /// Create a new SRP client instance, with the ability to override username inclusion in `x`.
     ///
-    /// Set `username_in_x` to false for e.g. compatibility with Apple implementations of SRP.
+    /// With `true` (the default), `x = H(s | H(I | ":" | P))`. With `false`,
+    /// `x = H(s | H(":" | P))`; the colon is retained. This option affects
+    /// [`Self::compute_verifier`] and [`Self::process_reply`], not the static
+    /// [`Self::compute_identity_hash`] helper or the username hash in `M1`.
+    ///
+    /// HomeKit Pair Setup requires `true`. This option does not configure proof
+    /// encoding: [`Self::process_reply`] always hashes `PAD(g)` in `M1` and does
+    /// not currently support the HomeKit client proof.
     #[must_use]
     pub fn new_with_options(username_in_x: bool) -> Self {
         Self {
@@ -152,7 +157,15 @@ impl<G: Group, D: Digest> Client<G, D> {
         d.finalize()
     }
 
-    /// Compute `x = H(<salt> | H(<username> | ":" | <raw password>))`.
+    /// Compute `x = H(salt | identity_hash)`.
+    ///
+    /// Normally `identity_hash` is the output of [`Self::compute_identity_hash`].
+    /// The salt is hashed exactly as supplied, including leading zero bytes;
+    /// it is not converted to an integer, trimmed, or padded. Integer conversion
+    /// applies only to the resulting digest `x`.
+    ///
+    /// See [RFC 5054 section 2.4](https://datatracker.ietf.org/doc/html/rfc5054#section-2.4)
+    /// for the derivation.
     #[must_use]
     pub fn compute_x(identity_hash: &[u8], salt: &[u8]) -> BoxedUint {
         let mut x = D::new();
@@ -184,7 +197,10 @@ impl<G: Group, D: Digest> Client<G, D> {
         base.pow(&exp).retrieve()
     }
 
-    /// Get password verifier (`v` in RFC5054) for user registration on the server.
+    /// Compute the password verifier `v = g^x mod N` for registration on the server.
+    ///
+    /// The salt is used verbatim, including leading zero bytes. Retain the same
+    /// salt bytes for authentication.
     #[must_use]
     pub fn compute_verifier(&self, username: &[u8], password: &[u8], salt: &[u8]) -> Vec<u8> {
         let identity_hash = Self::compute_identity_hash(self.identity_username(username), password);
@@ -192,14 +208,20 @@ impl<G: Group, D: Digest> Client<G, D> {
         self.compute_g_x(&x).to_be_bytes_trimmed_vartime().into()
     }
 
-    /// Process server reply to the handshake according to [RFC5054].
+    /// Process the server's SRP-6a reply and prepare RFC 2945-style proofs.
+    ///
+    /// Derives `K = H(S)` and uses `H(PAD(g))` in `M1`. This does not implement
+    /// TLS-SRP or the HomeKit client proof. Call [`ClientVerifier::verify_server`]
+    /// to authenticate the server and obtain `K`.
     ///
     /// # Params
     /// - `a` is a random value,
     /// - `username`, `password` is supplied by the user
     /// - `salt` and `b_pub` come from the server
     ///
-    /// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
+    /// # Panics
+    /// May panic if `b_pub_bytes` is longer than the group modulus encoding.
+    /// Validate the received public value's length before calling this method.
     pub fn process_reply(
         &self,
         a: &[u8],
@@ -248,14 +270,15 @@ impl<G: Group, D: Digest> Client<G, D> {
 
     /// Process server reply to the handshake using the legacy implementation.
     ///
-    /// This implementation is compatible with `srp` v0.6 and earlier. Note the default
-    /// implementation is now RFC5054 compatible.
+    /// This implementation is compatible with `srp` v0.6 and earlier. It hashes
+    /// unpadded public values for `u` and uses `M1 = H(A | B | S)` and
+    /// `M2 = H(A | M1 | S)`, with the unhashed premaster secret `S`.
     ///
     /// # Params
     /// - `a` is a random value,
     /// - `username`, `password` is supplied by the user
     /// - `salt` and `b_pub` come from the server
-    #[deprecated(since = "0.7.0", note = "please use `Client::process_reply` (RFC5054)")]
+    #[deprecated(since = "0.7.0", note = "please use `Client::process_reply`")]
     #[allow(deprecated)]
     pub fn process_reply_legacy(
         &self,
@@ -315,9 +338,9 @@ impl<G: Group, D: Digest> Default for Client<G, D> {
     }
 }
 
-/// [RFC5054]-compatible SRP client state after handshake with the server.
+/// SRP-6a client state with RFC 2945-style authentication proofs.
 ///
-/// [RFC5054]: https://datatracker.ietf.org/doc/html/rfc5054
+/// The server is not authenticated until [`Self::verify_server`] succeeds.
 #[derive(Debug)]
 pub struct ClientVerifier<D: Digest> {
     m1: Output<D>,
@@ -327,19 +350,22 @@ pub struct ClientVerifier<D: Digest> {
 }
 
 impl<D: Digest> ClientVerifier<D> {
-    /// Get shared secret key without authenticating server, e.g. for using with
-    /// authenticated encryption modes. DO NOT USE this method without
-    /// some kind of secure authentication
+    /// Return the unhashed premaster secret `S`, encoded without leading zeros.
+    ///
+    /// This does not authenticate the server or return the session key `K`.
+    /// Prefer [`Self::verify_server`], which returns `K = H(S)` on success.
+    /// Use `S` directly only when the enclosing protocol specifies its own key
+    /// derivation and authentication.
     pub fn key(&self) -> &[u8] {
         &self.key
     }
 
-    /// Verification data for sending to the server.
+    /// Client proof `M1` to send to the server.
     pub fn proof(&self) -> &[u8] {
         self.m1.as_slice()
     }
 
-    /// Verify server reply to verification data and return shared session key.
+    /// Verify the server's proof `M2` and return the session key `K = H(S)`.
     pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
         if self.m2.ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
@@ -350,7 +376,7 @@ impl<D: Digest> ClientVerifier<D> {
 }
 
 /// Legacy SRP client state after handshake with the server, compatible with `srp` v0.6 and earlier.
-#[deprecated(since = "0.7.0", note = "please switch to `ClientVerifierRfc5054`")]
+#[deprecated(since = "0.7.0", note = "please switch to `ClientVerifier`")]
 #[derive(Debug)]
 pub struct LegacyClientVerifier<D: Digest> {
     m1: Output<D>,
