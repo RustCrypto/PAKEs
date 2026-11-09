@@ -102,7 +102,7 @@ pub use self::{
     server::{AuCPaceServer, ServerMessage},
 };
 
-pub use rand_core;
+pub use {kdf, rand_core};
 
 #[cfg(feature = "partial_augmentation")]
 pub use self::database::PartialAugDatabase;
@@ -112,6 +112,9 @@ pub use self::database::StrongDatabase;
 
 #[cfg(feature = "getrandom")]
 pub use getrandom::SysRng;
+
+/// Raw 128-bit salt used for ordinary AuCPace registration.
+pub type Salt = [u8; 16];
 
 /// Infallible version of `SysRng` which panics on error
 #[cfg(feature = "getrandom")]

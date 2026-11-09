@@ -1,4 +1,5 @@
 use crate::{
+    Salt,
     constants::MIN_SSID_LEN,
     errors::{Error, Result},
     utils::{
@@ -15,10 +16,7 @@ use curve25519_dalek::{
     scalar::Scalar,
     traits::IsIdentity,
 };
-use password_hash::{
-    CustomizedPasswordHasher,
-    phc::{ParamsString, PasswordHash, Salt, SaltString},
-};
+use kdf::Pbkdf;
 use rand_core::CryptoRng;
 use subtle::ConstantTimeEq;
 
@@ -27,15 +25,21 @@ use crate::utils::H1;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "serde")]
-use crate::utils::{serde_paramsstring, serde_saltstring};
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Implementation of the client side of the `AuCPace` protocol
-pub struct AuCPaceClient<D, H, CSPRNG, const K1: usize>
+///
+/// `H` is a configured password-based KDF. `KDF_OUTPUT` is its output length in bytes,
+/// either 32 (the default) or 64. Registration and login must use the same length;
+/// it is independent of any output length configured in `H`.
+///
+/// Registration takes separate application-defined parameter metadata for the server
+/// to store and send back at login. It is not interpreted by this crate; use `()` if
+/// the KDF configuration is agreed out of band.
+pub struct AuCPaceClient<D, H, CSPRNG, const K1: usize, const KDF_OUTPUT: usize = 32>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
     CSPRNG: CryptoRng,
 {
     rng: CSPRNG,
@@ -43,13 +47,14 @@ where
     h: PhantomData<H>,
 }
 
-impl<D, H, CSPRNG, const K1: usize> AuCPaceClient<D, H, CSPRNG, K1>
+impl<D, H, CSPRNG, const K1: usize, const KDF_OUTPUT: usize>
+    AuCPaceClient<D, H, CSPRNG, K1, KDF_OUTPUT>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
     CSPRNG: CryptoRng,
 {
-    /// Create new server
+    /// Create new client
     pub const fn new(rng: CSPRNG) -> Self {
         Self {
             rng,
@@ -65,7 +70,12 @@ where
     /// - [`next_step`](AuCPaceClientSsidEstablish): the client in the SSID establishment stage
     /// - [`message`](ClientMessage::Nonce): the message to send to the server
     ///
-    pub fn begin(&mut self) -> (AuCPaceClientSsidEstablish<D, H, K1>, ClientMessage<'_, K1>) {
+    pub fn begin(
+        &mut self,
+    ) -> (
+        AuCPaceClientSsidEstablish<D, H, K1, KDF_OUTPUT>,
+        ClientMessage<'_, K1>,
+    ) {
         let next_step = AuCPaceClientSsidEstablish::new(&mut self.rng);
         let message = ClientMessage::Nonce(next_step.nonce);
 
@@ -81,7 +91,10 @@ where
     /// - Ok([`next_step`](AuCPaceClientSsidEstablish)): the server in the SSID establishment stage
     /// - Err([`Error::InsecureSsid`](Error::InsecureSsid)): the SSID provided was not long enough to be secure
     ///
-    pub fn begin_prestablished_ssid<S>(&mut self, ssid: S) -> Result<AuCPaceClientPreAug<D, H, K1>>
+    pub fn begin_prestablished_ssid<S>(
+        &mut self,
+        ssid: S,
+    ) -> Result<AuCPaceClientPreAug<D, H, K1, KDF_OUTPUT>>
     where
         S: AsRef<[u8]>,
     {
@@ -103,8 +116,8 @@ where
     /// # Arguments:
     /// - `username` - the username to register with
     /// - `password` - the password for the user
-    /// - `params` - the parameters of the PBKDF used
-    /// - `hasher` - the hasher to use for hashing the username and password.
+    /// - `params` - application-defined parameters describing the configured PBKDF, sent to the server
+    /// - `hasher` - the PBKDF configured with `params`, used to hash the username and password.
     ///
     /// # Const Parameters
     /// - `BUFSIZ` - the size of the buffer to use while hashing
@@ -113,45 +126,33 @@ where
     ///
     /// # Return:
     /// - Ok([`messsage`](ClientMessage::Registration)): the message to send to the server
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
-    pub fn register<'a, P, const BUFSIZ: usize>(
+    pub fn register<'a, P, Params, const BUFSIZ: usize>(
         &mut self,
         username: &'a [u8],
         password: P,
-        params: H::Params,
+        params: Params,
         hasher: H,
-    ) -> Result<ClientMessage<'a, K1>>
+    ) -> Result<ClientMessage<'a, K1, Params>>
     where
         P: AsRef<[u8]>,
-        ParamsString: TryFrom<
-                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
-                Error = password_hash::Error,
-            >,
     {
-        let salt_string = SaltString::from_rng(&mut self.rng);
+        let salt: Salt = generate_nonce(&mut self.rng);
 
         // compute the verifier W
-        let pw_hash = hash_password::<&[u8], P, &SaltString, H, BUFSIZ>(
-            username,
-            password,
-            &salt_string,
-            params.clone(),
-            &hasher,
-        )?;
+        let pw_hash =
+            hash_password::<&[u8], P, H, BUFSIZ, KDF_OUTPUT>(username, password, &salt, &hasher)?;
 
         let cofactor = Scalar::ONE;
         let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
-        // attempt to convert the parameters to a ParamsString
-        let params_string = params.try_into().map_err(Error::PasswordHashing)?;
-
         Ok(ClientMessage::Registration {
             username,
-            salt: salt_string,
-            params: params_string,
+            salt,
+            params,
             verifier,
         })
     }
@@ -161,8 +162,8 @@ where
     /// # Arguments:
     /// - `username` - the username to register with
     /// - `password` - the password for the user
-    /// - `params` - the parameters of the PBKDF used
-    /// - `hasher` - the hasher to use for hashing the username and password.
+    /// - `params` - application-defined parameters describing the configured PBKDF, sent to the server
+    /// - `hasher` - the PBKDF configured with `params`, used to hash the username and password.
     ///
     /// # Const Parameters
     /// - `BUFSIZ` - the size of the buffer to use while hashing
@@ -171,47 +172,34 @@ where
     ///
     /// # Return:
     /// - Ok([`messsage`](ClientMessage::Registration)): the message to send to the server
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     #[cfg(feature = "strong_aucpace")]
-    pub fn register_strong<'a, P, const BUFSIZ: usize>(
+    pub fn register_strong<'a, P, Params, const BUFSIZ: usize>(
         &mut self,
         username: &'a [u8],
         password: P,
-        params: H::Params,
+        params: Params,
         hasher: H,
-    ) -> Result<ClientMessage<'a, K1>>
+    ) -> Result<ClientMessage<'a, K1, Params>>
     where
         P: AsRef<[u8]>,
-        ParamsString: TryFrom<
-                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
-                Error = password_hash::Error,
-            >,
     {
         // generate a secret exponent and salt
-        let (q, salt_string) =
-            Self::generate_salt_strong(username, password.as_ref(), &mut self.rng)?;
+        let (q, salt) = Self::generate_salt_strong(username, password.as_ref(), &mut self.rng);
 
         // compute the verifier W
-        let pw_hash = hash_password::<&[u8], P, &SaltString, H, BUFSIZ>(
-            username,
-            password,
-            &salt_string,
-            params.clone(),
-            &hasher,
-        )?;
+        let pw_hash =
+            hash_password::<&[u8], P, H, BUFSIZ, KDF_OUTPUT>(username, password, &salt, &hasher)?;
         let cofactor = Scalar::ONE;
         let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
-        // attempt to convert the parameters to a ParamsString
-        let params_string = params.try_into().map_err(Error::PasswordHashing)?;
-
         Ok(ClientMessage::StrongRegistration {
             username,
             secret_exponent: q,
-            params: params_string,
+            params,
             verifier,
         })
     }
@@ -223,45 +211,38 @@ where
     /// # Arguments:
     /// - `username` - the username to register with
     /// - `password` - the password for the user
-    /// - `params` - the parameters of the PBKDF used
-    /// - `hasher` - the hasher to use for hashing the username and password.
+    /// - `params` - application-defined parameters describing the configured PBKDF, sent to the server
+    /// - `hasher` - the PBKDF configured with `params`, used to hash the username and password.
     ///
     /// # Return:
     /// - Ok([`messsage`](ClientMessage::Registration)): the message to send to the server
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     #[cfg(feature = "alloc")]
-    pub fn register_alloc<'a, P>(
+    pub fn register_alloc<'a, P, Params>(
         &mut self,
         username: &'a [u8],
         password: P,
-        params: H::Params,
+        params: Params,
         hasher: H,
-    ) -> Result<ClientMessage<'a, K1>>
+    ) -> Result<ClientMessage<'a, K1, Params>>
     where
         P: AsRef<[u8]>,
-        ParamsString: TryFrom<
-                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
-                Error = password_hash::Error,
-            >,
     {
-        let salt_string = SaltString::from_rng(&mut self.rng);
+        let salt: Salt = generate_nonce(&mut self.rng);
 
         // compute the verifier W
         let pw_hash =
-            hash_password_alloc(username, password, &salt_string, params.clone(), &hasher)?;
+            hash_password_alloc::<_, _, _, KDF_OUTPUT>(username, password, &salt, &hasher)?;
         let cofactor = Scalar::ONE;
         let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
-        // attempt to convert the parameters to a ParamsString
-        let params_string = params.try_into().map_err(Error::PasswordHashing)?;
-
         Ok(ClientMessage::Registration {
             username,
-            salt: salt_string,
-            params: params_string,
+            salt,
+            params,
             verifier,
         })
     }
@@ -273,63 +254,46 @@ where
     /// # Arguments:
     /// - `username` - the username to register with
     /// - `password` - the password for the user
-    /// - `params` - the parameters of the PBKDF used
-    /// - `hasher` - the hasher to use for hashing the username and password.
-    ///
-    /// # Const Parameters
-    /// - `BUFSIZ` - the size of the buffer to use while hashing
-    ///   it should be enough to store the maximum length of a username + password + 1 for your use case
-    ///   e.g. if you have a username limit of 20 and password limit of 60, 81 would be the right value.
+    /// - `params` - application-defined parameters describing the configured PBKDF, sent to the server
+    /// - `hasher` - the PBKDF configured with `params`, used to hash the username and password.
     ///
     /// # Return:
     /// - Ok([`messsage`](ClientMessage::Registration)): the message to send to the server
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     #[cfg(all(feature = "strong_aucpace", feature = "alloc"))]
-    pub fn register_alloc_strong<'a, P>(
+    pub fn register_alloc_strong<'a, P, Params>(
         &mut self,
         username: &'a [u8],
         password: P,
-        params: H::Params,
+        params: Params,
         hasher: H,
-    ) -> Result<ClientMessage<'a, K1>>
+    ) -> Result<ClientMessage<'a, K1, Params>>
     where
         P: AsRef<[u8]>,
-        ParamsString: TryFrom<
-                <H as CustomizedPasswordHasher<PasswordHash>>::Params,
-                Error = password_hash::Error,
-            >,
     {
         // generate a secret exponent and salt
-        let (q, salt_string) =
-            Self::generate_salt_strong(username, password.as_ref(), &mut self.rng)?;
+        let (q, salt) = Self::generate_salt_strong(username, password.as_ref(), &mut self.rng);
 
         // compute the verifier W
         let pw_hash =
-            hash_password_alloc(username, password, salt_string, params.clone(), &hasher)?;
+            hash_password_alloc::<_, _, _, KDF_OUTPUT>(username, password, &salt, &hasher)?;
         let cofactor = Scalar::ONE;
         let w = scalar_from_hash(&pw_hash)?;
         let verifier = RISTRETTO_BASEPOINT_POINT * (w * cofactor);
 
-        // attempt to convert the parameters to a ParamsString
-        let params_string = params.try_into().map_err(Error::PasswordHashing)?;
-
         Ok(ClientMessage::StrongRegistration {
             username,
             secret_exponent: q,
-            params: params_string,
+            params,
             verifier,
         })
     }
 
     /// generate a secret exponent and a salt value for the strong variant of the protocol
     #[cfg(feature = "strong_aucpace")]
-    fn generate_salt_strong(
-        user: &[u8],
-        pass: &[u8],
-        rng: &mut CSPRNG,
-    ) -> Result<(Scalar, SaltString)> {
+    fn generate_salt_strong(user: &[u8], pass: &[u8], rng: &mut CSPRNG) -> (Scalar, [u8; 32]) {
         // choose a random q
         let q = Scalar::random(rng);
 
@@ -342,28 +306,28 @@ where
         // compute the salt value
         let cofactor = Scalar::ONE;
         let salt_point = z * (q * cofactor);
-        let salt = Salt::new(&salt_point.compress().to_bytes())
-            .map_err(|e| Error::PasswordHashing(e.into()))?;
+        let salt = salt_point.compress().to_bytes();
 
-        Ok((q, salt.into()))
+        (q, salt)
     }
 }
 
 /// Client in the SSID agreement phase
-pub struct AuCPaceClientSsidEstablish<D, H, const K1: usize>
+pub struct AuCPaceClientSsidEstablish<D, H, const K1: usize, const KDF_OUTPUT: usize = 32>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     nonce: [u8; K1],
     d: PhantomData<D>,
     h: PhantomData<H>,
 }
 
-impl<D, H, const K1: usize> AuCPaceClientSsidEstablish<D, H, K1>
+impl<D, H, const K1: usize, const KDF_OUTPUT: usize>
+    AuCPaceClientSsidEstablish<D, H, K1, KDF_OUTPUT>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     fn new<CSPRNG>(rng: &mut CSPRNG) -> Self
     where
@@ -385,26 +349,26 @@ where
     /// [`next_step`](AuCPaceClientPreAug): the client in the pre-augmentation stage
     ///
     #[must_use]
-    pub fn agree_ssid(self, server_nonce: [u8; K1]) -> AuCPaceClientPreAug<D, H, K1> {
+    pub fn agree_ssid(self, server_nonce: [u8; K1]) -> AuCPaceClientPreAug<D, H, K1, KDF_OUTPUT> {
         let ssid = compute_ssid::<D, K1>(server_nonce, self.nonce);
         AuCPaceClientPreAug::new(ssid)
     }
 }
 
 /// Client in the pre-augmentation phase
-pub struct AuCPaceClientPreAug<D, H, const K1: usize>
+pub struct AuCPaceClientPreAug<D, H, const K1: usize, const KDF_OUTPUT: usize = 32>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     ssid: Output<D>,
     h: PhantomData<H>,
 }
 
-impl<D, H, const K1: usize> AuCPaceClientPreAug<D, H, K1>
+impl<D, H, const K1: usize, const KDF_OUTPUT: usize> AuCPaceClientPreAug<D, H, K1, KDF_OUTPUT>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     const fn new(ssid: Output<D>) -> Self {
         Self {
@@ -428,7 +392,10 @@ where
         self,
         username: &'a [u8],
         password: &'a [u8],
-    ) -> (AuCPaceClientAugLayer<'a, D, H, K1>, ClientMessage<'a, K1>) {
+    ) -> (
+        AuCPaceClientAugLayer<'a, D, H, K1, KDF_OUTPUT>,
+        ClientMessage<'a, K1>,
+    ) {
         let next_step = AuCPaceClientAugLayer::new(self.ssid, username, password);
         let message = ClientMessage::Username(username);
 
@@ -453,7 +420,7 @@ where
         password: &'a [u8],
         rng: &mut CSPRNG,
     ) -> (
-        StrongAuCPaceClientAugLayer<'a, D, H, K1>,
+        StrongAuCPaceClientAugLayer<'a, D, H, K1, KDF_OUTPUT>,
         ClientMessage<'a, K1>,
     )
     where
@@ -483,10 +450,10 @@ where
 }
 
 /// Client in the augmentation layer
-pub struct AuCPaceClientAugLayer<'a, D, H, const K1: usize>
+pub struct AuCPaceClientAugLayer<'a, D, H, const K1: usize, const KDF_OUTPUT: usize = 32>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     ssid: Output<D>,
     username: &'a [u8],
@@ -494,10 +461,11 @@ where
     h: PhantomData<H>,
 }
 
-impl<'a, D, H, const K1: usize> AuCPaceClientAugLayer<'a, D, H, K1>
+impl<'a, D, H, const K1: usize, const KDF_OUTPUT: usize>
+    AuCPaceClientAugLayer<'a, D, H, K1, KDF_OUTPUT>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     const fn new(ssid: Output<D>, username: &'a [u8], password: &'a [u8]) -> Self {
         Self {
@@ -514,31 +482,26 @@ where
     /// # Arguments:
     /// - `x_pub` - `x` from the protocol definition, used in generating the password related string (prs)
     /// - `salt` - the salt value sent by the server
-    /// - `params` - the parameters used by the hasher
-    /// - `hasher` - the hasher to use when computing `w`
+    /// - `hasher` - the PBKDF configured with the parameters received from the server
     ///
     /// # Const Parameters
     /// - `BUFSIZ` - the size of the buffer to use while hashing
     ///   it should be enough to store the maximum length of a username + password + 1 for your use case
     ///   e.g. if you have a username limit of 20 and password limit of 60, 81 would be the right value.
     ///
-    /// This version requires the alloc feature and allocates space for
-    /// the username and password on the heap using Vec.
-    ///
     /// # Return:
     /// - Ok([`next_step`](AuCPaceClientCPaceSubstep)): the client in the cpace substep
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     pub fn generate_cpace<S, const BUFSIZ: usize>(
         self,
         x_pub: RistrettoPoint,
         salt: S,
-        params: H::Params,
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>>
     where
-        S: Into<Salt>,
+        S: AsRef<[u8]>,
     {
         // check for the identity point
         if x_pub.is_identity() {
@@ -546,11 +509,10 @@ where
         }
 
         let cofactor = Scalar::ONE;
-        let pw_hash = hash_password::<&[u8], &[u8], S, H, BUFSIZ>(
+        let pw_hash = hash_password::<&[u8], &[u8], H, BUFSIZ, KDF_OUTPUT>(
             self.username,
             self.password,
-            salt,
-            params,
+            salt.as_ref(),
             &hasher,
         )?;
         let w = scalar_from_hash(&pw_hash)?;
@@ -569,24 +531,22 @@ where
     /// # Arguments:
     /// - `x_pub` - `x` from the protocol definition, used in generating the password related string (prs)
     /// - `salt` - the salt value sent by the server
-    /// - `params` - the parameters used by the hasher
-    /// - `hasher` - the hasher to use when computing `w`
+    /// - `hasher` - the PBKDF configured with the parameters received from the server
     ///
     /// # Return:
     /// - Ok([`next_step`](AuCPaceClientCPaceSubstep)): the client in the cpace substep
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     #[cfg(feature = "alloc")]
     pub fn generate_cpace_alloc<S>(
         self,
         x_pub: RistrettoPoint,
         salt: S,
-        params: H::Params,
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>>
     where
-        S: Into<Salt>,
+        S: AsRef<[u8]>,
     {
         // check for the identity point
         if x_pub.is_identity() {
@@ -594,7 +554,12 @@ where
         }
 
         let cofactor = Scalar::ONE;
-        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, &hasher)?;
+        let pw_hash = hash_password_alloc::<_, _, _, KDF_OUTPUT>(
+            self.username,
+            self.password,
+            salt.as_ref(),
+            &hasher,
+        )?;
         let w = scalar_from_hash(&pw_hash)?;
 
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
@@ -605,10 +570,10 @@ where
 
 /// Client in the augmentation layer - strong version
 #[cfg(feature = "strong_aucpace")]
-pub struct StrongAuCPaceClientAugLayer<'a, D, H, const K1: usize>
+pub struct StrongAuCPaceClientAugLayer<'a, D, H, const K1: usize, const KDF_OUTPUT: usize = 32>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     ssid: Output<D>,
     username: &'a [u8],
@@ -618,10 +583,11 @@ where
 }
 
 #[cfg(feature = "strong_aucpace")]
-impl<'a, D, H, const K1: usize> StrongAuCPaceClientAugLayer<'a, D, H, K1>
+impl<'a, D, H, const K1: usize, const KDF_OUTPUT: usize>
+    StrongAuCPaceClientAugLayer<'a, D, H, K1, KDF_OUTPUT>
 where
     D: Digest<OutputSize = U64> + Default,
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
 {
     const fn new(
         ssid: Output<D>,
@@ -643,28 +609,23 @@ where
     ///
     /// # Arguments:
     /// - `x_pub` - `x` from the protocol definition, used in generating the password related string (prs)
-    /// - `salt_point` - our blinded point `U`, multiplied by the server's secret exponent `q`
-    /// - `params` - the parameters used by the hasher
-    /// - `hasher` - the hasher to use when computing `w`
+    /// - `blinded_salt` - our blinded point `U`, multiplied by the server's secret exponent `q`
+    /// - `hasher` - the PBKDF configured with the parameters received from the server
     ///
     /// # Const Parameters
     /// - `BUFSIZ` - the size of the buffer to use while hashing
     ///   it should be enough to store the maximum length of a username + password + 1 for your use case
     ///   e.g. if you have a username limit of 20 and password limit of 60, 81 would be the right value.
     ///
-    /// This version requires the alloc feature and allocates space for
-    /// the username and password on the heap using Vec.
-    ///
     /// # Return:
     /// - Ok([`next_step`](AuCPaceClientCPaceSubstep)): the client in the cpace substep
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     pub fn generate_cpace<const BUFSIZ: usize>(
         self,
         x_pub: RistrettoPoint,
         blinded_salt: RistrettoPoint,
-        params: H::Params,
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>> {
         // check for the identity point
@@ -679,15 +640,17 @@ where
         // I have interpreted this as the multiplicative inverse of (r * cj^2)
         // then multiplied by cj again.
         let exponent = (self.blinding_value * cofactor * cofactor).invert() * cofactor;
-        let salt = Salt::new(&(blinded_salt * exponent).compress().to_bytes())
-            .map_err(|e| Error::PasswordHashing(e.into()))?;
+        let salt_point = blinded_salt * exponent;
+        if salt_point.is_identity() {
+            return Err(Error::IllegalPointError);
+        }
+        let salt = salt_point.compress().to_bytes();
 
         // compute the PRS
-        let pw_hash = hash_password::<&[u8], &[u8], &SaltString, H, BUFSIZ>(
+        let pw_hash = hash_password::<&[u8], &[u8], H, BUFSIZ, KDF_OUTPUT>(
             self.username,
             self.password,
-            &salt.into(),
-            params,
+            &salt,
             &hasher,
         )?;
         let w = scalar_from_hash(&pw_hash)?;
@@ -704,22 +667,19 @@ where
     ///
     /// # Arguments:
     /// - `x_pub` - `x` from the protocol definition, used in generating the password related string (prs)
-    /// - `password` - the user's password
-    /// - `salt` - the salt value sent by the server
-    /// - `params` - the parameters used by the hasher
-    /// - `hasher` - the hasher to use when computing `w`
+    /// - `blinded_salt` - our blinded point `U`, multiplied by the server's secret exponent `q`
+    /// - `hasher` - the PBKDF configured with the parameters received from the server
     ///
     /// # Return:
     /// - Ok([`next_step`](AuCPaceClientCPaceSubstep)): the client in the cpace substep
-    /// - Err([`Error::PasswordHashing`](Error::PasswordHashing) | [`Error::HashEmpty`](Error::HashEmpty) | [`Error::HashSizeInvalid`](Error::HashSizeInvalid)):
-    ///   one of the three error variants that can result from the password hashing process
+    /// - Err([`Error::PasswordHashing`] | [`Error::HashSizeInvalid`]):
+    ///   key derivation failed or `KDF_OUTPUT` was not 32 or 64
     ///
     #[cfg(feature = "alloc")]
     pub fn generate_cpace_alloc(
         self,
         x_pub: RistrettoPoint,
         blinded_salt: RistrettoPoint,
-        params: H::Params,
         hasher: H,
     ) -> Result<AuCPaceClientCPaceSubstep<D, K1>> {
         // check for the identity point
@@ -740,11 +700,15 @@ where
         if salt_point.is_identity() {
             return Err(Error::IllegalPointError);
         }
-        let salt = Salt::new(&salt_point.compress().to_bytes())
-            .map_err(|e| Error::PasswordHashing(e.into()))?;
+        let salt = salt_point.compress().to_bytes();
 
         // compute the PRS
-        let pw_hash = hash_password_alloc(self.username, self.password, salt, params, &hasher)?;
+        let pw_hash = hash_password_alloc::<_, _, _, KDF_OUTPUT>(
+            self.username,
+            self.password,
+            &salt,
+            &hasher,
+        )?;
         let w = scalar_from_hash(&pw_hash)?;
         let prs = (x_pub * (w * cofactor)).compress().to_bytes();
 
@@ -920,18 +884,16 @@ where
 }
 
 /// Hash a username and password with the given password hasher
-fn hash_password<U, P, S, H, const BUFSIZ: usize>(
+fn hash_password<U, P, H, const BUFSIZ: usize, const N: usize>(
     username: U,
     password: P,
-    salt: S,
-    params: H::Params,
+    salt: &[u8],
     hasher: &H,
-) -> Result<PasswordHash>
+) -> Result<[u8; N]>
 where
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
     U: AsRef<[u8]>,
     P: AsRef<[u8]>,
-    S: Into<Salt>,
 {
     let user = username.as_ref();
     let pass = password.as_ref();
@@ -947,25 +909,21 @@ where
     buf[u] = b':';
     buf[(u + 1)..=(u + p)].copy_from_slice(pass);
 
-    hasher
-        .hash_password_customized(&buf[0..=(u + p)], &salt.into(), None, None, params)
-        .map_err(Error::PasswordHashing)
+    derive_password_key(&buf[0..=(u + p)], salt, hasher)
 }
 
 /// Hash a username and password with the given password hasher
 #[cfg(feature = "alloc")]
-fn hash_password_alloc<U, P, S, H>(
+fn hash_password_alloc<U, P, H, const N: usize>(
     username: U,
     password: P,
-    salt: S,
-    params: H::Params,
+    salt: &[u8],
     hasher: &H,
-) -> Result<PasswordHash>
+) -> Result<[u8; N]>
 where
-    H: CustomizedPasswordHasher<PasswordHash>,
+    H: Pbkdf,
     U: AsRef<[u8]>,
     P: AsRef<[u8]>,
-    S: Into<Salt>,
 {
     let user = username.as_ref();
     let pass = password.as_ref();
@@ -976,15 +934,33 @@ where
     v.push(b':');
     v.extend_from_slice(pass);
 
-    hasher
-        .hash_password_customized(v.as_slice(), &salt.into(), None, None, params)
-        .map_err(Error::PasswordHashing)
+    derive_password_key(v.as_slice(), salt, hasher)
 }
 
-/// An enum representing the different messages the client can send to the server
+/// Derive raw key material of a supported length from the decoded salt.
+fn derive_password_key<H: Pbkdf, const N: usize>(
+    password: &[u8],
+    salt: &[u8],
+    hasher: &H,
+) -> Result<[u8; N]> {
+    if N != 32 && N != 64 {
+        return Err(Error::HashSizeInvalid);
+    }
+
+    let mut output = [0u8; N];
+    hasher
+        .derive_key(password, salt, &mut output)
+        .map_err(Error::PasswordHashing)?;
+    Ok(output)
+}
+
+/// An enum representing the different messages the client can send to the server.
+///
+/// `Params` is application-defined PBKDF metadata. Use `()` when the KDF configuration
+/// is agreed out of band. Only registration messages contain this metadata.
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum ClientMessage<'a, const K1: usize> {
+pub enum ClientMessage<'a, const K1: usize, Params = ()> {
     /// SSID establishment message - the client's nonce: `t`
     Nonce(#[cfg_attr(feature = "serde", serde(with = "serde_byte_array"))] [u8; K1]),
 
@@ -1014,12 +990,10 @@ pub enum ClientMessage<'a, const K1: usize> {
         username: &'a [u8],
 
         /// The salt used when computing the verifier
-        #[cfg_attr(feature = "serde", serde(with = "serde_saltstring"))]
-        salt: SaltString,
+        salt: Salt,
 
         /// The password hasher's parameters used when computing the verifier
-        #[cfg_attr(feature = "serde", serde(with = "serde_paramsstring"))]
-        params: ParamsString,
+        params: Params,
 
         /// The verifier computer from the user's password
         verifier: RistrettoPoint,
@@ -1036,8 +1010,7 @@ pub enum ClientMessage<'a, const K1: usize> {
         secret_exponent: Scalar,
 
         /// The password hasher's parameters used when computing the verifier
-        #[cfg_attr(feature = "serde", serde(with = "serde_paramsstring"))]
-        params: ParamsString,
+        params: Params,
 
         /// The verifier computer from the user's password
         verifier: RistrettoPoint,
@@ -1049,40 +1022,76 @@ mod tests {
     #[allow(unused)]
     use super::*;
 
-    #[cfg(all(feature = "getrandom", feature = "sha2"))]
+    #[cfg(all(feature = "getrandom", feature = "sha2", feature = "scrypt"))]
     use crate::{SysRng, rand_core::UnwrapErr};
 
     #[test]
-    #[cfg(all(feature = "alloc", feature = "getrandom", feature = "scrypt"))]
-    fn test_hash_password_no_std_and_alloc_agree() {
-        use rand_core::TryRng;
+    fn test_pbkdf_test_vector() {
         use scrypt::{Params, Scrypt};
 
-        let username = "worf@starship.enterprise";
-        let password = "data_x_worf_4ever_<3";
-        let mut bytes = [0u8; Salt::RECOMMENDED_LENGTH];
-        SysRng.try_fill_bytes(&mut bytes).unwrap();
-        let salt = Salt::new(&bytes).expect("Salt length invariant broken.");
-        // These are weak parameters, do not use them
-        // they are used here to make the test run faster
-        let params: Params = Default::default();
+        fn check<const N: usize>() {
+            // Weak parameters for tests only, with non-default output lengths.
+            let params = Params::new(4, 8, 1).unwrap();
+            let scrypt = Scrypt::new_with_params(params);
+            let salt = b"\0binary\xffsalt\0";
+            // Independently generated with Python's hashlib.scrypt.
+            let expected = [
+                0xab, 0x1a, 0x35, 0xb7, 0x4a, 0x2a, 0x59, 0x4c, 0x33, 0x46, 0x17, 0xcf, 0x2c, 0xb0,
+                0x7b, 0xa9, 0x8c, 0x05, 0xb3, 0xf4, 0x11, 0xd3, 0x5d, 0xc0, 0x22, 0x74, 0xac, 0xb6,
+                0xa6, 0x03, 0x20, 0x9f, 0xd2, 0xa4, 0x5d, 0xd8, 0x81, 0x82, 0x3f, 0xc4, 0x81, 0xdb,
+                0xca, 0x1d, 0xe3, 0xfe, 0x2b, 0x4a, 0x3f, 0x19, 0x34, 0xef, 0xde, 0xa4, 0x55, 0xb8,
+                0xd4, 0x36, 0x5e, 0xcb, 0x15, 0x74, 0xd5, 0xc2,
+            ];
+            let derived =
+                hash_password::<_, _, _, 13, N>(b"user", b"password", salt, &scrypt).unwrap();
+            assert_eq!(derived.as_slice(), &expected[..N]);
 
-        let scrypt = Scrypt::default();
-        let no_std_res = hash_password::<&str, &str, &SaltString, Scrypt, 100>(
-            username,
-            password,
-            &salt.into(),
-            params,
-            &scrypt,
-        )
-        .unwrap();
-        let alloc_res = hash_password_alloc(username, password, salt, params, &scrypt).unwrap();
+            #[cfg(feature = "alloc")]
+            assert_eq!(
+                hash_password_alloc::<_, _, _, N>(b"user", b"password", salt, &scrypt).unwrap(),
+                derived,
+            );
+        }
 
-        assert_eq!(alloc_res, no_std_res);
+        check::<32>();
+        check::<64>();
+    }
+
+    struct FailingPbkdf;
+
+    impl kdf::Kdf for FailingPbkdf {
+        fn derive_key(&self, _: &[u8], _: &[u8], _: &mut [u8]) -> kdf::Result<()> {
+            Err(kdf::Error)
+        }
+    }
+
+    impl Pbkdf for FailingPbkdf {}
+
+    #[test]
+    fn test_pbkdf_errors() {
+        let salt = b"test salt";
+        assert_eq!(
+            hash_password::<_, _, _, 13, 32>(b"user", b"password", salt, &FailingPbkdf),
+            Err(Error::PasswordHashing(kdf::Error)),
+        );
+        assert_eq!(
+            hash_password::<_, _, _, 12, 32>(b"user", b"password", salt, &FailingPbkdf),
+            Err(Error::UsernameOrPasswordTooLong),
+        );
+        assert_eq!(
+            hash_password::<_, _, _, 13, 48>(b"user", b"password", salt, &FailingPbkdf),
+            Err(Error::HashSizeInvalid),
+        );
+
+        #[cfg(feature = "alloc")]
+        assert_eq!(
+            hash_password_alloc::<_, _, _, 32>(b"user", b"password", salt, &FailingPbkdf),
+            Err(Error::PasswordHashing(kdf::Error)),
+        );
     }
 
     #[test]
-    #[cfg(all(feature = "getrandom", feature = "sha2"))]
+    #[cfg(all(feature = "getrandom", feature = "sha2", feature = "scrypt"))]
     fn test_client_doesnt_accept_insecure_ssid() {
         use crate::Client;
 
@@ -1103,10 +1112,9 @@ mod tests {
                 b"bob",
                 b"bob's very secure password that nobody knows about, honest",
             );
-        let res = aug_client.generate_cpace::<&SaltString, 100>(
+        let res = aug_client.generate_cpace::<_, 100>(
             RistrettoPoint::identity(),
-            &Salt::new(b"saltyboi").unwrap().into(),
-            scrypt::Params::RECOMMENDED,
+            b"saltyboi",
             scrypt::Scrypt::default(),
         );
 
@@ -1131,8 +1139,7 @@ mod tests {
             );
         let res = aug_client.generate_cpace_alloc(
             RistrettoPoint::identity(),
-            &Salt::new(b"saltyboi").unwrap().into(),
-            scrypt::Params::RECOMMENDED,
+            b"saltyboi",
             scrypt::Scrypt::default(),
         );
 
@@ -1161,7 +1168,6 @@ mod tests {
         let res = aug_client.generate_cpace::<100>(
             RistrettoPoint::identity(),
             RISTRETTO_BASEPOINT_POINT,
-            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt::default(),
         );
 
@@ -1195,7 +1201,6 @@ mod tests {
         let res = aug_client.generate_cpace_alloc(
             RistrettoPoint::identity(),
             RISTRETTO_BASEPOINT_POINT,
-            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt::default(),
         );
 
@@ -1241,6 +1246,33 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "sha2", feature = "scrypt", feature = "strong_aucpace"))]
+    fn test_strong_client_doesnt_accept_invalid_salt() {
+        use crate::utils::H0;
+        use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+        use curve25519_dalek::traits::Identity;
+
+        let ssid = H0::<sha2::Sha512>().finalize();
+        let aug_client: StrongAuCPaceClientAugLayer<'_, sha2::Sha512, scrypt::Scrypt, 16> =
+            StrongAuCPaceClientAugLayer::new(
+                ssid,
+                b"bob",
+                b"bob's very secure password that nobody knows about, honest",
+                Scalar::from(69u32),
+            );
+        let res = aug_client.generate_cpace::<100>(
+            RISTRETTO_BASEPOINT_POINT,
+            RistrettoPoint::identity(),
+            scrypt::Scrypt::default(),
+        );
+
+        if let Err(e) = res {
+            assert_eq!(e, Error::IllegalPointError);
+        } else {
+            panic!("Client accepted illegal point.");
+        }
+    }
+    #[test]
     #[cfg(all(
         feature = "sha2",
         feature = "scrypt",
@@ -1263,7 +1295,6 @@ mod tests {
         let res = aug_client.generate_cpace_alloc(
             RISTRETTO_BASEPOINT_POINT,
             RistrettoPoint::identity(),
-            scrypt::Params::RECOMMENDED,
             scrypt::Scrypt::default(),
         );
 

@@ -1,4 +1,6 @@
 #![cfg(all(
+    feature = "scrypt",
+    feature = "sha2",
     feature = "alloc",
     feature = "partial_augmentation",
     feature = "getrandom",
@@ -6,13 +8,12 @@
 ))]
 
 use aucpace::{
-    Client, ClientMessage, Error, PartialAugDatabase, Result, Server, ServerMessage,
+    AuCPaceClient, ClientMessage, Error, PartialAugDatabase, Result, Server, ServerMessage,
     StrongDatabase, SysRng,
     client::{AuCPaceClientPreAug, AuCPaceClientRecvServerKey},
     server::{AuCPaceServerAugLayer, AuCPaceServerRecvClientKey},
 };
 use curve25519_dalek::{RistrettoPoint, Scalar};
-use password_hash::phc::ParamsString;
 use rand_core::UnwrapErr;
 use scrypt::{Params, Scrypt};
 use sha2::Sha512;
@@ -23,22 +24,29 @@ const CI: &[u8] = b"test_channel_identifier";
 const PRE_SSID: &[u8] = b"bestest_ssid_ever_i_promise";
 const K1: usize = 16;
 
+type Client<const N: usize = 32> = AuCPaceClient<Sha512, Scrypt, UnwrapErr<SysRng>, K1, N>;
+
 /// Password Verifier database which can store the info for one user
 #[derive(Debug, Default)]
 struct SingleUserDatabase {
     user: Option<Vec<u8>>,
-    data: Option<(RistrettoPoint, Scalar, ParamsString)>,
+    data: Option<(RistrettoPoint, Scalar, Params)>,
     long_term_keypair: Option<(Scalar, RistrettoPoint)>,
 }
 
 impl StrongDatabase for SingleUserDatabase {
     type PasswordVerifier = RistrettoPoint;
+    type Params = Params;
+
+    fn default_params(&self) -> Self::Params {
+        Params::new(4, 8, 1).unwrap()
+    }
     type Exponent = Scalar;
 
     fn lookup_verifier_strong(
         &self,
         username: &[u8],
-    ) -> Option<(Self::PasswordVerifier, Self::Exponent, ParamsString)> {
+    ) -> Option<(Self::PasswordVerifier, Self::Exponent, Params)> {
         match &self.user {
             Some(stored_username) if stored_username == username => self.data.clone(),
             _ => None,
@@ -51,7 +59,7 @@ impl StrongDatabase for SingleUserDatabase {
         _uad: Option<&[u8]>,
         verifier: Self::PasswordVerifier,
         secret_exponent: Self::Exponent,
-        params: ParamsString,
+        params: Params,
     ) {
         self.user = Some(username.to_vec());
         self.data = Some((verifier, secret_exponent, params));
@@ -91,7 +99,16 @@ impl PartialAugDatabase for SingleUserDatabase {
 /// test the default key agreement - establish SSID, normal explicit mutual auth, non-strong version
 #[test]
 fn test_key_agreement() -> Result<()> {
-    let (mut base_client, mut base_server, database) = init()?;
+    key_agreement::<32>()
+}
+
+#[test]
+fn test_key_agreement_64_bytes() -> Result<()> {
+    key_agreement::<64>()
+}
+
+fn key_agreement<const N: usize>() -> Result<()> {
+    let (mut base_client, mut base_server, database) = init::<N>()?;
 
     // ===== SSID Establishment =====
     let (server, server_message) = base_server.begin();
@@ -150,7 +167,7 @@ fn test_key_agreement() -> Result<()> {
 /// test the default key agreement - establish SSID, normal explicit mutual auth, non-strong version
 #[test]
 fn test_key_agreement_implicit_auth() -> Result<()> {
-    let (mut base_client, mut base_server, database) = init()?;
+    let (mut base_client, mut base_server, database) = init::<32>()?;
 
     // ===== SSID Establishment =====
     let (server, server_message) = base_server.begin();
@@ -196,7 +213,7 @@ fn test_key_agreement_implicit_auth() -> Result<()> {
 /// test the default key agreement - establish SSID, normal explicit mutual auth, non-strong version
 #[test]
 fn test_key_agreement_prestablished_ssid() -> Result<()> {
-    let (mut base_client, mut base_server, database) = init()?;
+    let (mut base_client, mut base_server, database) = init::<32>()?;
 
     // ===== SSID Establishment =====
     let server = base_server.begin_prestablished_ssid(PRE_SSID)?;
@@ -241,7 +258,7 @@ fn test_key_agreement_prestablished_ssid() -> Result<()> {
 /// test the default key agreement - establish SSID, normal explicit mutual auth, non-strong version
 #[test]
 fn test_key_agreement_prestablished_ssid_implicit_auth() -> Result<()> {
-    let (mut base_client, mut base_server, database) = init()?;
+    let (mut base_client, mut base_server, database) = init::<32>()?;
 
     // ===== SSID Establishment =====
     let server = base_server.begin_prestablished_ssid(PRE_SSID)?;
@@ -271,18 +288,23 @@ fn test_key_agreement_prestablished_ssid_implicit_auth() -> Result<()> {
 }
 
 /// Perform the initialisation step for all tests
-fn init() -> Result<(Client, Server, SingleUserDatabase)> {
+fn init<const N: usize>() -> Result<(Client<N>, Server, SingleUserDatabase)> {
     let rng = UnwrapErr(SysRng);
 
     // Create the client, server and database
     let mut base_server = Server::new(rng);
-    let mut base_client = Client::new(rng);
+    let mut base_client = Client::<N>::new(rng);
     let mut database: SingleUserDatabase = Default::default();
 
     // register a user in the database
-    let params = Params::RECOMMENDED;
-    let registration =
-        base_client.register_alloc_strong(USERNAME, PASSWORD, params, Scrypt::default())?;
+    // Weak, non-default parameters keep tests fast. Do not use in production.
+    let params = Params::new(4, 8, 1).unwrap();
+    let registration = base_client.register_alloc_strong(
+        USERNAME,
+        PASSWORD,
+        params,
+        Scrypt::new_with_params(params),
+    )?;
     if let ClientMessage::StrongRegistration {
         username,
         secret_exponent,
@@ -299,8 +321,8 @@ fn init() -> Result<(Client, Server, SingleUserDatabase)> {
 }
 
 /// perform all the middle steps common to all tests
-fn test_core(
-    client: AuCPaceClientPreAug<Sha512, Scrypt, K1>,
+fn test_core<const N: usize>(
+    client: AuCPaceClientPreAug<Sha512, Scrypt, K1, N>,
     server: AuCPaceServerAugLayer<Sha512, K1>,
     database: &SingleUserDatabase,
 ) -> Result<(
@@ -331,15 +353,7 @@ fn test_core(
         ..
     } = server_message
     {
-        let params = {
-            // its christmas time!
-            let log_n = pbkdf_params.get_str("ln").unwrap().parse().unwrap();
-            let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
-            let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
-
-            Params::new(log_n, r, p).unwrap()
-        };
-        client.generate_cpace_alloc(x_pub, blinded_salt, params, Scrypt::default())?
+        client.generate_cpace_alloc(x_pub, blinded_salt, Scrypt::new_with_params(pbkdf_params))?
     } else {
         panic!("Received invalid server message {:?}", server_message);
     };
@@ -349,4 +363,22 @@ fn test_core(
     let (client, client_message) = client.generate_public_key(CI, &mut rng);
 
     Ok((client, server, client_message, server_message))
+}
+
+#[test]
+fn test_unknown_user_parameters() -> Result<()> {
+    let (_, mut base_server, database) = init::<32>()?;
+    let server = base_server.begin_prestablished_ssid(PRE_SSID)?;
+    let (_, message) = server.generate_client_info_partial_strong(
+        b"unknown user",
+        curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT,
+        &database,
+        UnwrapErr(SysRng),
+    )?;
+    if let ServerMessage::StrongAugmentationInfo { pbkdf_params, .. } = message {
+        assert_eq!(pbkdf_params, Params::new(4, 8, 1).unwrap());
+    } else {
+        panic!("Expected augmentation info");
+    }
+    Ok(())
 }
