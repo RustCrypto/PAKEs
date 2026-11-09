@@ -14,10 +14,10 @@ keywords = ["crypto", "pake", "authentication"]
 categories = ["authentication", "cryptography", "no-std"]
 readme = "README.md"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 
 [dependencies]
-bigint = { package = "crypto-bigint", version = "0.7", features = ["alloc"] }
+bigint = { package = "crypto-bigint", version = "0.7.11", features = ["alloc"] }
 common = { package = "crypto-common", version = "0.2" }
 digest = "0.11"
 subtle = { version = "2.4", default-features = false }
