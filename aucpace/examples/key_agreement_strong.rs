@@ -1,6 +1,5 @@
 use aucpace::{Client, ClientMessage, Result, Server, ServerMessage, StrongDatabase, SysRng};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use password_hash::phc::ParamsString;
 use rand_core::UnwrapErr;
 use scrypt::{Params, Scrypt};
 use sha2::{Sha512, digest::Output};
@@ -11,6 +10,10 @@ use std::{
     thread,
     time::Instant,
 };
+
+mod common;
+
+use common::ScryptParams;
 
 /// function like macro to wrap sending data over a tcp stream, returns the number of bytes sent
 macro_rules! send {
@@ -46,8 +49,12 @@ fn main() -> Result<()> {
     let mut database: SingleUserDatabase = Default::default();
 
     let params = Params::RECOMMENDED;
-    let registration =
-        base_client.register_alloc_strong(USERNAME, PASSWORD, params, Scrypt::default())?;
+    let registration = base_client.register_alloc_strong(
+        USERNAME,
+        PASSWORD,
+        ScryptParams(params),
+        Scrypt::new_with_params(params),
+    )?;
     if let ClientMessage::StrongRegistration {
         username,
         secret_exponent,
@@ -79,7 +86,7 @@ fn main() -> Result<()> {
         SERVER_BYTES_SENT.fetch_add(bytes_sent, Ordering::SeqCst);
         println!("[server] Sending message: Nonce, sent {} bytes", bytes_sent);
 
-        let mut client_message: ClientMessage<16> = recv!(stream, buf);
+        let mut client_message: ClientMessage<16, ScryptParams> = recv!(stream, buf);
         let server = if let ClientMessage::Nonce(client_nonce) = client_message {
             server.agree_ssid(client_nonce)
         } else {
@@ -157,7 +164,7 @@ fn main() -> Result<()> {
         println!("[client] Sending message: Nonce, sent {} bytes", bytes_sent);
 
         // receive the server nonce to agree on SSID
-        let mut server_message: ServerMessage<16> = recv!(stream, buf);
+        let mut server_message: ServerMessage<16, ScryptParams> = recv!(stream, buf);
         let client = if let ServerMessage::Nonce(server_nonce) = server_message {
             client.agree_ssid(server_nonce)
         } else {
@@ -181,15 +188,11 @@ fn main() -> Result<()> {
             ..
         } = server_message
         {
-            let params = {
-                // its christmas time!
-                let log_n = pbkdf_params.get_str("ln").unwrap().parse().unwrap();
-                let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
-                let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
-
-                Params::new(log_n, r, p).unwrap()
-            };
-            client.generate_cpace_alloc(x_pub, blinded_salt, params, Scrypt::default())?
+            client.generate_cpace_alloc(
+                x_pub,
+                blinded_salt,
+                Scrypt::new_with_params(pbkdf_params.0),
+            )?
         } else {
             panic!("Received invalid server message {:?}", server_message);
         };
@@ -258,17 +261,22 @@ fn main() -> Result<()> {
 #[derive(Debug, Default)]
 struct SingleUserDatabase {
     user: Option<Vec<u8>>,
-    data: Option<(RistrettoPoint, Scalar, ParamsString)>,
+    data: Option<(RistrettoPoint, Scalar, ScryptParams)>,
 }
 
 impl StrongDatabase for SingleUserDatabase {
     type PasswordVerifier = RistrettoPoint;
+    type Params = ScryptParams;
+
+    fn default_params(&self) -> Self::Params {
+        ScryptParams(Params::RECOMMENDED)
+    }
     type Exponent = Scalar;
 
     fn lookup_verifier_strong(
         &self,
         username: &[u8],
-    ) -> Option<(Self::PasswordVerifier, Self::Exponent, ParamsString)> {
+    ) -> Option<(Self::PasswordVerifier, Self::Exponent, ScryptParams)> {
         match &self.user {
             Some(stored_username) if stored_username == username => self.data.clone(),
             _ => None,
@@ -281,7 +289,7 @@ impl StrongDatabase for SingleUserDatabase {
         _uad: Option<&[u8]>,
         verifier: Self::PasswordVerifier,
         secret_exponent: Self::Exponent,
-        params: ParamsString,
+        params: ScryptParams,
     ) {
         self.user = Some(username.to_vec());
         self.data = Some((verifier, secret_exponent, params));

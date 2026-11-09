@@ -6,16 +6,14 @@ use core::fmt;
 pub enum Error {
     /// Some points such as the Neutral or Identity point are illegal
     IllegalPointError,
-    /// Wrapper around `password_hash`'s error type, for propagating errors should they occur
-    PasswordHashing(password_hash::Error),
-    /// PasswordHasher produced an empty hash.
-    HashEmpty,
-    /// PasswordHasher produced a hash of an invalid size (size was not 32 or 64 bytes)
+    /// Password-based key derivation failed
+    PasswordHashing(kdf::Error),
+    /// The configured PBKDF output length is not 32 or 64 bytes
     HashSizeInvalid,
     /// Failure during Explicit Mutual Authentication
     MutualAuthFail,
     /// The username:password string would overflow the buffer size allocated for hashing the password
-    /// Note: this error can only occur when using the *_alloc APIs
+    /// Note: this error can only occur when using the fixed-size buffer APIs
     UsernameOrPasswordTooLong,
     /// The SSID provided is too short to be secure, SSIDs must be at least 16 bytes long
     /// Note: this error can only occur if the SSID establishment phase is bypassed
@@ -31,7 +29,6 @@ impl fmt::Display for Error {
         match self {
             Self::IllegalPointError => write!(f, "illegal point encountered"),
             Self::PasswordHashing(error) => write!(f, "error while hashing password: {error}"),
-            Self::HashEmpty => write!(f, "password hash empty"),
             Self::HashSizeInvalid => write!(f, "password hash invalid, should be 32 or 64 bytes"),
             Self::MutualAuthFail => write!(
                 f,

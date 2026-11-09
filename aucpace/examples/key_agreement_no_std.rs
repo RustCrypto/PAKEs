@@ -3,12 +3,15 @@
 // use println and Instant only from std
 extern crate std;
 
-use aucpace::{Client, ClientMessage, Database, Result, Server, ServerMessage, SysRng};
+use aucpace::{Client, ClientMessage, Database, Result, Salt, Server, ServerMessage, SysRng};
 use curve25519_dalek::ristretto::RistrettoPoint;
-use password_hash::phc::{ParamsString, SaltString};
 use rand_core::UnwrapErr;
 use scrypt::{Params, Scrypt};
 use std::{println, time::Instant};
+
+mod common;
+
+use common::ScryptParams;
 
 /// function like macro to wrap sending data over a tcp stream, returns the number of bytes sent
 macro_rules! send {
@@ -39,8 +42,12 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
     let params = Params::RECOMMENDED;
-    let registration =
-        base_client.register::<&[u8], 100>(USERNAME, PASSWORD, params, Scrypt::default())?;
+    let registration = base_client.register::<&[u8], _, 100>(
+        USERNAME,
+        PASSWORD,
+        ScryptParams(params),
+        Scrypt::new_with_params(params),
+    )?;
     if let ClientMessage::Registration {
         username,
         salt,
@@ -80,7 +87,7 @@ fn main() -> Result<()> {
 
     // server receives SSID establishment packet and begins SSID establishment itself,
     // responding with a ServerNonce packet
-    let mut client_message: ClientMessage<16> = recv!(client_buf);
+    let mut client_message: ClientMessage<16, ScryptParams> = recv!(client_buf);
     let server = if let ClientMessage::Nonce(client_nonce) = client_message {
         let (server, message) = base_server.begin();
         let bytes_sent = send!(server_buf, message);
@@ -95,7 +102,7 @@ fn main() -> Result<()> {
     };
 
     // the client receives the nonce, calculates the SSID then moves on to the
-    let mut server_message = recv!(server_buf);
+    let mut server_message: ServerMessage<16, ScryptParams> = recv!(server_buf);
     let client = if let ServerMessage::Nonce(nonce) = server_message {
         client.agree_ssid(nonce)
     } else {
@@ -135,15 +142,11 @@ fn main() -> Result<()> {
         ..
     } = server_message
     {
-        let params = {
-            // its christmas time!
-            let log_n = pbkdf_params.get_str("ln").unwrap().parse().unwrap();
-            let r = pbkdf_params.get_str("r").unwrap().parse().unwrap();
-            let p = pbkdf_params.get_str("p").unwrap().parse().unwrap();
-
-            Params::new(log_n, r, p).unwrap()
-        };
-        client.generate_cpace::<&SaltString, 100>(x_pub, &salt, params, Scrypt::default())?
+        client.generate_cpace::<&Salt, 100>(
+            x_pub,
+            &salt,
+            Scrypt::new_with_params(pbkdf_params.0),
+        )?
     } else {
         panic!("Received invalid server message {:?}", server_message);
     };
@@ -245,16 +248,21 @@ fn main() -> Result<()> {
 #[derive(Debug, Default)]
 struct SingleUserDatabase<const USERSIZE: usize> {
     user: Option<([u8; USERSIZE], usize)>,
-    data: Option<(RistrettoPoint, SaltString, ParamsString)>,
+    data: Option<(RistrettoPoint, Salt, ScryptParams)>,
 }
 
 impl<const USERSIZE: usize> Database for SingleUserDatabase<USERSIZE> {
     type PasswordVerifier = RistrettoPoint;
+    type Params = ScryptParams;
+
+    fn default_params(&self) -> Self::Params {
+        ScryptParams(Params::RECOMMENDED)
+    }
 
     fn lookup_verifier(
         &self,
         username: &[u8],
-    ) -> Option<(Self::PasswordVerifier, SaltString, ParamsString)> {
+    ) -> Option<(Self::PasswordVerifier, Salt, ScryptParams)> {
         match self.user {
             Some((ref stored_username, len)) if &stored_username[..len] == username => {
                 self.data.clone()
@@ -266,11 +274,11 @@ impl<const USERSIZE: usize> Database for SingleUserDatabase<USERSIZE> {
     fn store_verifier(
         &mut self,
         username: &[u8],
-        salt: SaltString,
+        salt: Salt,
         // we don't care about this for an example
         _uad: Option<&[u8]>,
         verifier: Self::PasswordVerifier,
-        params: ParamsString,
+        params: ScryptParams,
     ) {
         // silently fail because this is just an example and I'm lazy
         if username.len() <= USERSIZE {

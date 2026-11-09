@@ -1,5 +1,5 @@
 use crate::{
-    Database, Error, Result,
+    Database, Error, Result, Salt,
     constants::MIN_SSID_LEN,
     utils::{
         H0, compute_authenticator_messages, compute_first_session_key, compute_session_key,
@@ -13,7 +13,6 @@ use curve25519_dalek::{
     scalar::Scalar,
     traits::IsIdentity,
 };
-use password_hash::phc::{ParamsString, Salt, SaltString};
 use rand_core::CryptoRng;
 use subtle::ConstantTimeEq;
 
@@ -22,9 +21,6 @@ use crate::database::PartialAugDatabase;
 
 #[cfg(feature = "strong_aucpace")]
 use crate::database::StrongDatabase;
-
-#[cfg(feature = "serde")]
-use crate::utils::{serde_paramsstring, serde_saltstring};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -205,7 +201,7 @@ where
         mut rng: CSPRNG,
     ) -> (
         AuCPaceServerCPaceSubstep<D, CSPRNG, K1>,
-        ServerMessage<'static, K1>,
+        ServerMessage<'static, K1, DB::Params>,
     )
     where
         U: AsRef<[u8]>,
@@ -249,7 +245,7 @@ where
         mut rng: CSPRNG,
     ) -> (
         AuCPaceServerCPaceSubstep<D, CSPRNG, K1>,
-        ServerMessage<'static, K1>,
+        ServerMessage<'static, K1, DB::Params>,
     )
     where
         U: AsRef<[u8]>,
@@ -265,7 +261,7 @@ where
             // if the user does not have a keypair stored then we generate a random point on the
             // curve to be the public key, and handle the failed lookup as normal
             let x_pub = RistrettoPoint::random(&mut rng);
-            self.lookup_failed(user, x_pub, &mut rng)
+            self.lookup_failed(user, x_pub, database.default_params(), &mut rng)
         };
         let next_step = AuCPaceServerCPaceSubstep::new(self.ssid, prs, rng);
 
@@ -291,6 +287,7 @@ where
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
     ///
     #[cfg(feature = "strong_aucpace")]
+    #[allow(clippy::type_complexity)]
     pub fn generate_client_info_strong<U, DB, CSPRNG>(
         self,
         username: U,
@@ -299,7 +296,7 @@ where
         mut rng: CSPRNG,
     ) -> Result<(
         AuCPaceServerCPaceSubstep<D, CSPRNG, K1>,
-        ServerMessage<'static, K1>,
+        ServerMessage<'static, K1, DB::Params>,
     )>
     where
         U: AsRef<[u8]>,
@@ -335,6 +332,7 @@ where
     /// - [`next_step`](AuCPaceServerCPaceSubstep): the server in the `CPace` substep stage
     /// - [`message`](ServerMessage::AugmentationInfo): the message to send to the client
     #[cfg(all(feature = "strong_aucpace", feature = "partial_augmentation"))]
+    #[allow(clippy::type_complexity)]
     pub fn generate_client_info_partial_strong<U, DB, CSPRNG>(
         self,
         username: U,
@@ -343,7 +341,7 @@ where
         mut rng: CSPRNG,
     ) -> Result<(
         AuCPaceServerCPaceSubstep<D, CSPRNG, K1>,
-        ServerMessage<'static, K1>,
+        ServerMessage<'static, K1, DB::Params>,
     )>
     where
         U: AsRef<[u8]>,
@@ -359,7 +357,7 @@ where
             // if the user does not have a keypair stored then we generate a random point on the
             // curve to be the public key, and handle the failed lookup as normal
             let x_pub = RistrettoPoint::random(&mut rng);
-            self.lookup_failed_strong(user, blinded, x_pub, &mut rng)?
+            self.lookup_failed_strong(user, blinded, x_pub, database.default_params(), &mut rng)?
         };
         let next_step = AuCPaceServerCPaceSubstep::new(self.ssid, prs, rng);
 
@@ -374,7 +372,7 @@ where
         rng: &mut CSPRNG,
         x: Scalar,
         x_pub: RistrettoPoint,
-    ) -> ([u8; 32], ServerMessage<'static, K1>)
+    ) -> ([u8; 32], ServerMessage<'static, K1, DB::Params>)
     where
         DB: Database<PasswordVerifier = RistrettoPoint>,
         CSPRNG: CryptoRng,
@@ -392,7 +390,7 @@ where
             (prs, message)
         } else {
             // handle the failure case
-            self.lookup_failed(username, x_pub, rng)
+            self.lookup_failed(username, x_pub, database.default_params(), rng)
         }
     }
 
@@ -407,7 +405,7 @@ where
         rng: &mut CSPRNG,
         x: Scalar,
         x_pub: RistrettoPoint,
-    ) -> Result<([u8; 32], ServerMessage<'static, K1>)>
+    ) -> Result<([u8; 32], ServerMessage<'static, K1, DB::Params>)>
     where
         DB: StrongDatabase<PasswordVerifier = RistrettoPoint, Exponent = Scalar>,
         CSPRNG: CryptoRng,
@@ -429,17 +427,18 @@ where
             Ok((prs, message))
         } else {
             // handle the failure case
-            self.lookup_failed_strong(username, blinded, x_pub, rng)
+            self.lookup_failed_strong(username, blinded, x_pub, database.default_params(), rng)
         }
     }
 
     /// Generate the message for if the lookup failed
-    fn lookup_failed<CSPRNG>(
+    fn lookup_failed<Params, CSPRNG>(
         &self,
         username: &[u8],
         x_pub: RistrettoPoint,
+        params: Params,
         rng: &mut CSPRNG,
-    ) -> ([u8; 32], ServerMessage<'static, K1>)
+    ) -> ([u8; 32], ServerMessage<'static, K1, Params>)
     where
         CSPRNG: CryptoRng,
     {
@@ -456,16 +455,16 @@ where
         let hash = hasher.finalize();
         let hash_bytes: &[u8] = hash.as_ref();
 
-        // It is okay to expect here because SaltString has a buffer of 64 bytes by requirement
-        // from the PHC spec. 48 bytes of data when encoded as base64 transform to 64 bytes.
-        // This gives us the most entropy possible from the hash in the SaltString.
-        let salt = Salt::new(&hash_bytes[..48]).expect("Salt maximum length invariant broken");
+        // Match the raw salt length used for registration.
+        let mut salt = Salt::default();
+        let salt_len = salt.len();
+        salt.copy_from_slice(&hash_bytes[..salt_len]);
 
         let message = ServerMessage::AugmentationInfo {
             group: "ristretto255",
             x_pub,
-            salt: salt.into(),
-            pbkdf_params: ParamsString::default(),
+            salt,
+            pbkdf_params: params,
         };
 
         (prs, message)
@@ -473,13 +472,14 @@ where
 
     /// Generate the message for if the lookup failed
     #[cfg(feature = "strong_aucpace")]
-    fn lookup_failed_strong<CSPRNG>(
+    fn lookup_failed_strong<Params, CSPRNG>(
         &self,
         username: &[u8],
         blinded: RistrettoPoint,
         x_pub: RistrettoPoint,
+        params: Params,
         rng: &mut CSPRNG,
-    ) -> Result<([u8; 32], ServerMessage<'static, K1>)>
+    ) -> Result<([u8; 32], ServerMessage<'static, K1, Params>)>
     where
         CSPRNG: CryptoRng,
     {
@@ -506,7 +506,7 @@ where
             group: "ristretto255",
             x_pub,
             blinded_salt: fake_blinded_salt,
-            pbkdf_params: ParamsString::default(),
+            pbkdf_params: params,
         };
 
         Ok((prs, message))
@@ -678,10 +678,13 @@ where
     }
 }
 
-/// An enum representing the different messages the server can send to the client
+/// An enum representing the different messages the server can send to the client.
+///
+/// `Params` is the application's PBKDF metadata, as provided by the verifier database.
+/// Only augmentation messages contain this metadata.
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum ServerMessage<'a, const K1: usize> {
+pub enum ServerMessage<'a, const K1: usize, Params = ()> {
     /// SSID establishment message - the server's nonce: `s`
     Nonce(#[cfg_attr(feature = "serde", serde(with = "serde_byte_array"))] [u8; K1]),
 
@@ -694,12 +697,10 @@ pub enum ServerMessage<'a, const K1: usize> {
         x_pub: RistrettoPoint,
 
         /// the salt used with the PBKDF
-        #[cfg_attr(feature = "serde", serde(with = "serde_saltstring"))]
-        salt: SaltString,
+        salt: Salt,
 
         /// the parameters for the PBKDF used - sigma from the protocol definition
-        #[cfg_attr(feature = "serde", serde(with = "serde_paramsstring"))]
-        pbkdf_params: ParamsString,
+        pbkdf_params: Params,
     },
 
     /// Information required for the AuCPace Augmentation layer sub-step
@@ -715,8 +716,7 @@ pub enum ServerMessage<'a, const K1: usize> {
         blinded_salt: RistrettoPoint,
 
         /// the parameters for the PBKDF used - sigma from the protocol definition
-        #[cfg_attr(feature = "serde", serde(with = "serde_paramsstring"))]
-        pbkdf_params: ParamsString,
+        pbkdf_params: Params,
     },
 
     /// `CPace` substep message - the server's public key: `Ya`
@@ -785,17 +785,17 @@ mod tests {
     #[cfg(all(feature = "sha2", feature = "strong_aucpace"))]
     impl StrongDatabase for FakeDatabase {
         type PasswordVerifier = RistrettoPoint;
+        type Params = ();
+
         type Exponent = Scalar;
+
+        fn default_params(&self) {}
 
         fn lookup_verifier_strong(
             &self,
             _username: &[u8],
-        ) -> Option<(Self::PasswordVerifier, Self::Exponent, ParamsString)> {
-            Some((
-                RISTRETTO_BASEPOINT_POINT,
-                Scalar::ZERO,
-                ParamsString::default(),
-            ))
+        ) -> Option<(Self::PasswordVerifier, Self::Exponent, ())> {
+            Some((RISTRETTO_BASEPOINT_POINT, Scalar::ZERO, ()))
         }
 
         fn store_verifier_strong(
@@ -804,7 +804,7 @@ mod tests {
             _uad: Option<&[u8]>,
             _verifier: Self::PasswordVerifier,
             _secret_exponent: Self::Exponent,
-            _params: ParamsString,
+            _params: (),
         ) {
             unimplemented!()
         }

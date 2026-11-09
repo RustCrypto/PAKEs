@@ -6,7 +6,6 @@ use curve25519_dalek::{
     ristretto::RistrettoPoint,
     scalar::Scalar,
 };
-use password_hash::phc::PasswordHash;
 use rand_core::CryptoRng;
 
 #[allow(non_snake_case)]
@@ -130,10 +129,7 @@ where
 
 /// Compute a scalar from a password hash
 #[inline]
-pub fn scalar_from_hash(pw_hash: &PasswordHash) -> Result<Scalar> {
-    let hash = pw_hash.hash.ok_or(Error::HashEmpty)?;
-    let hash_bytes = hash.as_bytes();
-
+pub fn scalar_from_hash(hash_bytes: &[u8]) -> Result<Scalar> {
     // support both 32 and 64 byte hashes
     match hash_bytes.len() {
         32 => {
@@ -165,87 +161,4 @@ where
     let public = RISTRETTO_BASEPOINT_POINT * (private * cofactor);
 
     (private, public)
-}
-
-// serde_with helper modules for serialising
-#[cfg(feature = "serde")]
-pub mod serde_saltstring {
-    use core::fmt;
-    use password_hash::phc::SaltString;
-    use serde::{
-        Deserializer, Serializer,
-        de::{Error, Visitor},
-    };
-
-    pub fn serialize<S>(data: &SaltString, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(data.as_ref())
-    }
-
-    struct SaltStringVisitor {}
-
-    impl<'de> Visitor<'de> for SaltStringVisitor {
-        type Value = SaltString;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(formatter, "a valid ASCII salt string")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: Error,
-        {
-            SaltString::from_b64(v).map_err(Error::custom)
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<SaltString, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(SaltStringVisitor {})
-    }
-}
-
-#[cfg(feature = "serde")]
-pub mod serde_paramsstring {
-    use core::fmt;
-    use password_hash::phc::ParamsString;
-    use serde::{
-        Deserializer, Serializer,
-        de::{Error, Visitor},
-    };
-
-    pub fn serialize<S>(data: &ParamsString, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(data.as_str())
-    }
-
-    struct ParamsStringVisitor {}
-
-    impl<'de> Visitor<'de> for ParamsStringVisitor {
-        type Value = ParamsString;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(formatter, "a valid PHC parameter string")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: Error,
-        {
-            v.parse().map_err(Error::custom)
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<ParamsString, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(ParamsStringVisitor {})
-    }
 }

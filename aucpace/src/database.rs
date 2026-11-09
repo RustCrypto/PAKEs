@@ -1,4 +1,4 @@
-use password_hash::phc::{ParamsString, SaltString};
+use crate::Salt;
 
 #[cfg(feature = "partial_augmentation")]
 use crate::Result;
@@ -7,6 +7,15 @@ use crate::Result;
 pub trait Database {
     /// The type of password verifier stored in the database
     type PasswordVerifier;
+
+    /// Application-defined PBKDF parameters stored with each verifier.
+    type Params;
+
+    /// Parameters to send when the user is unknown.
+    ///
+    /// Use the same parameter profile as registered users to avoid exposing
+    /// whether an account exists through the augmentation message.
+    fn default_params(&self) -> Self::Params;
 
     /// perform `LookupW`, returning the password verifier `W`, if it exists.
     ///
@@ -21,7 +30,7 @@ pub trait Database {
     fn lookup_verifier(
         &self,
         username: &[u8],
-    ) -> Option<(Self::PasswordVerifier, SaltString, ParamsString)>;
+    ) -> Option<(Self::PasswordVerifier, Salt, Self::Params)>;
 
     /// store a username, salt, verifier and hash parameters to the database.
     /// This function should allow for overwriting users credentials if they exist.
@@ -40,10 +49,10 @@ pub trait Database {
     fn store_verifier(
         &mut self,
         username: &[u8],
-        salt: SaltString,
+        salt: Salt,
         uad: Option<&[u8]>,
         verifier: Self::PasswordVerifier,
-        params: ParamsString,
+        params: Self::Params,
     );
 }
 
@@ -100,6 +109,15 @@ pub trait StrongDatabase {
     /// The type of password verifier stored in the database
     type PasswordVerifier;
 
+    /// Application-defined PBKDF parameters stored with each verifier.
+    type Params;
+
+    /// Parameters to send when the user is unknown.
+    ///
+    /// Use the same parameter profile as registered users to avoid exposing
+    /// whether an account exists through the augmentation message.
+    fn default_params(&self) -> Self::Params;
+
     /// The type of the secret exponent `q` stored in the database
     type Exponent;
 
@@ -116,7 +134,7 @@ pub trait StrongDatabase {
     fn lookup_verifier_strong(
         &self,
         username: &[u8],
-    ) -> Option<(Self::PasswordVerifier, Self::Exponent, ParamsString)>;
+    ) -> Option<(Self::PasswordVerifier, Self::Exponent, Self::Params)>;
 
     /// store a username, secret exponent, verifier and hash parameters to the database.
     /// This function should allow for overwriting users credentials if they exist.
@@ -138,6 +156,6 @@ pub trait StrongDatabase {
         uad: Option<&[u8]>,
         verifier: Self::PasswordVerifier,
         secret_exponent: Self::Exponent,
-        params: ParamsString,
+        params: Self::Params,
     );
 }
