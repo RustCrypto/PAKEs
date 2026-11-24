@@ -375,7 +375,7 @@ impl<D: Digest> ClientVerifier<D> {
 
     /// Verify the server's proof `M2` and return the session key `K = H(S)`.
     pub fn verify_server(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
-        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
+        if self.m2.as_slice().ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
         } else {
             Err(AuthError::BadRecordMac { peer: "server" })
@@ -408,7 +408,7 @@ impl<D: Digest> LegacyClientVerifier<D> {
 
     /// Verify server reply to verification data.
     pub fn verify_server(&self, reply: &[u8]) -> Result<(), AuthError> {
-        if self.m2.ct_eq(reply).unwrap_u8() == 1 {
+        if self.m2.as_slice().ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
         } else {
             Err(AuthError::BadRecordMac { peer: "server" })
