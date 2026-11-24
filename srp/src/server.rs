@@ -312,7 +312,7 @@ impl<D: Digest> ServerVerifier<D> {
 
     /// Verify the client's proof `M1` and return the session key `K = H(S)`.
     pub fn verify_client(&self, reply: &[u8]) -> Result<&[u8], AuthError> {
-        if self.m1.ct_eq(reply).unwrap_u8() == 1 {
+        if self.m1.as_slice().ct_eq(reply).unwrap_u8() == 1 {
             Ok(self.session_key.as_slice())
         } else {
             Err(AuthError::BadRecordMac { peer: "client" })
@@ -345,7 +345,7 @@ impl<D: Digest> LegacyServerVerifier<D> {
 
     /// Process user proof of having the same shared secret.
     pub fn verify_client(&self, reply: &[u8]) -> Result<(), AuthError> {
-        if self.m1.ct_eq(reply).unwrap_u8() == 1 {
+        if self.m1.as_slice().ct_eq(reply).unwrap_u8() == 1 {
             Ok(())
         } else {
             Err(AuthError::BadRecordMac { peer: "client" })
